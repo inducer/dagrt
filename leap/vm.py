@@ -43,6 +43,7 @@ class Instruction(Record):
 
 
 class EvaluateRHS(Instruction):
+    # FIXME: We should allow vectorization over multiple inputs/outputs
     """
     .. attribute:: assignee
     .. attribute:: out_component
@@ -54,6 +55,9 @@ class EvaluateRHS(Instruction):
 
 
 class SolveRHS(Instruction):
+    # FIXME: We should allow vectorization over multiple inputs/outputs
+    # Pure vectorization is not enough here. We may want some amount
+    # of tensor product expression flexibility.
     """
     .. attribute:: assignee
     .. attribute:: out_component
