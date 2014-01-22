@@ -70,70 +70,33 @@ def adapt_step_size(t, dt,
 
 
 class EmbeddedRungeKuttaMethod(Method):
-    def __init__(self, use_high_order=True, dtype=numpy.float64, rcon=None,
-            vector_primitive_factory=None, atol=0, rtol=0,
-            max_dt_growth=5, min_dt_shrinkage=0.1,
-            limiter=None):
-        if vector_primitive_factory is None:
-            from hedge.vector_primitives import VectorPrimitiveFactory
-            self.vector_primitive_factory = VectorPrimitiveFactory()
-        else:
-            self.vector_primitive_factory = vector_primitive_factory
-
-        from pytools.log import IntervalTimer, EventCounter
-        timer_factory = IntervalTimer
-        if rcon is not None:
-            timer_factory = rcon.make_timer
-
-        if limiter is None:
-            self.limiter = lambda x: x
-        else:
-            self.limiter = limiter
-
-        self.timer = timer_factory(
-                "t_rk", "Time spent doing algebra in Runge-Kutta")
-        self.flop_counter = EventCounter(
-                "n_flops_rk", "Floating point operations performed in Runge-Kutta")
+    def __init__(self, use_high_order=True,
+            atol=0, rtol=0, max_dt_growth=5, min_dt_shrinkage=0.1,
+            limiter_name=None):
+        self.limiter_name = limiter_name
 
         self.use_high_order = use_high_order
-
-        self.dtype = numpy.dtype(dtype)
 
         self.adaptive = bool(atol or rtol)
         self.atol = atol
         self.rtol = rtol
 
-        from pytools import match_precision
-        self.scalar_dtype = match_precision(
-                numpy.dtype(numpy.float64), self.dtype)
-
         self.max_dt_growth = max_dt_growth
         self.min_dt_shrinkage = min_dt_shrinkage
 
-        self.linear_combiner_cache = {}
 
-    def get_stability_relevant_init_args(self):
-        return (self.use_high_order,)
+class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
+    def __call__(self, state_id):
+        """
+        :arg state_id: an identifier to be used for the single state component
+            supported.
+        """
 
-    def add_instrumentation(self, logmgr):
-        logmgr.add_quantity(self.timer)
-        logmgr.add_quantity(self.flop_counter)
+        code = []
 
-    def get_linear_combiner(self, arg_count, sample_vec):
-        try:
-            return self.linear_combiner_cache[arg_count]
-        except KeyError:
-            lc = self.vector_primitive_factory \
-                    .make_linear_combiner(
-                            self.dtype, self.scalar_dtype, sample_vec,
-                            arg_count=arg_count)
-            self.linear_combiner_cache[arg_count] = lc
-            return lc
-
-
-class EmbeddedButcherTableauTimeStepperBase(EmbeddedRungeKuttaTimeStepperBase):
-    def __call__(self, y, t, dt, rhs, reject_hook=None):
-        from hedge.tools import count_dofs
+        def add_to_code(*insns):
+            code.append(insns)
+            return insns
 
         # {{{ preparation
         try:
@@ -150,28 +113,50 @@ class EmbeddedButcherTableauTimeStepperBase(EmbeddedRungeKuttaTimeStepperBase):
 
         # }}}
 
-        flop_count = [0]
+        from leap.vm.language import EvaluateRHS, If, ReturnState, Norm
+        from pymbolic import var
+
+        dt = var("<dt>")
+        t = var("<t>")
+        last_rhs = var("<p>last_rhs")
+        state = var("<state>"+state_id)
+
+        if self.limiter_name is not None:
+            limiter = var("<func>"+self.limiter_name)
+        else:
+            limiter = lambda x: x
+
+        initialization_dep_on = add_to_code(
+                EvaluateRHS(
+                    assignees=("<p>last_rhs",),
+                    rhs_id=state_id,
+                    t=var("<t>"),
+                    rhs_arguments=((state_id, state),)))
 
         while True:
             rhss = []
 
             # {{{ stage loop
 
-            for i, (c, coeffs) in enumerate(self.butcher_tableau):
+            for istage, (c, coeffs) in enumerate(self.butcher_tableau):
                 if len(coeffs) == 0:
                     assert c == 0
-                    this_rhs = self.last_rhs
+                    this_rhs = last_rhs
                 else:
-                    sub_timer = self.timer.start_sub_timer()
-                    args = [(1, y)] + [
-                            (dt*coeff, rhss[j]) for j, coeff in enumerate(coeffs)
-                            if coeff]
-                    flop_count[0] += len(args)*2 - 1
-                    sub_y = self.limiter(self.get_linear_combiner(
-                            len(args), self.last_rhs)(*args))
-                    sub_timer.stop().submit()
+                    stage_state = limiter(
+                            state + sum(
+                                dt * coeff * rhss[j]
+                                for j, coeff in enumerate(coeffs)))
 
-                    this_rhs = rhs(t + c*dt, sub_y)
+                    rhs_id = "rhs%d" % istage
+                    add_to_code(
+                            EvaluateRHS(
+                                assignees=(rhs_id,),
+                                rhs_id=state_id,
+                                t=t + c*dt,
+                                rhs_arguments=((state_id, stage_state),)))
+
+                    this_rhs = var(rhs_id)
 
                 rhss.append(this_rhs)
 
@@ -181,7 +166,6 @@ class EmbeddedButcherTableauTimeStepperBase(EmbeddedRungeKuttaTimeStepperBase):
                 args = [(1, y)] + [
                         (dt*coeff, rhss[i]) for i, coeff in enumerate(coeffs)
                         if coeff]
-                flop_count[0] += len(args)*2 - 1
                 return self.get_linear_combiner(
                         len(args), self.last_rhs)(*args)
 
@@ -192,7 +176,6 @@ class EmbeddedButcherTableauTimeStepperBase(EmbeddedRungeKuttaTimeStepperBase):
                     y = self.limiter(finish_solution(self.low_order_coeffs))
 
                 self.last_rhs = this_rhs
-                self.flop_counter.add(self.dof_count*flop_count[0])
                 return y
             else:
                 # {{{ step size adaptation
@@ -226,7 +209,7 @@ class EmbeddedButcherTableauTimeStepperBase(EmbeddedRungeKuttaTimeStepperBase):
 
 # {{{ Bogacki-Shampine second/third-order Runge-Kutta
 
-class ODE23TimeStepper(EmbeddedButcherTableauTimeStepperBase):
+class ODE23TimeStepper(EmbeddedButcherTableauMethod):
     """Bogacki-Shampine second/third-order Runge-Kutta.
 
     (same as Matlab's ode23)
@@ -255,7 +238,7 @@ class ODE23TimeStepper(EmbeddedButcherTableauTimeStepperBase):
 
 # {{{ Dormand-Prince fourth/fifth-order Runge-Kutta
 
-class ODE45TimeStepper(EmbeddedButcherTableauTimeStepperBase):
+class ODE45TimeStepper(EmbeddedButcherTableauMethod):
     """Dormand-Prince fourth/fifth-order Runge-Kutta.
 
     (same as Matlab's ode45)
