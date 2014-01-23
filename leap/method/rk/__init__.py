@@ -24,50 +24,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-
-import numpy
 from leap.method import Method
 
 
 # {{{ Embedded Runge-Kutta schemes base class
-
-def adapt_step_size(t, dt,
-        start_y, high_order_end_y, low_order_end_y, stepper, lc2, norm):
-    normalization = stepper.atol + stepper.rtol*max(
-                norm(low_order_end_y), norm(start_y))
-
-    error = lc2(
-        (1/normalization, high_order_end_y),
-        (-1/normalization, low_order_end_y)
-        )
-
-    if rel_err == 0:
-        rel_err = 1e-14
-
-    if rel_err > 1 or numpy.isnan(rel_err):
-        # reject step
-
-        if not numpy.isnan(rel_err):
-            dt = max(
-                    0.9 * dt * rel_err**(-1/stepper.low_order),
-                    stepper.min_dt_shrinkage * dt)
-        else:
-            dt = stepper.min_dt_shrinkage*dt
-
-        if t + dt == t:
-            from hedge.timestep import TimeStepUnderflow
-            raise TimeStepUnderflow()
-
-        return False, dt, rel_err
-    else:
-        # accept step
-
-        next_dt = min(
-                0.9 * dt * rel_err**(-1/stepper.high_order),
-                stepper.max_dt_growth*dt)
-
-        return True, next_dt, rel_err
-
 
 class EmbeddedRungeKuttaMethod(Method):
     def __init__(self, use_high_order=True,
@@ -86,123 +46,210 @@ class EmbeddedRungeKuttaMethod(Method):
 
 
 class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
-    def __call__(self, state_id):
+    def __call__(self, component_id):
         """
-        :arg state_id: an identifier to be used for the single state component
+        :arg component_id: an identifier to be used for the single state component
             supported.
         """
+        from leap.vm.language import (
+                AssignRHS, AssignNorm, AssignExpression,
+                ReturnState, If, Raise, FailStep,
+                TimeIntegratorCode,
+                CodeBuilder)
 
-        code = []
+        cbuild = CodeBuilder()
 
-        def add_to_code(*insns):
-            code.append(insns)
-            return insns
+        add_and_get_ids = cbuild.add_and_get_ids
 
-        # {{{ preparation
-        try:
-            self.last_rhs
-        except AttributeError:
-            self.last_rhs = rhs(t, y)
-            self.dof_count = count_dofs(self.last_rhs)
-
-            if self.adaptive:
-                self.norm = self.vector_primitive_factory \
-                        .make_maximum_norm(self.last_rhs)
-            else:
-                self.norm = None
-
-        # }}}
-
-        from leap.vm.language import EvaluateRHS, If, ReturnState, Norm
         from pymbolic import var
 
         dt = var("<dt>")
         t = var("<t>")
         last_rhs = var("<p>last_rhs")
-        state = var("<state>"+state_id)
+        state = var("<state>"+component_id)
 
         if self.limiter_name is not None:
             limiter = var("<func>"+self.limiter_name)
         else:
             limiter = lambda x: x
 
-        initialization_dep_on = add_to_code(
-                EvaluateRHS(
+        initialization_dep_on = add_and_get_ids(
+                AssignRHS(
                     assignees=("<p>last_rhs",),
-                    rhs_id=state_id,
+                    rhs_id=component_id,
                     t=var("<t>"),
-                    rhs_arguments=((state_id, state),)))
+                    rhs_arguments=((component_id, state),)))
 
-        while True:
-            rhss = []
+        rhss = []
 
-            # {{{ stage loop
+        # {{{ stage loop
 
-            for istage, (c, coeffs) in enumerate(self.butcher_tableau):
-                if len(coeffs) == 0:
-                    assert c == 0
-                    this_rhs = last_rhs
-                else:
-                    stage_state = limiter(
+        for istage, (c, coeffs) in enumerate(self.butcher_tableau):
+            if len(coeffs) == 0:
+                assert c == 0
+                this_rhs = last_rhs
+            else:
+                stage_state = limiter(
+                        state + sum(
+                            dt * coeff * rhss[j]
+                            for j, coeff in enumerate(coeffs)))
+
+                rhs_id = "rhs%d" % istage
+                add_and_get_ids(
+                        AssignRHS(
+                            assignees=(rhs_id,),
+                            rhs_id=component_id,
+                            t=t + c*dt,
+                            rhs_arguments=((component_id, stage_state),)))
+
+                this_rhs = var(rhs_id)
+
+            rhss.append(this_rhs)
+
+        # }}}
+
+        last_rhs_assignment_id, = add_and_get_ids(
+                AssignExpression(last_rhs.name, this_rhs))
+
+        if not self.adaptive:
+            if self.use_high_order:
+                coeffs = self.high_order_coeffs
+            else:
+                coeffs = self.low_order_coeffs
+
+            ret_id, = add_and_get_ids(
+                    AssignExpression(
+                        "<state>", limiter(
                             state + sum(
                                 dt * coeff * rhss[j]
-                                for j, coeff in enumerate(coeffs)))
+                                for j, coeff in enumerate(coeffs))),
+                        id="update_state"),
+                    AssignExpression(
+                        "<t>", t + dt,
+                        depends_on=["update_state"],
+                        id="increment_dt"),
 
-                    rhs_id = "rhs%d" % istage
-                    add_to_code(
-                            EvaluateRHS(
-                                assignees=(rhs_id,),
-                                rhs_id=state_id,
-                                t=t + c*dt,
-                                rhs_arguments=((state_id, stage_state),)))
+                    ReturnState(
+                        id="ret_state",
+                        time_id="final",
+                        time=t + dt,
+                        component_id=component_id,
+                        expression=state,
+                        depends_on="update_state"))
 
-                    this_rhs = var(rhs_id)
+            return TimeIntegratorCode(
+                    instructions=cbuild.instructions,
+                    initialization_dep_on=initialization_dep_on,
+                    step_dep_on=[ret_id, last_rhs_assignment_id, "increment_dt"])
+        else:
+            # {{{ step size adaptation
 
-                rhss.append(this_rhs)
+            from leap.method import TimeStepUnderflow
+
+            from pymbolic.primitives import Min, Max, Comparison, LogicalOr
+            add_and_get_ids(
+                    AssignExpression(
+                        "high_order_end_state", state + sum(
+                                dt * coeff * rhss[j]
+                                for j, coeff in enumerate(self.high_order_coeffs))),
+                    AssignExpression(
+                        "low_order_end_state", state + sum(
+                                dt * coeff * rhss[j]
+                                for j, coeff in enumerate(self.low_order_coeffs))),
+                    AssignNorm("norm_start_state", state),
+                    AssignNorm("norm_end_state", var("low_order_end_state")),
+                    AssignNorm(
+                        "rel_error_raw", (
+                            var("high_order_end_state") - var("low_order_end_state")
+                            ) / (
+                                var("len")(state)**0.5
+                                *
+                                (self.atol + self.rtol * Max((
+                                    var("norm_start_state"),
+                                    var("norm_end_state"))))
+                                )
+                            ),
+                    If(
+                        condition=Comparison(var("rel_error_raw"), "==", 0),
+                        then_depends_on=["rel_err_zero"],
+                        else_depends_on=["rel_err_nonzero"],
+                        id="rel_error_zero_check"),
+                    # then
+                    AssignExpression("rel_error", var("rel_error_raw"),
+                        id="rel_err_nonzero"),
+                    # else
+                    AssignExpression("rel_error", 1e-14,
+                        id="rel_err_zero"),
+                    # endif
+
+                    If(
+                        condition=LogicalOr([
+                            Comparison(var("rel_error"), ">", 1),
+                            var("isnan")(var("rel_error"))
+                            ]),
+                        then_depends_on=["rej_step"],
+                        else_depends_on=["acc_adjust_dt", last_rhs_assignment_id,
+                            "update_state", "increment_dt"],
+                        depends_on=["rel_error_zero_check"],
+                        id="reject_check"),
+                    # then
+                        # reject step
+
+                        If(
+                            condition=var("isnan")(var("rel_error")),
+                            then_depends_on=["min_adjust_dt"],
+                            else_depends_on=["low_adjust_dt"],
+                            id="adjust_dt"),
+                        # then
+                        AssignExpression("<dt>",
+                            self.min_dt_shrinkage*dt,
+                            id="min_adjust_dt"),
+                        # else
+                        AssignExpression("<dt>",
+                            Max((
+                                0.9 * dt * var("rel_error")**(-1/self.low_order),
+                                self.min_dt_shrinkage * dt)),
+                            id="rej_adjust_dt"),
+                        # endif
+
+                        If(
+                            condition=Comparison(t + dt, "==", t),
+                            then_depends_on=["tstep_underflow"],
+                            else_depends_on=[],
+                            id="check_underflow",
+                            depends_on=["adjust_dt"]),
+                        # then
+                        Raise(TimeStepUnderflow, id="tstep_underflow"),
+                        # endif
+
+                        FailStep(
+                            id="rej_step",
+                            depends_on=["check_underflow"]),
+
+                    # else
+                        # accept step
+
+                        AssignExpression("<dt>",
+                            Min((
+                                0.9 * dt * var("rel_error")**(-1/self.high_order),
+                                self.max_dt_growth * dt)),
+                            id="acc_adjust_dt"),
+                        AssignExpression(
+                            "<state>", limiter(var("high_order_end_state")),
+                            id="update_state"),
+                        AssignExpression(
+                            "<t>", t + dt,
+                            depends_on=["acc_adjust_dt"],
+                            id="increment_dt")
+                    # endif
+                    )
+
+            return TimeIntegratorCode(
+                    instructions=cbuild.instructions,
+                    initialization_dep_on=initialization_dep_on,
+                    step_dep_on=["reject_check"])
 
             # }}}
-
-            def finish_solution(coeffs):
-                args = [(1, y)] + [
-                        (dt*coeff, rhss[i]) for i, coeff in enumerate(coeffs)
-                        if coeff]
-                return self.get_linear_combiner(
-                        len(args), self.last_rhs)(*args)
-
-            if not self.adaptive:
-                if self.use_high_order:
-                    y = self.limiter(finish_solution(self.high_order_coeffs))
-                else:
-                    y = self.limiter(finish_solution(self.low_order_coeffs))
-
-                self.last_rhs = this_rhs
-                return y
-            else:
-                # {{{ step size adaptation
-                high_order_end_y = finish_solution(self.high_order_coeffs)
-                low_order_end_y = finish_solution(self.low_order_coeffs)
-
-                flop_count[0] += 3+1  # one two-lincomb, one norm
-
-                # Perform error estimation based on un-limited solutions.
-                accept_step, next_dt, rel_err = adapt_step_size(
-                        t, dt, y, high_order_end_y, low_order_end_y,
-                        self, self.get_linear_combiner(2, high_order_end_y),
-                        self.norm)
-
-                if not accept_step:
-                    if reject_hook:
-                        y = reject_hook(dt, rel_err, t, y)
-
-                    dt = next_dt
-                    # ... and go back to top of loop
-                else:
-                    # finish up
-                    self.last_rhs = this_rhs
-                    self.flop_counter.add(self.dof_count*flop_count[0])
-
-                    return self.limiter(high_order_end_y), t+dt, dt, next_dt
-                # }}}
 
 # }}}
 

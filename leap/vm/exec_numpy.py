@@ -132,7 +132,7 @@ class NumpyInterpreter(object):
 
     # {{{ execution methods
 
-    def map_EvaluateRHS(self, insn):
+    def map_AssignRHS(self, insn):
         rhs = self.rhs_map[insn.rhs_id]
         t = self.eval_mapper(insn.t)
 
@@ -148,14 +148,14 @@ class NumpyInterpreter(object):
                 component_id=insn.component_id,
                 state_component=self.eval_mapper(insn.expression))
 
-    def map_EvaluateExpression(self, insn):
+    def map_AssignExpression(self, insn):
         self.state[insn.assignee] = self.eval_mapper(insn.expression)
 
-    def map_Norm(self, insn):
+    def map_AssignNorm(self, insn):
         self.state[insn.assignee] = la.norm(
                 self.eval_mapper(insn.expression), insn.p)
 
-    def map_DotProduct(self, insn):
+    def map_AssignDotProduct(self, insn):
         self.state[insn.assignee] = np.vdot(
                 self.eval_mapper(insn.expression_1),
                 self.eval_mapper(insn.expression_2)

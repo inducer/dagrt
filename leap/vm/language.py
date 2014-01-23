@@ -51,6 +51,11 @@ following special variable names are supported:
 
 The latter two serve to separate the name space used by the method from that
 under the control of the user.
+
+Built-in functions:
+
+* ``len(state)`` returns the number of degrees of freedom in *state*
+* ``isnan(state)`` returns True if there are any NaNs in *state*
 """
 
 
@@ -68,13 +73,15 @@ class Instruction(Record):
     """
 
 
-class EvaluateRHS(Instruction):
+# {{{ assignments
+
+class AssignRHS(Instruction):
     """
     .. attribute:: assignees
 
         A tuple of strings, the names of the variable being assigned to.
 
-    .. attribute:: rhs_id
+    .. attribute:: component_id
 
         Identifier of the right hand side to be evaluated. Typically a number
         or a string.
@@ -90,13 +97,15 @@ class EvaluateRHS(Instruction):
         A tuple of tuples. The outer tuple is the vectorization list, where each
         entry corresponds to one of the entries of :attr:`assignees`. The inner
         lists corresponds to arguments being passed to the right-hand side
-        (identified by :attr:`rhs_id`) being invoked. These are tuples
+        (identified by :attr:`component_id`) being invoked. These are tuples
         ``(arg_name, expression)``, where *expression* is a :mod:`pymbolic`
         expression.
     """
 
+    exec_method = intern("exec_AssignRHS")
 
-class SolveRHS(Instruction):
+
+class AssignSolvedRHS(Instruction):
     # FIXME: We should allow vectorization over multiple inputs/outputs
     # Pure vectorization is not enough here. We may want some amount
     # of tensor product expression flexibility.
@@ -107,12 +116,63 @@ class SolveRHS(Instruction):
 
         A string, the name of the variable being assigned to.
 
-    .. attribute:: rhs_id
+    .. attribute:: component_id
     .. attribute:: t
     .. attribute:: states
     .. attribute:: solve_component
     .. attribute:: rhs
     """
+
+    exec_method = intern("exec_AssignSolvedRHS")
+
+
+class AssignExpression(Instruction):
+    """
+    .. attribute:: assignee
+    .. attribute:: expression
+    """
+    def __init__(self, assignee, expression, id=None, depends_on=frozenset()):
+        Instruction.__init__(self,
+                assignee=assignee,
+                expression=expression,
+                id=id,
+                depends_on=depends_on)
+
+    exec_method = "exec_AssignExpression"
+
+
+class AssignNorm(Instruction):
+    """
+    .. attribute:: assignee
+    .. attribute:: expression
+    .. attribute:: p
+    """
+
+    def __init__(self, assignee, expression, p=2, id=None, depends_on=frozenset()):
+        Instruction.__init__(self,
+                assignee=assignee,
+                expression=expression,
+                p=p,
+                id=id,
+                depends_on=depends_on)
+
+    exec_method = "exec_AssignNorm"
+
+
+class DotProduct(Instruction):
+    """
+    .. attribute:: assignee
+    .. attribute:: expression_1
+
+        The complex conjugate of this argument is taken before computing the
+        dot product, if applicable.
+
+    .. attribute:: expression_2
+    """
+
+    exec_method = "exec_AssignDotProduct"
+
+# }}}
 
 
 class ReturnState(Instruction):
@@ -127,32 +187,7 @@ class ReturnState(Instruction):
     .. attribute:: expression
     """
 
-
-class EvaluateExpression(Instruction):
-    """
-    .. attribute:: assignee
-    .. attribute:: expression
-    """
-
-
-class Norm(Instruction):
-    """
-    .. attribute:: assignee
-    .. attribute:: expression
-    .. attribute:: p
-    """
-
-
-class DotProduct(Instruction):
-    """
-    .. attribute:: assignee
-    .. attribute:: expression_1
-
-        The complex conjugate of this argument is taken before computing the
-        dot product, if applicable.
-
-    .. attribute:: expression_2
-    """
+    exec_method = intern("exec_ReturnState")
 
 
 class Raise(Instruction):
@@ -166,10 +201,16 @@ class Raise(Instruction):
         The error message to go along with that exception type.
     """
 
+    exec_method = "exec_Raise"
+
+    def __init__(self, error_condition, error_message=None, id=
+
 
 class FailStep(Instruction):
     """
     """
+
+    exec_method = "exec_FailStep"
 
 
 class If(Instruction):
@@ -185,6 +226,8 @@ class If(Instruction):
         a set of ids that the instruction depends on if :attr:`condition`
         evaluates to False
     """
+
+    exec_method = "exec_If"
 
 # }}}
 
@@ -204,6 +247,10 @@ class TimeIntegratorCode(Record):
 
         List of instruction ids (not including their recursive dependencies) to
         be executed for one time step.
+
+    .. atttribute:: instructions
+
+        A list of :class:`Instruction` instances, in no particular order.
     """
 
     @property
@@ -271,6 +318,41 @@ class ExecutionController(object):
                 self.update_plan(new_deps)
 
 # }}}
+
+
+class CodeBuilder(object):
+    def __init__(self):
+        self.id_set = set()
+        self.instructions = []
+
+        from pytools import generate_unique_names
+        self.id_generator = generate_unique_names("insn")
+
+    def add_and_get_ids(self, *insns):
+        new_ids = []
+        for insn in insns:
+            set_attrs = {}
+            if not hasattr(insn, "id") or insn.id is None:
+
+                for possible_id in self.id_generator:
+                    if possible_id not in self.id_set:
+                        set_attrs["id"] = possible_id
+            else:
+                if insn.id in self.id_set:
+                    raise ValueError("duplicate ID")
+
+            if not hasattr(insn, "depends_on"):
+                set_attrs["depends_on"] = frozenset()
+
+            if set_attrs:
+                insn = insn.copy(**set_attrs)
+
+            self.instructions.append(insn)
+            new_ids.append(insn.id)
+
+        # For exception safety, only make state change at end.
+        self.id_set.update(new_ids)
+        return new_ids
 
 
 def infer_single_writer_dependencies(insns):
