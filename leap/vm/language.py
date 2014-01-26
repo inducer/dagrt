@@ -48,20 +48,36 @@ Identifier conventions
 Identifiers whose names start with the pattern <letters> are special.  The
 following special variable names are supported:
 
-<p>NAME : This variable contains persistent state.
-  (that survives from one step to the next)
+``<p>NAME``
+    This variable contains persistent state.
+    (that survives from one step to the next)
 
-<dt> : time step
-  Its value at the beginning of a step indicates the step size to be used. If
-  a time step of this size cannot be completed, FailStep must be issued.
+``<dt>``
+    The time increment for the present time step.
 
-<t> : base time of current time step.
-  The integrator code is responsible for incrementing <t> at the end of a
-  successful step.
+    Its value at the beginning of a step indicates the step size to be used. If
+    a time step of this size cannot be completed, FailStep must be issued.
 
-<state>NAME : state identifier under user control
+    This variable contains persistent state.
+    (that survives from one step to the next)
 
-<func>NAME : A user-defined function.
+``<t>``
+    Base time of current time step.
+
+    The integrator code is responsible for incrementing <t> at the end of a
+    successful step.
+
+    This variable contains persistent state.
+    (that survives from one step to the next)
+
+``<state>NAME``
+    State identifier under user control
+
+    This variable contains persistent state.
+    (that survives from one step to the next)
+
+``<func>NAME``
+    A user-defined function.
 
 The latter two serve to separate the name space used by the method from that
 under the control of the user.
