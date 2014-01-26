@@ -37,6 +37,8 @@ logger = logging.getLogger(__name__)
 # Run example with
 # python test_methods.py "test_rk_accuracy(ODE45TimeStepper(), 5)"
 
+# {{{ non-adaptive test
+
 @pytest.mark.parametrize(("method", "expected_order"), [
     (ODE23TimeStepper(use_high_order=False), 2),
     (ODE23TimeStepper(use_high_order=True), 3),
@@ -67,11 +69,16 @@ def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False
                 + np.cos(inner)
                 )
 
-    def get_error(interp, dt):
+    from pytools.convergence import EOCRecorder
+    eocrec = EOCRecorder()
+
+    for n in range(4, 7):
+        dt = 2**(-n)
         t = 1
         y = np.array([1, 3], dtype=np.float64)
         final_t = 10
 
+        interp = NumpyInterpreter(code, rhs_map={component_id: rhs})
         interp.set_up(t_start=t, dt_start=dt, state={component_id: y})
         interp.initialize()
 
@@ -93,16 +100,7 @@ def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False
             pt.plot(times, soln(times), label="true")
             pt.show()
 
-        return abs(values[-1]-soln(final_t))
-
-    from pytools.convergence import EOCRecorder
-    eocrec = EOCRecorder()
-
-    for n in range(4, 7):
-        dt = 2**(-n)
-        interp = NumpyInterpreter(code, rhs_map={component_id: rhs})
-
-        error = get_error(interp, dt)
+        error = abs(values[-1]-soln(final_t))
         eocrec.add_data_point(dt, error)
 
     print("------------------------------------------------------")
@@ -114,8 +112,26 @@ def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False
     #print orderest, order
     assert orderest > expected_order*0.95
 
+# }}}
 
-def no_test_adaptive_timestep():
+
+# {{{ adaptive test
+
+@pytest.mark.parametrize("method", [
+    ODE23TimeStepper(rtol=1e-6),
+    ODE45TimeStepper(rtol=1e-6),
+    ])
+def test_adaptive_timestep(method, show_dag=False, plot=False):
+    # Use "DEBUG" to trace execution
+    logging.basicConfig(level=logging.INFO)
+
+    component_id = "y"
+    code = method(component_id)
+
+    if show_dag:
+        from leap.vm.language import show_dependency_graph
+        show_dependency_graph(code)
+
     class VanDerPolOscillator:
         def __init__(self, mu=30):
             self.mu = mu
@@ -136,39 +152,67 @@ def no_test_adaptive_timestep():
     example = VanDerPolOscillator()
     y = example.ic()
 
-    from hedge.timestep.dumka3 import Dumka3TimeStepper
-    stepper = Dumka3TimeStepper(3, rtol=1e-6)
+    from leap.vm.exec_numpy import (
+            NumpyInterpreter,
+            StateComputed, StepCompleted, StepFailed)
 
-    next_dt = 1e-5
-    from hedge.timestep import times_and_steps
+    interp = NumpyInterpreter(code, rhs_map={component_id: example})
+    interp.set_up(t_start=example.t_start, dt_start=1e-5, state={component_id: y})
+    interp.initialize()
+
     times = []
-    hist = []
-    dts = []
-    for step, t, max_dt in times_and_steps(
-            max_dt_getter=lambda t: next_dt,
-            taken_dt_getter=lambda: taken_dt,
-            start_time=example.t_start, final_time=example.t_end):
+    values = []
+
+    new_times = []
+    new_values = []
+
+    last_t = 0
+    step_sizes = []
+
+    for event in interp.run(t_end=example.t_end):
+        if isinstance(event, StateComputed):
+            assert event.component_id == component_id
+            assert event.t < example.t_end + 1e-12
+
+            new_values.append(event.state_component)
+            new_times.append(event.t)
+        elif isinstance(event, StepCompleted):
+            step_sizes.append(event.t - last_t)
+            last_t = event.t
+
+            times.extend(new_times)
+            values.extend(new_values)
+            del new_times[:]
+            del new_values[:]
+        elif isinstance(event, StepFailed):
+            del new_times[:]
+            del new_values[:]
+
+            logger.info("failed step at t=%s" % event.t)
 
         #if step % 100 == 0:
             #print t
 
-        hist.append(y)
-        times.append(t)
-        y, t, taken_dt, next_dt = stepper(y, t, next_dt, example)
-        dts.append(taken_dt)
+    times = np.array(times)
+    values = np.array(values)
 
-    if False:
-        from matplotlib.pyplot import plot, show
-        plot(times, [h_entry[1] for h_entry in hist])
-        show()
-        plot(times, dts)
-        show()
+    if plot:
+        import matplotlib.pyplot as pt
+        pt.plot(times, values[:, 1], "x-")
+        pt.show()
+        pt.plot(times, step_sizes, "x-")
+        pt.show()
 
-    dts = np.array(dts)
-    small_step_frac = len(np.nonzero(dts < 0.01)[0]) / step
-    big_step_frac = len(np.nonzero(dts > 0.1)[0]) / step
-    assert abs(small_step_frac - 0.6) < 0.1
-    assert abs(big_step_frac - 0.2) < 0.1
+    step_sizes = np.array(step_sizes)
+    small_step_frac = len(np.nonzero(step_sizes < 0.01)[0]) / len(step_sizes)
+    big_step_frac = len(np.nonzero(step_sizes > 0.05)[0]) / len(step_sizes)
+
+    print small_step_frac
+    print big_step_frac
+    assert small_step_frac <= 0.35
+    assert big_step_frac >= 0.16
+
+# }}}
 
 
 if __name__ == "__main__":

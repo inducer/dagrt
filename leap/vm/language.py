@@ -106,8 +106,12 @@ class Instruction(Record):
     """
 
     def __init__(self, **kwargs):
+        id = kwargs.pop("id", None)
+        if id is not None:
+            id = intern(id)
         depends_on = frozenset(kwargs.pop("depends_on", []))
         Record.__init__(self,
+                id=id,
                 depends_on=depends_on,
                 **kwargs)
 
@@ -165,7 +169,7 @@ class AssignRHS(Instruction):
         return result
 
     def __str__(self):
-        lines = ["time: %s" % self.t]
+        lines = ["at time: %s" % self.t]
         for assignee, rhs_args in zip(self.assignees, self.rhs_arguments):
             lines.append("%s <- rhs:%s(%s)"
                     % (assignee, self.component_id,
@@ -399,7 +403,24 @@ class TimeIntegratorCode(Record):
     .. attribute:: instructions
 
         A list of :class:`Instruction` instances, in no particular order.
+
+    .. attribute:: step_before_fail
+
+        Whether the described method may generate state updates (using
+        :class:`ReturnState`) for a time step it later decides to fail
+        (using :class:`FailStep`).
     """
+
+    def __init__(self,
+            initialization_dep_on,
+            step_dep_on,
+            instructions,
+            step_before_fail):
+        Record.__init__(self,
+                initialization_dep_on=initialization_dep_on,
+                step_dep_on=step_dep_on,
+                instructions=instructions,
+                step_before_fail=step_before_fail)
 
     @property
     @memoize_method
@@ -421,6 +442,7 @@ class ExecutionController(object):
         self.plan_id_set = set()
 
     def reset(self):
+        logger.debug("execution reset")
         self.executed_ids.clear()
 
     def update_plan(self, execute_ids):
@@ -429,32 +451,35 @@ class ExecutionController(object):
         others and such that all their dependencies are satisfied.
         """
 
-        early_plan_id_set = set()
         early_plan = []
 
         id_to_insn = self.code.id_to_insn
 
         def add_with_deps(insn):
             insn_id = insn.id
-            if insn_id in early_plan_id_set:
+            if insn_id in self.executed_ids:
+                # Already done, no need to think more.
+                return
+
+            if insn_id in self.plan_id_set:
+                # Already in plan, no need to think more.
+                return
+
+            if insn_id in early_plan:
                 return
 
             for dep_id in insn.depends_on:
                 add_with_deps(id_to_insn[dep_id])
 
-            if insn_id in self.plan_id_set and insn_id not in self.executed_ids:
-                self.plan_id_set.remove(insn_id)
-                self.plan.remove(insn_id)
+            assert insn_id not in self.plan_id_set
 
-            assert insn_id not in early_plan_id_set
             early_plan.append(insn_id)
-            early_plan_id_set.add(insn_id)
 
         for insn_id in execute_ids:
             add_with_deps(id_to_insn[insn_id])
 
         self.plan = early_plan + self.plan
-        self.plan_id_set.update(early_plan_id_set)
+        self.plan_id_set.update(early_plan)
 
     def __call__(self, target):
         id_to_insn = self.code.id_to_insn
@@ -467,7 +492,9 @@ class ExecutionController(object):
 
             insn = id_to_insn[insn_id]
 
-            logger.debug("trace: %s" % str(insn).replace("\n", " | "))
+            logger.debug("execution trace: [%s] %s" % (
+                insn.id, str(insn).replace("\n", " | ")))
+
             result = getattr(target, insn.exec_method)(insn)
             if result is not None:
                 event, new_deps = result

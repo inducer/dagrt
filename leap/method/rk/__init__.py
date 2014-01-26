@@ -137,10 +137,6 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                         id="update_state",
                         # don't change state before all RHSs are done using it
                         depends_on=all_rhs_eval_ids),
-                    AssignExpression(
-                        "<t>", t + dt,
-                        depends_on=["update_state"],
-                        id="increment_dt"),
 
                     ReturnState(
                         id="ret_state",
@@ -148,7 +144,14 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                         time=t + dt,
                         component_id=component_id,
                         expression=state,
-                        depends_on=["update_state"]))
+                        depends_on=["update_state"]),
+
+                    AssignExpression(
+                        "<t>", t + dt,
+                        id="increment_t",
+                        depends_on=["update_state", "ret_state"],
+                        ),
+                    )
 
             cbuild.infer_single_writer_dependencies(exclude=dep_inf_exclude_names)
             cbuild.commit()
@@ -159,7 +162,8 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                     step_dep_on=[
                         "ret_state",
                         last_rhs_assignment_id,
-                        "increment_dt"])
+                        "increment_t"],
+                    step_before_fail=False)
 
         else:
             # {{{ step size adaptation
@@ -171,12 +175,15 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                     AssignExpression(
                         "high_order_end_state", state + sum(
                                 dt * coeff * rhss[j]
-                                for j, coeff in enumerate(self.high_order_coeffs))),
+                                for j, coeff in enumerate(self.high_order_coeffs)),
+                        id="compute_hes"),
                     AssignExpression(
                         "low_order_end_state", state + sum(
                                 dt * coeff * rhss[j]
-                                for j, coeff in enumerate(self.low_order_coeffs))),
-                    AssignNorm("norm_start_state", state),
+                                for j, coeff in enumerate(self.low_order_coeffs)),
+                        id="compute_les"),
+                    AssignNorm("norm_start_state", state,
+                        id="compute_state_norm"),
                     AssignNorm("norm_end_state", var("low_order_end_state")),
                     AssignNorm(
                         "rel_error_raw", (
@@ -209,7 +216,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                             )),
                         then_depends_on=["rej_step"],
                         else_depends_on=["acc_adjust_dt", last_rhs_assignment_id,
-                            "update_state", "increment_dt"],
+                            "ret_state", "increment_t"],
                         depends_on=["rel_error_zero_check"],
                         id="reject_check"),
                     # then
@@ -254,14 +261,27 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                             Min((
                                 0.9 * dt * var("rel_error")**(-1/self.high_order),
                                 self.max_dt_growth * dt)),
-                            id="acc_adjust_dt"),
+                            id="acc_adjust_dt",
+                            depends_on=["increment_t"],
+                            ),
                         AssignExpression(
-                            "<state>", limiter(var("high_order_end_state")),
-                            id="update_state"),
+                            state.name, limiter(var("high_order_end_state")),
+                            id="update_state",
+                            depends_on=["compute_les", "compute_hes",
+                                "compute_state_norm"]),
+
+                        ReturnState(
+                            id="ret_state",
+                            time_id="final",
+                            time=t + dt,
+                            component_id=component_id,
+                            expression=state,
+                            depends_on=["update_state"]),
+
                         AssignExpression(
                             "<t>", t + dt,
-                            depends_on=["acc_adjust_dt"],
-                            id="increment_dt")
+                            id="increment_t",
+                            depends_on=["ret_state"]),
                     # endif
                     )
 
@@ -271,7 +291,8 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
             return TimeIntegratorCode(
                     instructions=cbuild.instructions,
                     initialization_dep_on=initialization_dep_on,
-                    step_dep_on=["reject_check"])
+                    step_dep_on=["reject_check"],
+                    step_before_fail=False)
 
             # }}}
 

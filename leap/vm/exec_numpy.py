@@ -26,6 +26,8 @@ from pytools import Record
 import numpy as np
 import numpy.linalg as la
 
+from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
+
 
 class FailStepException(Exception):
     pass
@@ -71,6 +73,19 @@ class StepFailed(Record):
 # }}}
 
 
+class EvaluationMapper(EvaluationMapperBase):
+    def __init__(self, context, functions):
+        """
+        :arg context: a mapping from variable names to values
+        """
+        EvaluationMapperBase.__init__(self, context)
+        self.functions = functions
+
+    def map_call(self, expr):
+        func = self.functions[expr.function.name]
+        return func(*[self.rec(par) for par in expr.parameters])
+
+
 class NumpyInterpreter(object):
     """A :mod:`numpy`-targeting interpreter for the time integration language
     defined in :mod:`leap.vm.language`.
@@ -90,11 +105,14 @@ class NumpyInterpreter(object):
         from leap.vm.language import ExecutionController
         self.exec_controller = ExecutionController(code)
         self.state = {}
+        self.functions = {
+                "len": len,
+                "isnan": np.isnan,
+                }
 
         self.rhs_map = rhs_map
 
-        from pymbolic.mapper.evaluator import EvaluationMapper
-        self.eval_mapper = EvaluationMapper(self.state)
+        self.eval_mapper = EvaluationMapper(self.state, self.functions)
 
     def set_up(self, t_start, dt_start, state):
         """
@@ -155,6 +173,12 @@ class NumpyInterpreter(object):
 
             if last_step:
                 break
+
+    def register_function(self, name, f):
+        if name in self.functions:
+            raise ValueError("function '%s' already regsitered" % name)
+
+        self.functions[name] = f
 
     # {{{ execution methods
 
