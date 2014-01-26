@@ -48,9 +48,11 @@ class StateComputed(Record):
 class StepCompleted(Record):
     """
     .. attribute:: t
+
         Floating point number.
 
     .. attribute:: number
+
         Integer, initial state is 0.
     """
 
@@ -58,9 +60,11 @@ class StepCompleted(Record):
 class StepFailed(Record):
     """
     .. attribute:: t
+
         Floating point number.
 
     .. attribute:: number
+
         Integer, initial state is 0.
     """
 
@@ -70,9 +74,18 @@ class StepFailed(Record):
 class NumpyInterpreter(object):
     """A :mod:`numpy`-targeting interpreter for the time integration language
     defined in :mod:`leap.vm.language`.
+
+    .. automethod:: set_up
+    .. automethod:: initialize
+    .. automethod:: run
     """
 
     def __init__(self, code, rhs_map):
+        """
+        :arg code: an instance of :class:`leap.vm.TimeIntegratorCode`
+        :arg rhs_map: a mapping from component ids to right-hand-side
+            functions
+        """
         self.code = code
         from leap.vm.language import ExecutionController
         self.exec_controller = ExecutionController(code)
@@ -102,6 +115,8 @@ class NumpyInterpreter(object):
             pass
 
     def run(self, t_end):
+        """Generates :ref:`numpy-exec-events`."""
+
         last_step = False
         while True:
             # {{{ adjust time step down at end of integration

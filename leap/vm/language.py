@@ -43,7 +43,7 @@ def get_dependencies(expr):
 
 __doc__ = """
 Identifier conventions
-----------------------
+~~~~~~~~~~~~~~~~~~~~~~
 
 Identifiers whose names start with the pattern <letters> are special.  The
 following special variable names are supported:
@@ -84,6 +84,9 @@ class Instruction(Record):
         A :class:`frozenset` of instruction ids that are reuqired to be
         executed within this execution context before this instruction can be
         executed.
+
+    .. automethod:: get_assignees
+    .. automethod:: get_read_variables
     """
 
     def __init__(self, **kwargs):
@@ -367,17 +370,17 @@ class If(Instruction):
 
 class TimeIntegratorCode(Record):
     """
-    .. atttribute:: initialization_dep_on
+    .. attribute:: initialization_dep_on
 
         List of instruction ids (not including their recursive dependencies) to
         be executed for initialization of the time integrator.
 
-    .. atttribute:: step_dep_on
+    .. attribute:: step_dep_on
 
         List of instruction ids (not including their recursive dependencies) to
         be executed for one time step.
 
-    .. atttribute:: instructions
+    .. attribute:: instructions
 
         A list of :class:`Instruction` instances, in no particular order.
     """
