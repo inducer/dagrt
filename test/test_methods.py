@@ -105,10 +105,10 @@ def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False
         error = get_error(interp, dt)
         eocrec.add_data_point(dt, error)
 
-    print "------------------------------------------------------"
-    print "%s: expected order %d" % (method, expected_order)
-    print "------------------------------------------------------"
-    print eocrec.pretty_print()
+    print("------------------------------------------------------")
+    print("%s: expected order %d" % (method, expected_order))
+    print("------------------------------------------------------")
+    print(eocrec.pretty_print())
 
     orderest = eocrec.estimate_order_of_convergence()[0, 1]
     #print orderest, order

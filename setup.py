@@ -32,11 +32,11 @@ def main():
               'License :: OSI Approved :: MIT License',
               'Natural Language :: English',
               'Programming Language :: Python',
-              # We use conditional expressions, so 2.5 is the bare minimum.
               'Programming Language :: Python :: 2.5',
               'Programming Language :: Python :: 2.6',
               'Programming Language :: Python :: 2.7',
-              # 3.x has not yet been tested.
+              'Programming Language :: Python :: 3.3',
+              'Programming Language :: Python :: 3.4',
               'Topic :: Scientific/Engineering',
               'Topic :: Scientific/Engineering :: Information Analysis',
               'Topic :: Scientific/Engineering :: Mathematics',
