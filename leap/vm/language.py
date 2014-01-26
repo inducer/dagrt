@@ -585,6 +585,11 @@ class CodeBuilder(object):
         self.build_group = new_build_group
 
     def commit(self):
+        for insn in self.build_group:
+            for dep in insn.depends_on:
+                if dep not in self.id_set:
+                    raise ValueError("unknown dependency id: %s" % dep)
+
         self._instructions.extend(self.build_group)
         del self.build_group[:]
 
