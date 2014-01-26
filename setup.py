@@ -45,11 +45,16 @@ def main():
               'Topic :: Utilities',
               ],
 
-          packages=["leap"],
+          packages=[
+              "leap",
+              "leap.method",
+              "leap.method.rk",
+              "leap.vm",
+              ],
           install_requires=[
               "numpy>=1.5",
-              "pytools>=2013.1",
-              "pymbolic>=2013.3.5",
+              "pytools>=2014.1",
+              "pymbolic>=2014.1",
               "pytest>=2.3",
               ],
 

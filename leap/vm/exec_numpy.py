@@ -31,7 +31,7 @@ class FailStepException(Exception):
     pass
 
 
-# {{{ states returned from run()
+# {{{ events returned from run()
 
 class StateComputed(Record):
     """
@@ -93,20 +93,26 @@ class NumpyInterpreter(object):
         for key, val in state.iteritems():
             if key.startswith("<"):
                 raise ValueError("state variables may not start with '<'")
-            self.state[key] = val
+            self.state["<state>"+key] = val
 
     def initialize(self):
-        for result in self.exec_controller(self.code.initialization_dep_on, self):
-            yield result
+        self.exec_controller.reset()
+        self.exec_controller.update_plan(self.code.initialization_dep_on)
+        for event in self.exec_controller(self):
+            pass
 
     def run(self, t_end):
+        last_step = False
         while True:
             # {{{ adjust time step down at end of integration
 
             t = self.state["<t>"]
-            dt = self.state["<t>"]
-            if t+dt > t_end:
+            dt = self.state["<dt>"]
+
+            if t+dt >= t_end:
+                assert t <= t_end
                 self.state["<dt>"] = t_end - t
+                last_step = True
 
             # }}}
 
@@ -114,14 +120,16 @@ class NumpyInterpreter(object):
                 try:
                     self.exec_controller.reset()
                     self.exec_controller.update_plan(self.code.step_dep_on)
-                    for result in self.exec_controller(self):
-                        yield result
+                    for event in self.exec_controller(self):
+                        yield event
 
                 finally:
                     # discard non-permanent per-step state
                     for name in list(self.state.iterkeys()):
-                        if not name.startswith("<p>") \
-                                and name not in ["<t>", "<dt>"]:
+                        if (
+                                not name.startswith("<state>")
+                                and not name.startswith("<p>")
+                                and name not in ["<t>", "<dt>"]):
                             del self.state[name]
 
             except FailStepException:
@@ -130,10 +138,13 @@ class NumpyInterpreter(object):
 
             yield StepCompleted(t=self.state["<t>"])
 
+            if last_step:
+                break
+
     # {{{ execution methods
 
-    def map_AssignRHS(self, insn):
-        rhs = self.rhs_map[insn.rhs_id]
+    def exec_AssignRHS(self, insn):
+        rhs = self.rhs_map[insn.component_id]
         t = self.eval_mapper(insn.t)
 
         for assignee, args in zip(insn.assignees, insn.rhs_arguments):
@@ -141,37 +152,37 @@ class NumpyInterpreter(object):
                     (name, self.eval_mapper(expr))
                     for name, expr in args))
 
-    def map_ReturnState(self, insn):
-        yield StateComputed(
-                t=self.eval_mapper(insn.time),
-                time_id=insn.time_id,
-                component_id=insn.component_id,
-                state_component=self.eval_mapper(insn.expression))
+    def exec_ReturnState(self, insn):
+        return StateComputed(
+                    t=self.eval_mapper(insn.time),
+                    time_id=insn.time_id,
+                    component_id=insn.component_id,
+                    state_component=self.eval_mapper(insn.expression)), []
 
-    def map_AssignExpression(self, insn):
+    def exec_AssignExpression(self, insn):
         self.state[insn.assignee] = self.eval_mapper(insn.expression)
 
-    def map_AssignNorm(self, insn):
+    def exec_AssignNorm(self, insn):
         self.state[insn.assignee] = la.norm(
                 self.eval_mapper(insn.expression), insn.p)
 
-    def map_AssignDotProduct(self, insn):
+    def exec_AssignDotProduct(self, insn):
         self.state[insn.assignee] = np.vdot(
                 self.eval_mapper(insn.expression_1),
                 self.eval_mapper(insn.expression_2)
                 )
 
-    def map_Raise(self, insn):
+    def exec_Raise(self, insn):
         raise insn.error_condition(insn.error_message)
 
-    def map_FailStep(self, insn):
+    def exec_FailStep(self, insn):
         raise FailStepException()
 
-    def map_If(self, insn):
+    def exec_If(self, insn):
         if self.eval_mapper(insn.condition):
-            return insn.then_depends_on
+            return None, insn.then_depends_on
         else:
-            return insn.else_depends_on
+            return None, insn.else_depends_on
 
     # }}}
 

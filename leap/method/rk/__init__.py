@@ -65,8 +65,10 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
 
         dt = var("<dt>")
         t = var("<t>")
-        last_rhs = var("<p>last_rhs")
+        last_rhs = var("<p>last_rhs_"+component_id)
         state = var("<state>"+component_id)
+
+        dep_inf_exclude_names = ["<t>", "<dt>", state.name, last_rhs.name]
 
         if self.limiter_name is not None:
             limiter = var("<func>"+self.limiter_name)
@@ -75,12 +77,16 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
 
         initialization_dep_on = add_and_get_ids(
                 AssignRHS(
-                    assignees=("<p>last_rhs",),
-                    rhs_id=component_id,
+                    assignees=(last_rhs.name,),
+                    component_id=component_id,
                     t=var("<t>"),
-                    rhs_arguments=((component_id, state),)))
+                    rhs_arguments=(((component_id, state),),)))
+
+        cbuild.commit()
 
         rhss = []
+
+        all_rhs_eval_ids = []
 
         # {{{ stage loop
 
@@ -95,12 +101,17 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                             for j, coeff in enumerate(coeffs)))
 
                 rhs_id = "rhs%d" % istage
+                rhs_insn_id = "ev_rhs%d" % istage
+                all_rhs_eval_ids.append(rhs_insn_id)
+
                 add_and_get_ids(
                         AssignRHS(
                             assignees=(rhs_id,),
-                            rhs_id=component_id,
+                            component_id=component_id,
                             t=t + c*dt,
-                            rhs_arguments=((component_id, stage_state),)))
+                            rhs_arguments=(((component_id, stage_state),),),
+                            id=rhs_insn_id,
+                            ))
 
                 this_rhs = var(rhs_id)
 
@@ -117,13 +128,15 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
             else:
                 coeffs = self.low_order_coeffs
 
-            ret_id, = add_and_get_ids(
+            add_and_get_ids(
                     AssignExpression(
-                        "<state>", limiter(
+                        state.name, limiter(
                             state + sum(
                                 dt * coeff * rhss[j]
                                 for j, coeff in enumerate(coeffs))),
-                        id="update_state"),
+                        id="update_state",
+                        # don't change state before all RHSs are done using it
+                        depends_on=all_rhs_eval_ids),
                     AssignExpression(
                         "<t>", t + dt,
                         depends_on=["update_state"],
@@ -135,12 +148,19 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                         time=t + dt,
                         component_id=component_id,
                         expression=state,
-                        depends_on="update_state"))
+                        depends_on=["update_state"]))
+
+            cbuild.infer_single_writer_dependencies(exclude=dep_inf_exclude_names)
+            cbuild.commit()
 
             return TimeIntegratorCode(
                     instructions=cbuild.instructions,
                     initialization_dep_on=initialization_dep_on,
-                    step_dep_on=[ret_id, last_rhs_assignment_id, "increment_dt"])
+                    step_dep_on=[
+                        "ret_state",
+                        last_rhs_assignment_id,
+                        "increment_dt"])
+
         else:
             # {{{ step size adaptation
 
@@ -183,10 +203,10 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                     # endif
 
                     If(
-                        condition=LogicalOr([
+                        condition=LogicalOr((
                             Comparison(var("rel_error"), ">", 1),
                             var("isnan")(var("rel_error"))
-                            ]),
+                            )),
                         then_depends_on=["rej_step"],
                         else_depends_on=["acc_adjust_dt", last_rhs_assignment_id,
                             "update_state", "increment_dt"],
@@ -198,7 +218,8 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                         If(
                             condition=var("isnan")(var("rel_error")),
                             then_depends_on=["min_adjust_dt"],
-                            else_depends_on=["low_adjust_dt"],
+                            else_depends_on=["rej_adjust_dt"],
+                            depends_on=["rel_error_zero_check"],
                             id="adjust_dt"),
                         # then
                         AssignExpression("<dt>",
@@ -243,6 +264,9 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                             id="increment_dt")
                     # endif
                     )
+
+            cbuild.infer_single_writer_dependencies(exclude=dep_inf_exclude_names)
+            cbuild.commit()
 
             return TimeIntegratorCode(
                     instructions=cbuild.instructions,
