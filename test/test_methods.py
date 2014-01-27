@@ -207,8 +207,8 @@ def test_adaptive_timestep(method, show_dag=False, plot=False):
     small_step_frac = len(np.nonzero(step_sizes < 0.01)[0]) / len(step_sizes)
     big_step_frac = len(np.nonzero(step_sizes > 0.05)[0]) / len(step_sizes)
 
-    print small_step_frac
-    print big_step_frac
+    print(small_step_frac)
+    print(big_step_frac)
     assert small_step_frac <= 0.35
     assert big_step_frac >= 0.16
 
