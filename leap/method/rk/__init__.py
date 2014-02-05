@@ -26,6 +26,186 @@ THE SOFTWARE.
 
 from leap.method import Method
 
+class MultirateFastestFirstEulerMethod(Method):
+
+    # Add code for y' = y + dt * f(t, y).
+
+    def euler_update(self, cbuild, funcs, deps, t, dt, fast, slow,
+                     lhs, suffix):
+        add_and_get_ids = cbuild.add_and_get_ids
+
+        from leap.vm.language import AssignRHS, AssignNorm, \
+            AssignExpression, ReturnState, If, Raise, FailStep, \
+            TimeIntegratorCode, CodeBuilder
+
+        from pymbolic import var
+
+        rhss = []
+        
+        # Compute all derivatives.
+        for f in funcs:
+            rhs = 'rhs' + str(len(rhss)) + '_' + suffix
+            add_and_get_ids(AssignRHS(
+                assignees=(rhs, ),
+                component_id=f,
+                t=t,
+                rhs_arguments=((('u', fast), ('v', slow)), ),
+                id='assign_' + rhs,
+                depends_on=deps,
+                ))
+            rhss.append(rhs)
+
+        # Take sum of derivatives * dt
+        add_and_get_ids(AssignExpression(lhs.name, lhs + dt
+                        * sum(map(var, rhss)), id='update_state_'
+                        + suffix, depends_on=map(lambda x: 'assign_' \
+                        + x, rhss)))
+
+        return 'update_state_' + suffix
+
+    def __call__(self, components):
+        from leap.vm.language import AssignRHS, AssignNorm, \
+            AssignExpression, ReturnState, If, Raise, FailStep, \
+            TimeIntegratorCode, CodeBuilder
+
+        cbuild = CodeBuilder()
+
+        add_and_get_ids = cbuild.add_and_get_ids
+
+        from pymbolic import var
+
+        # Ratio of slow to fast (must be integer)
+        factor = var('<state>factor')
+
+        dt = var('<dt>')
+        t = var('<t>')
+        # Slow component
+        slow = var('<p>slow')
+        # Computed derivative of slow component at last synchronization
+        slowrate = var('<p>slow_rate')
+        # Fast component
+        fast = var('<p>fast')
+        # Value of fast component at last slow component synchronization
+        fastprev = var('<p>fast_prev')
+        # Distance in timesteps since last component synchronization
+        step = var('<p>step')
+        # Extrapolated value of slow component
+        slow_extrapolate = var('slow_extrapolate')
+
+        dep_inf_exclude_names = [v.name for v in [
+            dt, t, slow, slowrate, fast, fastprev, step, slow_extrapolate
+            ]]
+
+        # Initialization
+
+        initialization_dep_on = add_and_get_ids(
+            AssignExpression(step.name, 0, id='init_step'),
+            AssignExpression(fast.name, var('<state>fast'),
+                             id='init_fast'),
+            AssignExpression(slow.name, var('<state>slow'),
+                             id='init_slow'),
+            AssignRHS(
+                assignees=('slow_rate_init_s2s', ),
+                component_id='s2s',
+                t=t,
+                rhs_arguments=((('u', fast), ('v', slow)), ),
+                id='init_s2s',
+                depends_on=['init_slow', 'init_fast'],
+                ),
+            AssignRHS(
+                assignees=('slow_rate_init_f2s', ),
+                component_id='f2s',
+                t=t,
+                rhs_arguments=((('u', fast), ('v', slow)), ),
+                id='init_f2s',
+                depends_on=['init_slow', 'init_fast'],
+                ),
+            AssignExpression(slowrate.name, var('slow_rate_init_f2s')
+                             + var('slow_rate_init_s2s'),
+                             depends_on=['init_s2s', 'init_f2s']),
+            AssignExpression(fastprev.name, fast,
+                             depends_on=['init_fast']),
+            )
+
+        cbuild.commit()
+
+        from pymbolic.primitives import Comparison
+
+        # Extrapolation
+
+        add_and_get_ids(AssignExpression(slow_extrapolate.name, slow
+                        + step * dt * slowrate, id='extrapolation'))
+
+        # Fast step with extrapolated value
+
+        fast_step = self.euler_update(
+            cbuild, ['f2f', 's2f'], ['extrapolation'], t, dt, fast,
+            slow_extrapolate, fast, 'fast'
+            )
+
+        # Slow step
+
+        slow_step = self.euler_update(
+            cbuild, ['f2s', 's2s'], [], t - (factor - 1) * dt, factor * dt,
+            fastprev, slow, slow, 'slow'
+            )
+
+        # Upon completion of the slow step, the new derivative needs to be computed for
+        # extrapolation purposes.
+
+        add_and_get_ids(AssignRHS(assignees=('u_rhs0_slow', ),
+                        component_id='f2s', t=t + dt,
+                        rhs_arguments=((('u', fast), ('v', slow)), ),
+                        depends_on=[slow_step, fast_step]),
+
+                        AssignRHS(assignees=('u_rhs1_slow', ),
+                        component_id='s2s', t=t + dt,
+                        rhs_arguments=((('u', fast), ('v', slow)), ),
+                        depends_on=[slow_step, fast_step]),
+
+                        AssignExpression(slowrate.name,
+                        var('u_rhs0_slow') + var('u_rhs1_slow'),
+                        id='update_slowrate'))
+
+        # Upon completion of the slow step, the value of fast at that time must be
+        # recorded.
+
+        (update_fastprev, ) = \
+            add_and_get_ids(AssignExpression(fastprev.name, fast,
+                            depends_on=[fast_step, slow_step]))
+
+        # This condition determines if the slow step is taken.
+
+        add_and_get_ids(If(condition=Comparison(step, '==', factor
+                        - 1), then_depends_on=[fast_step, slow_step,
+                        'update_slowrate', update_fastprev],
+                        else_depends_on=[fast_step], id='decide_step'))
+
+        # Step depends on: (1) return value (fast component), (2) incrementing <t>,
+        # (3) incrementing <step>
+
+        add_and_get_ids(ReturnState(
+            id='ret',
+            time_id='final',
+            time=t + dt,
+            component_id='<state>',
+            expression=fast,
+            depends_on=['decide_step'],
+            ),
+            AssignExpression('<t>', t + dt, id='increment_t',
+                             depends_on=['ret']),
+            AssignExpression(step.name, (step + 1) % factor,
+                             depends_on=['decide_step'],
+                             id='update_step'))
+
+        cbuild.infer_single_writer_dependencies(exclude=dep_inf_exclude_names)
+        cbuild.commit()
+
+        return TimeIntegratorCode(instructions=cbuild.instructions,
+                                  initialization_dep_on=initialization_dep_on,
+                                  step_dep_on=['ret', 'increment_t',
+                                  'update_step'],
+                                  step_before_fail=False)
 
 # {{{ Embedded Runge-Kutta schemes base class
 

@@ -27,11 +27,114 @@ THE SOFTWARE.
 import sys
 import pytest
 
-from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
+from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper, \
+                           MultirateFastestFirstEulerMethod
 import numpy as np
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+class Basic:
+    """
+    stolen and modified from ode_systems.py
+    ODE-system - basic
+    du/dt = v
+    dv/dt = -u/t^2
+    A = [[0, 1]
+        [-1/t^2, 0]].
+    """
+    def __init__(self):
+        self.t_start = 1
+        self.t_end = 2
+        self.initial_values = np.array([1, 3])
+
+    def f2f_rhs(self, t, u, v):
+        return 0
+
+    def s2f_rhs(self, t, u, v):
+        return v
+
+    def f2s_rhs(self, t, u, v):
+        return -u/t**2
+
+    def s2s_rhs(self, t, u, v):
+        return 0
+
+    def soln_0(self, t):
+        inner = np.sqrt(3)/2*np.log(t)
+        return np.sqrt(t)*(
+                5*np.sqrt(3)/3*np.sin(inner)
+                + np.cos(inner)
+                )
+
+# Run example with
+# python test_methods.py "test_multirate_euler_accuracy(MultirateFastestFirstEulerMethod(), 1)"
+
+@pytest.mark.parametrize(("method", "expected_order"),
+                         [(MultirateFastestFirstEulerMethod(), 1)])
+def test_multirate_euler_accuracy(method, expected_order, show_dag=False, plot_solution=False):
+    # Use "DEBUG" to trace execution
+    logging.basicConfig(level=logging.INFO)
+
+    component_id = "y"
+    code = method(component_id)
+
+    if show_dag:
+        from leap.vm.language import show_dependency_graph
+        show_dependency_graph(code)
+
+    from leap.vm.exec_numpy import NumpyInterpreter, StateComputed
+
+    from ode_systems import Full
+
+    f = Basic()
+    soln = f.soln_0
+
+    from pytools.convergence import EOCRecorder
+    eocrec = EOCRecorder()
+
+    for n in range(4, 7):
+        dt = 2**(-n)
+        t = 1
+        y = np.array([1, 3], dtype=np.float64)
+        final_t = 2
+
+        interp = NumpyInterpreter(code,
+            rhs_map={"s2f": f.s2f_rhs, "f2f": f.f2f_rhs, "f2s" : f.f2s_rhs,
+                     "s2s": f.s2s_rhs})
+        interp.set_up(t_start=t, dt_start=dt,
+                      state={"fast": y[0], "slow": y[1], "factor": 4})
+        interp.initialize()
+
+        times = []
+        values = []
+        for event in interp.run(t_end=final_t):
+            if isinstance(event, StateComputed):
+                values.append(event.state_component)
+                times.append(event.t)
+
+        assert abs(times[-1] - final_t) < 1e-10
+
+        times = np.array(times)
+
+        if plot_solution:
+            import matplotlib.pyplot as pt
+            pt.plot(times, values, label="comp")
+            pt.plot(times, soln(times), label="true")
+            pt.show()
+
+        error = abs(values[-1]-soln(final_t))
+        eocrec.add_data_point(dt, error)
+
+    print("------------------------------------------------------")
+    print("%s: expected order %d" % (method, expected_order))
+    print("------------------------------------------------------")
+    print(eocrec.pretty_print())
+
+    orderest = eocrec.estimate_order_of_convergence()[0, 1]
+    #print orderest, order
+    assert orderest > expected_order*0.95
 
 
 # Run example with
