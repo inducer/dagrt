@@ -29,6 +29,7 @@ import pytest
 
 from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper, \
                            MultirateFastestFirstEulerMethod
+from leap.method.ab import AdamsBashforthTimeStepper
 import numpy as np
 
 import logging
@@ -73,7 +74,7 @@ class Basic:
 
 @pytest.mark.parametrize(("method", "expected_order"),
                          [(MultirateFastestFirstEulerMethod(), 1)])
-def test_multirate_euler_accuracy(method, expected_order, show_dag=False, plot_solution=False):
+def test_multirate_euler_accuracy(method, expected_order, show_dag=True, plot_solution=False):
     # Use "DEBUG" to trace execution
     logging.basicConfig(level=logging.INFO)
 
@@ -136,6 +137,79 @@ def test_multirate_euler_accuracy(method, expected_order, show_dag=False, plot_s
     #print orderest, order
     assert orderest > expected_order*0.95
 
+# Run example with
+# python test_methods.py "test_ab_accuracy(AdamsBashforthTimeStepper(3), 3)"
+
+@pytest.mark.parametrize(("method", "expected_order"), [
+    (AdamsBashforthTimeStepper(3), 3),
+    ])
+def test_ab_accuracy(method, expected_order, show_dag=True, plot_solution=False):
+    # Use "DEBUG" to trace execution
+    logging.basicConfig(level=logging.INFO)
+
+    component_id = "y"
+    code = method(component_id)
+
+    if show_dag:
+        from leap.vm.language import show_dependency_graph
+        show_dependency_graph(code)
+
+    from leap.vm.exec_numpy import NumpyInterpreter, StateComputed
+
+    def rhs(t, y):
+        u, v = y
+        return np.array([v, -u/t**2], dtype=np.float64)
+
+    def soln(t):
+        inner = np.sqrt(3)/2*np.log(t)
+        return np.sqrt(t)*(
+                5*np.sqrt(3)/3*np.sin(inner)
+                + np.cos(inner)
+                )
+
+    from pytools.convergence import EOCRecorder
+    eocrec = EOCRecorder()
+
+    for n in range(5, 9):
+        dt = 2**(-n)
+        t = 1
+        y = np.array([1, 3], dtype=np.float64)
+        final_t = 10
+
+        interp = NumpyInterpreter(code, rhs_map={component_id: rhs})
+        interp.set_up(t_start=t, dt_start=dt, state={component_id: y})
+        interp.initialize()
+
+        times = []
+        values = []
+        for event in interp.run(t_end=final_t):
+            if isinstance(event, StateComputed):
+                assert event.component_id == component_id
+                values.append(event.state_component[0])
+                times.append(event.t)
+
+        assert abs(times[-1] - final_t) < 1e-10
+
+        times = np.array(times)
+
+        if plot_solution:
+            import matplotlib.pyplot as pt
+            pt.plot(times, values, label="comp")
+            pt.plot(times, soln(times), label="true")
+            pt.show()
+
+        error = abs(values[-1]-soln(final_t))
+        eocrec.add_data_point(dt, error)
+
+    print("------------------------------------------------------")
+    print("%s: expected order %d" % (method, expected_order))
+    print("------------------------------------------------------")
+    print(eocrec.pretty_print())
+
+    orderest = eocrec.estimate_order_of_convergence()[0, 1]
+    assert orderest > expected_order*0.95
+
+# }}}
 
 # Run example with
 # python test_methods.py "test_rk_accuracy(ODE45TimeStepper(), 5)"
@@ -148,7 +222,7 @@ def test_multirate_euler_accuracy(method, expected_order, show_dag=False, plot_s
     (ODE45TimeStepper(use_high_order=False), 4),
     (ODE45TimeStepper(use_high_order=True), 5),
     ])
-def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False):
+def test_rk_accuracy(method, expected_order, show_dag=True, plot_solution=False):
     # Use "DEBUG" to trace execution
     logging.basicConfig(level=logging.INFO)
 
