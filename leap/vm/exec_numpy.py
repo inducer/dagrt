@@ -27,6 +27,7 @@ import numpy as np
 import numpy.linalg as la
 
 from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
+from pymbolic.primitives import Vector
 
 
 class FailStepException(Exception):
@@ -84,6 +85,12 @@ class EvaluationMapper(EvaluationMapperBase):
     def map_call(self, expr):
         func = self.functions[expr.function.name]
         return func(*[self.rec(par) for par in expr.parameters])
+    
+    def map_vector(self, expr):
+        return np.array([self.rec(child) for child in expr.children])
+    
+    def map_numpy_array(self, expr):
+        return expr
 
 
 class NumpyInterpreter(object):

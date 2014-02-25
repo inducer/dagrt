@@ -510,24 +510,42 @@ class ExecutionController(object):
 # {{{ code building utility
 
 class CodeBuilder(object):
+        
     def __init__(self):
         self.id_set = set()
+        self.generated_id_set = set()
+        self.var_set = set()
+        self.generated_var_set = set()
+
         self._instructions = []
         self.build_group = []
-
+    
+    def fresh_var_name(self, prefix):
+        """Return a variable name that is not guaranteed not to be in use and
+        not to be generated in the future."""
         from pytools import generate_unique_names
-        self.id_generator = generate_unique_names("insn")
-
+        for possible_var in generate_unique_names(prefix):
+            if possible_var not in self.var_set \
+                and possible_var not in self.generated_var_set:
+                self.generated_var_set.add(possible_var)
+                return possible_var
+        
+    def fresh_insn_id(self, prefix):
+        """Return an instruction name that is guaranteed not to be in use and
+        not to be generated in the future."""
+        from pytools import generate_unique_names
+        for possible_id in generate_unique_names(prefix):
+            if possible_id not in self.id_set and possible_id not in \
+                self.generated_id_set:
+                self.generated_id_set.add(possible_id)
+                return possible_id
+        
     def add_and_get_ids(self, *insns):
         new_ids = []
         for insn in insns:
             set_attrs = {}
             if not hasattr(insn, "id") or insn.id is None:
-
-                for possible_id in self.id_generator:
-                    if possible_id not in self.id_set:
-                        set_attrs["id"] = possible_id
-                        break
+                set_attrs["id"] = self.fresh_insn_id("insn")
             else:
                 if insn.id in self.id_set:
                     raise ValueError("duplicate ID")
@@ -540,6 +558,9 @@ class CodeBuilder(object):
 
             self.build_group.append(insn)
             new_ids.append(insn.id)
+            
+            self.var_set |= insn.get_assignees()
+            #self.var_set |= insn.get_read_variables()
 
         # For exception safety, only make state change at end.
         self.id_set.update(new_ids)
