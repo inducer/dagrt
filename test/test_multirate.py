@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # Hedge - the Hybrid'n'Easy DG Environment
 # Copyright (C) 2007 Andreas Kloeckner
+# Copyright (C) 2014 Matt Wala
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,27 +20,34 @@ from __future__ import division
 
 import numpy
 import numpy.linalg as la
-import pytools.test
+import pytest
+from pytools import memoize_method
 
 
 class MultirateTimesteperAccuracyChecker:
-    """Check that the multirate timestepper has the advertised accuracy
-    """
-    def __init__(self, method, order, step_ratio, ode):
+    """Check that the multirate timestepper has the advertised accuracy."""
+
+    def __init__(self, method, order, step_ratio, ode, display_dag=False,
+                 display_solution=False):
         self.method = method
         self.order = order
-        self.step_ratio  = step_ratio
+        self.step_ratio = step_ratio
         self.ode = ode
-    
-    def initialize_interpreter(self, dt):
+        self.display_dag = display_dag
+        self.display_solution = display_solution
+
+    @memoize_method
+    def get_code(self):
         from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
-        from leap.vm.exec_numpy import NumpyInterpreter
-        from pytools import DictionaryWithDefault
-        
+        from pytools import DictionaryWithDefault        
         order = DictionaryWithDefault(lambda x : self.order)
         stepper = TwoRateAdamsBashforthTimeStepper(self.method, order,
-                                                   self.step_ratio)
-        
+                                                       self.step_ratio)
+        return stepper()
+    
+    def initialize_interpreter(self, dt):
+        from leap.vm.exec_numpy import NumpyInterpreter
+
         # Requires a coupled component.
         def make_coupled(f2f, f2s, s2f, s2s):
             def coupled(t, y):
@@ -53,7 +61,7 @@ class MultirateTimesteperAccuracyChecker:
             '<func>s2s' : self.ode.s2s_rhs, '<func>coupled' : make_coupled(
             self.ode.f2f_rhs, self.ode.s2f_rhs, self.ode.f2s_rhs,
             self.ode.s2s_rhs) }
-        interpreter = NumpyInterpreter(stepper(), rhs_map)
+        interpreter = NumpyInterpreter(self.get_code(), rhs_map)
         
         t = self.ode.t_start
         y = self.ode.initial_values
@@ -62,7 +70,7 @@ class MultirateTimesteperAccuracyChecker:
         interpreter.initialize()
         return interpreter
 
-    def get_error(self, dt, name=None):
+    def get_error(self, dt, name=None, plot_solution=False):
         from leap.vm.exec_numpy import StateComputed
         
         final_t = self.ode.t_end
@@ -82,24 +90,46 @@ class MultirateTimesteperAccuracyChecker:
         y = values[-1]
         
         from ode_systems import Basic, Tria
+        
+        proj = lambda l, x: map(lambda z : z[x], l)
 
         if isinstance(self.ode, Basic) or isinstance(self.ode, Tria):
             # AK: why?
+            if self.display_solution:
+                self.plot_solution(times, proj(values, 0), self.ode.soln_0)
             return abs(y[0]-self.ode.soln_0(t))
         else:
             from math import sqrt
+            if self.display_solution:
+                self.plot_solution(times, proj(values, 0), self.ode.soln_0)
+                self.plot_solution(times, proj(values, 1), self.ode.soln_1)
             return abs(sqrt(y[0]**2 + y[1]**2)
                     - sqrt(self.ode.soln_0(t)**2 + self.ode.soln_1(t)**2)
                     )
 
+    def show_dag(self):
+        from leap.vm.language import show_dependency_graph
+        show_dependency_graph(self.get_code())
+
+    def plot_solution(self, times, values, soln, label=None):
+        import matplotlib.pyplot as pt
+        pt.plot(times, values, label="comp")
+        pt.plot(times, soln(times), label="true")
+        pt.legend(loc='best')
+        pt.show()
+
     def __call__(self):
+        """Run the test and output the estimated the order of convergence."""
+        
         from pytools.convergence import EOCRecorder
+
+        if self.display_dag:
+            self.show_dag()
+
         eocrec = EOCRecorder()
         for n in range(4,7):
             dt = 2**(-n)
-
             error = self.get_error(dt, "mrab-%d.dat" % self.order)
-
             eocrec.add_data_point(dt, error)
 
         print "------------------------------------------------------"
@@ -110,9 +140,25 @@ class MultirateTimesteperAccuracyChecker:
         orderest = eocrec.estimate_order_of_convergence()[0,1]
         assert orderest > self.order*0.70
 
+# Run example with
+# python test_multirate.py "test_multirate_accuracy(\"F\", 3)"
+@pytest.mark.parametrize(("method", "expected_order"), [
+    ("F", 3),
+    ("Fq", 3)
+    ])
+def test_multirate_accuracy(method, expected_order, show_dag=False,
+                            plot_solution=False):
+    from ode_systems import Full
+    from leap.method.ab.multirate.methods import methods
+    m = methods[method]
+    
+    checker = MultirateTimesteperAccuracyChecker(m, expected_order, 2, Full(),
+        show_dag, plot_solution)
+    checker()
 
-@pytools.test.mark_test.long
-def test_multirate_timestep_accuracy():
+
+@pytest.mark.slowtest
+def test_all_multirate_accuracy():
     """Check that the multirate timestepper has the advertised accuracy"""
 
     from leap.method.ab.multirate.methods import methods
@@ -120,7 +166,7 @@ def test_multirate_timestep_accuracy():
 
     step_ratio = 2
 
-    for sys_name in ["Basic", "Full","Comp", "Tria"]:
+    for sys_name in ["Basic", "Full", "Comp", "Tria"]:
         system = getattr(ode_systems, sys_name)
 
         for name in methods:
