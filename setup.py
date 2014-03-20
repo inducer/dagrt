@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: latin1 -*-
+# -*- coding: latin-1 -*-
 
 
 def main():
@@ -49,6 +49,8 @@ def main():
               "leap",
               "leap.method",
               "leap.method.rk",
+              "leap.method.ab",
+              "leap.method.ab.multirate",
               "leap.vm",
               ],
           install_requires=[
