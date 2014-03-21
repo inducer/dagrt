@@ -27,6 +27,8 @@ import numpy as np
 import numpy.linalg as la
 
 from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
+from pymbolic.mapper.differentiator import DifferentiationMapper as \
+    DifferentiationMapperBase
 from pymbolic.primitives import Vector
 
 
@@ -92,6 +94,19 @@ class EvaluationMapper(EvaluationMapperBase):
     def map_numpy_array(self, expr):
         return expr
 
+class DifferentiationMapperWithContext(DifferentiationMapperBase):
+
+    def __init__(self, variable, functions, context):
+        DifferentiationMapperBase.__init__(self, variable, None)
+        self.context = context
+        self.functions = functions
+
+    def map_call(self, expr):
+        raise NotImplementedError
+    
+    def map_variable(self, expr):
+        return self.context[expr.name] if expr.name in self.context else \
+            DifferentiationMapperBase.map_variable(self, expr)
 
 class NumpyInterpreter(object):
     """A :mod:`numpy`-targeting interpreter for the time integration language
@@ -231,5 +246,123 @@ class NumpyInterpreter(object):
             return None, insn.else_depends_on
 
     # }}}
+
+class StepMatrixFinder(NumpyInterpreter):
+    """Constructs a step matrix on-the-fly while interpreting code."""
+    
+    def __init__(self, code, rhs_map, rhs_deriv_map, variables=None):
+        NumpyInterpreter.__init__(self, code, rhs_map)
+        self.rhs_deriv_map = rhs_deriv_map
+        self.diff_states = {}
+        if variables is None:
+            variables = self.get_state_variables()
+        self.variables = variables
+        for variable in variables:
+            self.diff_states[variable] = {}
+        # Initialize the differentiation mapper.
+        self.diff_mappers = {}
+        for variable in variables:
+            context = self.diff_states[variable]
+            self.diff_mappers[variable] = \
+                DifferentiationMapperWithContext(variable, rhs_deriv_map,
+                context)
+
+    def get_state_variables(self):
+        """Extract all state-related variables from the code."""
+        all_var_ids = set()
+        for inst in self.code.instructions:
+            all_var_ids |= inst.get_assignees()
+            all_var_ids |= inst.get_read_variables()
+        all_state_vars = []
+        for var_name in all_var_ids:
+            if var_name.startswith('<p>') or var_name.startswith('<state>'):
+                all_state_vars.append(var_name)
+        all_state_vars.sort()
+        from pymbolic import var
+        return map(var, all_state_vars)
+
+    def build_step_matrix(self):
+        nv = len(self.variables)
+        step_matrix = np.zeros((nv, nv),)
+        for i, v in enumerate(self.variables):
+            for j, vv in enumerate(self.variables):
+                step_matrix[i][j] = self.diff_mappers[vv](v)
+        return step_matrix
+
+    def run(self, t_end):
+        """Generates :ref:`numpy-exec-events`."""
+
+        last_step = False
+        while True:
+            # {{{ adjust time step down at end of integration
+
+            t = self.state["<t>"]
+            dt = self.state["<dt>"]
+
+            if t+dt >= t_end:
+                assert t <= t_end
+                self.state["<dt>"] = t_end - t
+                last_step = True
+
+            # }}}
+
+            try:
+                try:
+                    self.exec_controller.reset()
+                    self.exec_controller.update_plan(self.code.step_dep_on)
+                    for event in self.exec_controller(self):
+                        if isinstance(event, StateComputed):
+                            event.step_matrix = self.build_step_matrix()
+                            # Discard computed derivatives.
+                            for variable in self.variables:
+                                self.diff_states[variable].clear()
+                        yield event
+                finally:
+                    # discard non-permanent per-step state
+                    for name in list(self.state.iterkeys()):
+                        if (
+                                not name.startswith("<state>")
+                                and not name.startswith("<p>")
+                                and name not in ["<t>", "<dt>"]):
+                            del self.state[name]
+
+            except FailStepException:
+                yield StepFailed(t=self.state["<t>"])
+                continue
+
+            yield StepCompleted(t=self.state["<t>"])
+
+            if last_step:
+                break
+
+    def exec_AssignRHS(self, insn):
+        rhs = self.rhs_map[insn.component_id]
+        t = self.eval_mapper(insn.t)
+
+        evaluated = []
+
+        for assignee, args in zip(insn.assignees, insn.rhs_arguments):
+            rhsargs = [(name, self.eval_mapper(expr)) for name, expr in args]
+            evaluated.append(rhsargs)
+            self.state[assignee] = rhs(t, **dict(rhsargs))
+
+        # Compute derivatives of assignee by chain rule.
+        rhs_deriv = self.rhs_deriv_map[insn.component_id]
+
+        for assignee, args, ev_args in \
+            zip(insn.assignees, insn.rhs_arguments, evaluated):
+            for variable in self.variables:
+                total_deriv = 0
+                for n, arg in enumerate(args):
+                    deriv = self.diff_mappers[variable](arg[1])
+                    eval_deriv = self.eval_mapper(deriv)
+                    total_deriv += rhs_deriv(1 + n, t, **dict(ev_args)) * eval_deriv
+                self.diff_states[variable][assignee] = self.eval_mapper(total_deriv)
+                
+    def exec_AssignExpression(self, insn):
+        self.state[insn.assignee] = self.eval_mapper(insn.expression)
+        for variable in self.variables:
+            deriv = self.diff_mappers[variable](insn.expression)
+            self.diff_states[variable][insn.assignee] = self.eval_mapper(deriv)
 
 # vim: fdm=marker
