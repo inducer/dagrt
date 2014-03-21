@@ -127,7 +127,7 @@ class MultirateTimesteperAccuracyChecker:
             self.show_dag()
 
         eocrec = EOCRecorder()
-        for n in range(4,7):
+        for n in range(5,8):
             dt = 2**(-n)
             error = self.get_error(dt, "mrab-%d.dat" % self.order)
             eocrec.add_data_point(dt, error)
