@@ -91,7 +91,7 @@ class MultirateTimesteperAccuracyChecker:
         
         from ode_systems import Basic, Tria
         
-        proj = lambda l, x: map(lambda z : z[x], l)
+        proj = lambda l, x: [z[x] for z in l]
 
         if isinstance(self.ode, Basic) or isinstance(self.ode, Tria):
             # AK: why?
@@ -132,10 +132,10 @@ class MultirateTimesteperAccuracyChecker:
             error = self.get_error(dt, "mrab-%d.dat" % self.order)
             eocrec.add_data_point(dt, error)
 
-        print "------------------------------------------------------"
-        print "ORDER %d" % self.order
-        print "------------------------------------------------------"
-        print eocrec.pretty_print()
+        print("------------------------------------------------------")
+        print("ORDER %d" % self.order)
+        print("------------------------------------------------------")
+        print(eocrec.pretty_print())
 
         orderest = eocrec.estimate_order_of_convergence()[0,1]
         assert orderest > self.order*0.70
@@ -170,9 +170,9 @@ def test_all_multirate_accuracy():
         system = getattr(ode_systems, sys_name)
 
         for name in methods:
-            print "------------------------------------------------------"
-            print "METHOD: %s" % name
-            print "------------------------------------------------------"
+            print("------------------------------------------------------")
+            print("METHOD: %s" % name)
+            print("------------------------------------------------------")
             for order in [1, 3, 5]:
                 MultirateTimesteperAccuracyChecker(
                         methods[name], order, step_ratio, ode = system())()
@@ -181,7 +181,7 @@ def test_all_multirate_accuracy():
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
-        exec sys.argv[1]
+        exec(sys.argv[1])
     else:
         from py.test.cmdline import main
         main([__file__])
