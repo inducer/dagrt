@@ -66,6 +66,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         dt = var("<dt>")
         t = var("<t>")
         last_rhs = var("<p>last_rhs_"+component_id)
+        local_last_rhs = var('last_rhs_' + component_id)
         state = var("<state>"+component_id)
 
         dep_inf_exclude_names = ["<t>", "<dt>", state.name, last_rhs.name]
@@ -93,7 +94,9 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         for istage, (c, coeffs) in enumerate(self.butcher_tableau):
             if len(coeffs) == 0:
                 assert c == 0
-                this_rhs = last_rhs
+                add_and_get_ids(
+                    AssignExpression(local_last_rhs.name, last_rhs))
+                this_rhs = local_last_rhs
             else:
                 stage_state = limiter(
                         state + sum(
