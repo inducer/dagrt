@@ -1,6 +1,9 @@
 from __future__ import division, with_statement
 
-__copyright__ = "Copyright (C) 2013 Andreas Kloeckner"
+__copyright__ = """
+Copyright (C) 2013 Andreas Kloeckner
+Copyright (C) 2014 Matt Wala
+"""
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,21 +26,10 @@ THE SOFTWARE.
 """
 
 from pytools import Record, memoize_method
+from leap.vm.utils import get_variables
 
 import logging
 logger = logging.getLogger(__name__)
-
-
-# {{{ utilities
-
-def get_dependencies(expr):
-    from pymbolic.mapper.dependency import DependencyMapper
-    dep_mapper = DependencyMapper(composite_leaves=False)
-
-    return frozenset(dep.name for dep in dep_mapper(expr))
-
-# }}}
-
 
 # {{{ instructions
 
@@ -161,10 +153,10 @@ class AssignRHS(Instruction):
         return frozenset(self.assignees)
 
     def get_read_variables(self):
-        result = get_dependencies(self.t)
+        result = get_variables(self.t)
         for args in self.rhs_arguments:
-            for name, expr in args:
-                result = result | get_dependencies(expr)
+            for var, expr in args:
+                result = result | get_variables(expr)
 
         return result
 
@@ -174,7 +166,7 @@ class AssignRHS(Instruction):
             lines.append("%s <- rhs:%s(%s)"
                     % (assignee, self.component_id,
                         ", ".join(str(arg)
-                            for name, arg in rhs_args)))
+                            for var, arg in rhs_args)))
 
         return "\n".join(lines)
 
@@ -218,7 +210,7 @@ class AssignExpression(Instruction):
         return frozenset([self.assignee])
 
     def get_read_variables(self):
-        return get_dependencies(self.expression)
+        return get_variables(self.expression)
 
     def __str__(self):
         return "%s <- %s" % (self.assignee, self.expression)
@@ -245,7 +237,7 @@ class AssignNorm(Instruction):
         return frozenset([self.assignee])
 
     def get_read_variables(self):
-        return get_dependencies(self.expression)
+        return get_variables(self.expression)
 
     def __str__(self):
         return "%s <- ||%s||_%s" % (self.assignee, self.expression, self.p)
@@ -269,8 +261,8 @@ class AssignDotProduct(Instruction):
 
     def get_read_variables(self):
         return (
-                get_dependencies(self.expression_1)
-                | get_dependencies(self.expression_2))
+                get_variables(self.expression_1)
+                | get_variables(self.expression_2))
 
     exec_method = "exec_AssignDotProduct"
 
@@ -293,7 +285,7 @@ class ReturnState(Instruction):
         return frozenset()
 
     def get_read_variables(self):
-        return get_dependencies(self.expression)
+        return get_variables(self.expression)
 
     def __str__(self):
         return "Ret %s at %s as %s" % (
@@ -374,7 +366,7 @@ class If(Instruction):
         return frozenset()
 
     def get_read_variables(self):
-        return get_dependencies(self.condition)
+        return get_variables(self.condition)
 
     def __str__(self):
         return "If %s" % self.condition
@@ -510,7 +502,7 @@ class ExecutionController(object):
 # {{{ code building utility
 
 class CodeBuilder(object):
-        
+
     def __init__(self):
         self.id_set = set()
         self.generated_id_set = set()
@@ -519,27 +511,27 @@ class CodeBuilder(object):
 
         self._instructions = []
         self.build_group = []
-    
+
     def fresh_var_name(self, prefix):
         """Return a variable name that is not guaranteed not to be in use and
         not to be generated in the future."""
         from pytools import generate_unique_names
         for possible_var in generate_unique_names(prefix):
             if possible_var not in self.var_set \
-                and possible_var not in self.generated_var_set:
+                    and possible_var not in self.generated_var_set:
                 self.generated_var_set.add(possible_var)
                 return possible_var
-        
+
     def fresh_insn_id(self, prefix):
         """Return an instruction name that is guaranteed not to be in use and
         not to be generated in the future."""
         from pytools import generate_unique_names
         for possible_id in generate_unique_names(prefix):
             if possible_id not in self.id_set and possible_id not in \
-                self.generated_id_set:
+                    self.generated_id_set:
                 self.generated_id_set.add(possible_id)
                 return possible_id
-        
+
     def add_and_get_ids(self, *insns):
         new_ids = []
         for insn in insns:
@@ -558,7 +550,7 @@ class CodeBuilder(object):
 
             self.build_group.append(insn)
             new_ids.append(insn.id)
-            
+
             self.var_set |= insn.get_assignees()
             #self.var_set |= insn.get_read_variables()
 
