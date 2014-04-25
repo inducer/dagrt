@@ -1,22 +1,31 @@
 # -*- coding: utf-8 -*-
-# Hedge - the Hybrid'n'Easy DG Environment
-# Copyright (C) 2007 Andreas Kloeckner
-# Copyright (C) 2014 Matt Wala
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import division
+
+__copyright__ ="""
+Copyright (C) 2007 Andreas Kloeckner
+Copyright (C) 2014 Matt Wala
+"""
+
+__license__ = """
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+"""
 
 import numpy
 import numpy.linalg as la
@@ -24,7 +33,7 @@ import pytest
 from pytools import memoize_method
 
 
-class MultirateTimesteperAccuracyChecker:
+class MultirateTimesteperAccuracyChecker(object):
     """Check that the multirate timestepper has the advertised accuracy."""
 
     def __init__(self, method, order, step_ratio, ode, display_dag=False,
@@ -39,12 +48,12 @@ class MultirateTimesteperAccuracyChecker:
     @memoize_method
     def get_code(self):
         from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
-        from pytools import DictionaryWithDefault        
+        from pytools import DictionaryWithDefault
         order = DictionaryWithDefault(lambda x : self.order)
         stepper = TwoRateAdamsBashforthTimeStepper(self.method, order,
                                                        self.step_ratio)
         return stepper()
-    
+
     def initialize_interpreter(self, dt):
         from leap.vm.exec_numpy import NumpyInterpreter
 
@@ -55,14 +64,14 @@ class MultirateTimesteperAccuracyChecker:
                 return numpy.array((f2f(*args), f2s(*args), s2f(*args),
                     s2s(*args)),)
             return coupled
-        
+
         rhs_map = { '<func>f2f' : self.ode.f2f_rhs,
             '<func>s2f' : self.ode.s2f_rhs, '<func>f2s' : self.ode.f2s_rhs,
             '<func>s2s' : self.ode.s2s_rhs, '<func>coupled' : make_coupled(
             self.ode.f2f_rhs, self.ode.s2f_rhs, self.ode.f2s_rhs,
             self.ode.s2s_rhs) }
         interpreter = NumpyInterpreter(self.get_code(), rhs_map)
-        
+
         t = self.ode.t_start
         y = self.ode.initial_values
         interpreter.set_up(t_start=t, dt_start=dt, state = {'fast': y[0],
@@ -72,25 +81,25 @@ class MultirateTimesteperAccuracyChecker:
 
     def get_error(self, dt, name=None, plot_solution=False):
         from leap.vm.exec_numpy import StateComputed
-        
+
         final_t = self.ode.t_end
-        
+
         interp = self.initialize_interpreter(dt)
-        
+
         times = []
         values = []
         for event in interp.run(t_end=final_t):
             if isinstance(event, StateComputed):
                 values.append(event.state_component)
                 times.append(event.t)
-        
+
         assert abs(times[-1] - final_t) < 1e-10
-                
+
         t = times[-1]
         y = values[-1]
-        
+
         from ode_systems import Basic, Tria
-        
+
         proj = lambda l, x: [z[x] for z in l]
 
         if isinstance(self.ode, Basic) or isinstance(self.ode, Tria):
@@ -120,7 +129,7 @@ class MultirateTimesteperAccuracyChecker:
 
     def __call__(self):
         """Run the test and output the estimated the order of convergence."""
-        
+
         from pytools.convergence import EOCRecorder
 
         if self.display_dag:
@@ -151,7 +160,7 @@ def test_multirate_accuracy(method, expected_order, show_dag=False,
     from ode_systems import Full
     from leap.method.ab.multirate.methods import methods
     m = methods[method]
-    
+
     checker = MultirateTimesteperAccuracyChecker(m, expected_order, 2, Full(),
         show_dag, plot_solution)
     checker()
