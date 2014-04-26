@@ -39,6 +39,9 @@ from pytools.py_codegen import Indentation
 from pymbolic import var
 from pymbolic.mapper.stringifier import StringifyMapper
 
+from cgi import escape
+from textwrap import TextWrapper
+
 
 # To do
 # - structural analysis
@@ -273,8 +276,47 @@ class ControlFlowGraph(object):
     def get_dot_graph(self):
         """Return a string in the graphviz language that represents the control
         flow graph."""
-        # TODO: Write me.
-        pass
+        # Wrap long lines.
+        wrapper = TextWrapper(width=80, subsequent_indent=4 * ' ')
+
+        lines = []
+        lines.append('digraph ControlFlowGraph {')
+
+        # Draw the basic blocks.
+        for block in self:
+            name = str(block.number)
+
+            # Draw the block number.
+            lines.append('%s [shape=box,label=<' % name)
+            lines.append('<table border="0">')
+            lines.append('<tr>')
+            lines.append('<td align="center"><font face="Helvetica">')
+            lines.append('<b>basic block %s</b>' % name)
+            lines.append('</font></td>')
+            lines.append('</tr>')
+
+            # Draw the code.
+            for inst in block:
+                for line in wrapper.wrap(str(inst)):
+                    lines.append('<tr>')
+                    lines.append('<td align="left">')
+                    lines.append('<font face="Courier">')
+                    lines.append(escape(line).replace(' ', '&nbsp;'))
+                    lines.append('</font>')
+                    lines.append('</td>')
+                    lines.append('</tr>')
+            lines.append('</table>>]')
+
+            # Draw the successor edges.
+            for successor in block.successors:
+                lines.append('%s -> %d;' % (name, successor.number))
+
+        # Add a dummy entry to mark the start block.
+        lines.append('entry [style=invisible];')
+        lines.append('entry -> %d;' % self.start_block.number)
+
+        lines.append('}')
+        return '\n'.join(lines)
 
     def __str__(self):
         return '\n'.join(map(str, self.reverse_postorder()))

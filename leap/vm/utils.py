@@ -3,7 +3,10 @@ language."""
 
 from __future__ import division, with_statement
 
-__copyright__ = """Copyright (C) 2014 Matt Wala"""
+__copyright__ = """
+Copyright (C) 2014 Matt Wala
+Copyright (C) 2014 Andreas Kloeckner
+"""
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -81,3 +84,25 @@ def get_unique_name(prefix, *name_sets):
     while is_in_name_sets(prefix + str(suffix)):
         suffix += 1
     return prefix + str(suffix)
+
+
+def show_dot_graph(dot):
+    """Displays the given DOT format string in the web browser."""
+    from tempfile import mkdtemp
+    temp_dir = mkdtemp(prefix="tmp_leap_dot")
+
+    dot_file_name = "leap.dot"
+
+    from os.path import join
+    with open(join(temp_dir, dot_file_name), "w") as dotf:
+        dotf.write(dot)
+
+    svg_file_name = "leap.svg"
+    from subprocess import check_call
+    check_call(["dot", "-Tsvg", "-o", svg_file_name, dot_file_name],
+                cwd=temp_dir)
+
+    full_svg_file_name = join(temp_dir, svg_file_name)
+
+    from webbrowser import open as browser_open
+    browser_open("file://" + full_svg_file_name)
