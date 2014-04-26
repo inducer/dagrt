@@ -1092,7 +1092,7 @@ class ControlFlowGraphSimplifier(object):
         for block in reachable:
             block.successors &= reachable
             block.predecessors &= reachable
-        changed = len(reachable) == len(control_flow_graph)
+        changed = len(reachable) != len(control_flow_graph)
         if changed:
             control_flow_graph.update()
         return changed
