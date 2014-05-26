@@ -744,10 +744,6 @@ class InstructionDAGEntryExitAugmenter(object):
         exit_id = get_unique_name('exit', ids)
         import copy
         aug_instructions = copy.deepcopy(instructions)
-        aug_deps = set()
-        for inst in aug_instructions:
-            if inst.id in instructions_dep_on:
-                aug_deps.add(inst)
         ent = Entry(id=entry_id)
         ex = Exit(id=exit_id, depends_on=[entry_id] + instructions_dep_on)
         aug_instructions.add(ex)
