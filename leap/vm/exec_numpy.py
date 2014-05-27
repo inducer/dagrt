@@ -88,11 +88,6 @@ class EvaluationMapper(EvaluationMapperBase):
         func = self.functions[expr.function.name]
         return func(*[self.rec(par) for par in expr.parameters])
     
-    def map_vector(self, expr):
-        return np.array([self.rec(child) for child in expr.children])
-    
-    def map_numpy_array(self, expr):
-        return expr
 
 class DifferentiationMapperWithContext(DifferentiationMapperBase):
 
