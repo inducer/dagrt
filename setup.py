@@ -52,6 +52,7 @@ def main():
               "leap.method.ab",
               "leap.method.ab.multirate",
               "leap.vm",
+              "leap.vm.codegen"
               ],
           install_requires=[
               "numpy>=1.5",
