@@ -24,13 +24,13 @@ THE SOFTWARE.
 
 from .expressions import PythonExpressionMapper
 from .codegen_base import CodeGenerator
-from .ir import Inst, AssignInst, JumpInst, BranchInst, ReturnInst, \
+from .ir import AssignInst, JumpInst, BranchInst, ReturnInst, \
     UnreachableInst
 from pytools.py_codegen import PythonCodeGenerator as PythonEmitter
 from pytools.py_codegen import PythonFunctionGenerator as PythonFunctionEmitter
 from pytools.py_codegen import Indentation
 from leap.vm.utils import is_state_variable, get_unique_name
-from leap.vm.language import AssignExpression, AssignRHS, ReturnState
+from leap.vm.language import AssignExpression, AssignRHS
 
 
 class PythonCodeGenerator(CodeGenerator):

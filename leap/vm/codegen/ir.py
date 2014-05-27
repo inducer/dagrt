@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 from .expressions import string_mapper
 from pytools import RecordWithoutPickling, memoize_method
-from leap.vm.utils import get_unique_name, get_variables, is_state_variable
+from leap.vm.utils import get_unique_name, get_variables
 from leap.vm.language import AssignExpression, AssignRHS
 from textwrap import TextWrapper
 from cgi import escape

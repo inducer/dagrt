@@ -23,11 +23,11 @@ THE SOFTWARE.
 """
 
 from leap.vm.language import Instruction, AssignExpression, AssignNorm, \
-    AssignDotProduct, AssignSolvedRHS, AssignRHS, If, ReturnState
+    AssignDotProduct, AssignSolvedRHS, AssignRHS, If, ReturnState, Raise, \
+    FailStep
 from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import peek, get_unique_name, is_state_variable
 from .ir import SymbolTable, BasicBlock, ControlFlowGraph
-from .ir import Inst
 from pymbolic import var
 
 
