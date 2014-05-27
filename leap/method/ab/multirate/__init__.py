@@ -104,7 +104,6 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         """Initialize method variables. Returns the initialization list."""
 
         from leap.vm.language import AssignRHS, AssignExpression, If
-        from pymbolic.primitives import Vector
         
         add_and_get_ids = cbuild.add_and_get_ids
         initialization = []
@@ -114,7 +113,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         # Initial value of RK y vector
         yval, = add_and_get_ids(AssignExpression(self.rk_y.name,
-                                Vector((self.fast, 0, self.slow, 0),)))      
+            numpy.array((self.fast, 0., self.slow, 0.), dtype='object')))
         initialization.append(yval)
 
         # Initial value of RK derivative matrix
@@ -134,7 +133,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         from leap.vm.language import AssignRHS, AssignExpression, If
         add_and_get_ids = cbuild.add_and_get_ids
         from pymbolic import var
-        from pymbolic.primitives import Vector, Comparison
+        from pymbolic.primitives import Comparison
                                         
         steps = self.max_order * self.substep_count
         
@@ -143,7 +142,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         startup_conditions = []
         
         # Note: both y and RHS need to be 2x2 matrices and functions need to
-        # be adapted to this convention. Yuck        
+        # be adapted to this convention. Yuck
         component_id = self.coupled.name
         
         for i in range(self.max_order):
@@ -249,15 +248,14 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
     
     def __call__(self):
         from leap.vm.language import CodeBuilder, TimeIntegratorCode
-        from pymbolic.primitives import Vector
         
         cbuild = CodeBuilder()
         initialization = self.emit_initialization(cbuild)
         startup = self.emit_startup(cbuild)
         ab_method = self.emit_ab_method(cbuild)
         glue = self.emit_main_branch(cbuild, startup, ab_method)
-        epilogue = self.emit_epilogue(cbuild, Vector((self.fast, self.slow),),
-                                      "", glue)   
+        epilogue = self.emit_epilogue(cbuild,
+            numpy.array((self.fast, self.slow), dtype='object'), '', glue)   
         cbuild.commit()
 
         return TimeIntegratorCode(instructions=cbuild.instructions,
