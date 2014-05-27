@@ -58,7 +58,6 @@ def test_basic_codegen():
         step_before_fail=False)
     codegen = PythonCodeGenerator(method_name='Method')
     output = codegen(code)
-    print output
     state = exec_in_new_namespace(output)
     m = state['Method']({})
     m.set_up(t_start=0, dt_start=0, state={})
@@ -157,7 +156,6 @@ def test_complex_dependency_codegen():
         step_before_fail=False)
     codegen = PythonCodeGenerator(method_name='Method')
     output = codegen(code)
-    print(output)
     state = exec_in_new_namespace(output)
     m = state['Method']({})
     m.set_up(t_start=0, dt_start=0, state={'y': 0})
@@ -187,7 +185,6 @@ def test_rk_codegen(stepper, expected_order):
 
     codegen = PythonCodeGenerator(method_name='RKMethod')
     output = codegen(code)
-    print(output)
     state = exec_in_new_namespace(output)
 
     def rhs(t, y):
