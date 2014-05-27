@@ -1288,8 +1288,6 @@ class PythonCodeGenerator(CodeGenerator):
         import string
         self.ident_chars = set('_' + string.ascii_letters + string.digits)
         self.class_emitter = PythonClassEmitter(method_name)
-        self.class_emitter('from leap.vm.exec_numpy import StateComputed, ' +
-            'StepCompleted')
         self.finished = False
         self.rhs_map = {}
         self.global_map = {}
@@ -1415,8 +1413,14 @@ class PythonCodeGenerator(CodeGenerator):
                 emit('%s = %s' % (assignee, call))
 
     def emit_constructor(self):
-        # Save all the rhs components.
         emit = PythonFunctionEmitter('__init__', ('self', 'rhs_map'))
+        # Perform necessary imports.
+        emit('import numpy')
+        emit('self.numpy = numpy')
+        emit('from leap.vm.exec_numpy import StateComputed, StepCompleted')
+        emit('self.StateComputed = StateComputed')
+        emit('self.StepCompleted = StepCompleted')
+        # Save all the rhs components.
         for rhs in self.rhs_map:
             emit('%s = rhs_map["%s"]' % (self.rhs_map[rhs], rhs))
         emit('return')
@@ -1450,11 +1454,11 @@ class PythonCodeGenerator(CodeGenerator):
                 emit('self.dt = t_end - self.t')
                 emit('last_step = True')
             emit('step = self.step()')
-            emit('yield StateComputed(t=step[0], time_id=step[1], ' +
+            emit('yield self.StateComputed(t=step[0], time_id=step[1], ' +
                 'component_id=step[2], state_component=step[3])')
             emit('if last_step:')
             with Indentation(emit):
-                emit('yield StepCompleted(t=self.t)')
+                emit('yield self.StepCompleted(t=self.t)')
                 emit('break')
         self.class_emitter.incorporate(emit)
 
@@ -1500,26 +1504,29 @@ class PythonClassEmitter(PythonEmitter):
 class PythonExpressionMapper(StringifyMapper):
     """Converts expressions to Python code."""
 
-    def __init__(self, variable_names):
+    def __init__(self, variable_names, numpy='self.numpy'):
         super(PythonExpressionMapper, self).__init__(repr)
         self.variable_names = variable_names
+        self.numpy = numpy
 
     def map_foreign(self, expr, *args):
         if expr is None:
-            return self.map_none(expr)
+            return 'None'
         elif isinstance(expr, str):
-            return self.map_string(expr)
+            return repr(expr)
         else:
             return super(PythonExpressionMapper, self).map_foreign(expr, *args)
-
-    def map_string(self, expr):
-        return repr(expr)
 
     def map_variable(self, expr, enclosing_prec):
         return self.variable_names[expr.name]
 
-    def map_none(self, expr):
-        return 'None'
+    def map_numpy_array(self, expr, *args):
+        if len(expr.shape) > 1:
+            raise ValueError('Representing multidimensional arrays is ' +
+                             'not supported')
+        elements = [self.rec(element, *args) for element in expr]
+        return '%s.array([%s],dtype=\'object\')' % (self.numpy,
+            ', '.join(elements))
 
 
 string_mapper = PythonExpressionMapper(DictionaryWithDefault(lambda x: x))
