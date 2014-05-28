@@ -157,7 +157,7 @@ class PythonCodeGenerator(CodeGenerator):
             calls = []
             for argv in assignment.rhs_arguments:
                 build_kwarg = lambda pair: '%s=%s' % (pair[0], mapper(pair[1]))
-                if len(argv) > 0:
+                if argv:
                     argument_string = ', '.join(map(build_kwarg, argv))
                     calls.append('%s(%s, %s)' % (rhs, time, argument_string))
                 else:

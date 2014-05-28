@@ -95,21 +95,21 @@ class InstructionDAGIntGraph(SimpleIntGraph):
         unconditional dependency.
         """
         inst = self.id_to_inst[self.get_id_for_number(vertex)]
-        return set(map(self.get_number_for_id, inst.depends_on))
+        return frozenset(map(self.get_number_for_id, inst.depends_on))
 
     def get_conditional_edges(self, vertex):
         """Return the set of vertices that are adjacent to this vertex by a
         conditional dependency (i.e., a branch of an If statement).
         """
         inst = self.id_to_inst[self.get_id_for_number(vertex)]
+        deps = []
         if isinstance(inst, If):
-            deps = inst.then_depends_on + inst.else_depends_on
-            return set(map(self.get_number_for_id, deps))
-        else:
-            return set()
+            deps += inst.then_depends_on
+            deps += inst.else_depends_on
+        return frozenset(map(self.get_number_for_id, deps))
 
     def get_number_for_vertex(self, vertex):
-        assert False
+        return self.get_number_for_id(vertex.id)
 
     def get_vertex_for_number(self, num):
         return self.id_to_inst[self.get_id_for_number(num)]

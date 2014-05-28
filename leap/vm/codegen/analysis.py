@@ -77,9 +77,9 @@ class InstructionDAGVerifier(object):
         unvisited = set(graph)
         visiting = set()
         stack = []
-        while len(unvisited) > 0:
+        while unvisited:
             stack.append(peek(unvisited))
-            while len(stack) > 0:
+            while stack:
                 top = stack[-1]
                 if top in unvisited:
                     unvisited.remove(top)
@@ -127,14 +127,14 @@ class ReachingDefinitions(object):
                 reach = set()
                 for predecessor in block.predecessors:
                     reach |= def_out[predecessor]
-                changed = changed or len(reach) > len(def_in[block])
+                changed |= len(reach) > len(def_in[block])
                 def_in[block] = reach
 
                 kill = def_kill[block]
                 reach_out = self.remove_killed(reach, kill)
 
                 reach_out |= def_gen[block]
-                changed = changed or len(reach_out) > len(def_out[block])
+                changed |= len(reach_out) > len(def_out[block])
 
                 def_out[block] = reach_out
 

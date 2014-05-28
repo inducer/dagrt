@@ -29,6 +29,7 @@ from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import peek, get_unique_name, is_state_variable
 from .ir import SymbolTable, BasicBlock, ControlFlowGraph
 from pymbolic import var
+import copy
 
 
 class Entry(Instruction):
@@ -76,10 +77,9 @@ class InstructionDAGEntryExitAugmenter(object):
         instruction while the exit instruction depends on the set
         instructions_dep_on.
         """
-        ids = set(inst.id for inst in instructions)
+        ids = {inst.id for inst in instructions}
         entry_id = get_unique_name('entry', ids)
         exit_id = get_unique_name('exit', ids)
-        import copy
         aug_instructions = copy.deepcopy(instructions)
         ent = Entry(id=entry_id)
         ex = Exit(id=exit_id, depends_on=[entry_id] + instructions_dep_on)
@@ -98,7 +98,7 @@ class InstructionDAGExtractor(object):
         graph = InstructionDAGIntGraph(dag)
         stack = list(map(graph.get_number_for_id, dependencies))
         reachable = set()
-        while len(stack) > 0:
+        while stack:
             top = stack.pop()
             if top not in reachable:
                 reachable.add(top)
@@ -139,9 +139,9 @@ class InstructionDAGPartitioner(object):
         visiting = set()
         stack = []
         sort = []
-        while len(unvisited) > 0:
+        while unvisited:
             stack.append(peek(unvisited))
-            while len(stack) > 0:
+            while stack:
                 top = stack[-1]
                 if top in unvisited:
                     unvisited.remove(top)
@@ -205,7 +205,7 @@ class InstructionDAGPartitioner(object):
         visited = set()
         blocks = set()
         inst_to_block = {}
-        while len(topo_sort) > 0:
+        while topo_sort:
             instr = topo_sort.pop()
             if instr in visited:
                 continue
@@ -249,7 +249,6 @@ class FlagAnalysis(object):
         """Return a new flag analysis object with the given flag set to true.
         """
         assert flag in self.all_flags
-        import copy
         new_fa = copy.deepcopy(self)
         new_fa.must_be_true.add(flag)
         new_fa.must_be_false.discard(flag)
@@ -259,7 +258,6 @@ class FlagAnalysis(object):
         """Return a new flag analysis object with the given flag set to false.
         """
         assert flag in self.all_flags
-        import copy
         new_fa = copy.deepcopy(self)
         new_fa.must_be_false.add(flag)
         new_fa.must_be_true.discard(flag)
@@ -394,7 +392,7 @@ class ControlFlowGraphAssembler(object):
         instruction blocks.
         """
 
-        if len(block_sequence) == 0:
+        if not block_sequence:
             return (top_bb, flag_analysis)
 
         main_bb = top_bb

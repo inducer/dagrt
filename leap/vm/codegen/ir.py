@@ -319,7 +319,7 @@ class ControlFlowGraph(object):
         visiting = set()
         visited = set()
         acyclic = True
-        while len(stack) > 0:
+        while stack:
             top = stack[-1]
             if top not in visited:
                 # Mark top as being visited. Add the children of top to the
