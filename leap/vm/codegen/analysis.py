@@ -55,7 +55,7 @@ class InstructionDAGVerifier(object):
         return True
 
     def verify_all_dependencies_exist(self, instructions, *dependency_lists):
-        """Ensures that all instruction dependencies exist."""
+        """Ensure that all instruction dependencies exist."""
         ids = set(inst.id for inst in instructions)
         for inst in instructions:
             deps = set(inst.depends_on)
@@ -70,8 +70,9 @@ class InstructionDAGVerifier(object):
         return True
 
     def verify_no_circular_dependencies(self, instructions):
-        """Ensures that there are no circular dependencies among the
-        instructions."""
+        """Ensure that there are no circular dependencies among the
+        instructions.
+        """
         graph = InstructionDAGIntGraph(instructions)
         unvisited = set(graph)
         visiting = set()
@@ -145,7 +146,7 @@ class ReachingDefinitions(object):
         self.def_out = def_out
 
     def get_gen_and_kill_sets(self, block, point):
-        """Returns the gen and kill sets."""
+        """Return the gen and kill sets."""
         last_def = {}
         for pos, inst in enumerate(block.code):
             if pos == point:
@@ -155,7 +156,7 @@ class ReachingDefinitions(object):
         return (set(last_def.iteritems()), set(last_def.iterkeys()))
 
     def remove_killed(self, definitions, kill):
-        """Returns the result of removing all definitions that are killed."""
+        """Return the result of removing all definitions that are killed."""
         return set(pair for pair in definitions if pair[0] not in kill)
 
     @memoize_method

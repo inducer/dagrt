@@ -43,15 +43,15 @@ class Inst(RecordWithoutPickling):
         self.block = block
 
     def get_defined_variables(self):
-        """Returns the set of variables defined by this instruction."""
+        """Return the set of variables defined by this instruction."""
         raise NotImplementedError()
 
     def get_used_variables(self):
-        """Returns the set of variables used by this instruction."""
+        """Return the set of variables used by this instruction."""
         raise NotImplementedError()
 
     def get_jump_targets(self):
-        """Returns the set of basic blocks that this instruction may jump to.
+        """Return the set of basic blocks that this instruction may jump to.
         """
         raise NotImplementedError()
 
@@ -216,15 +216,15 @@ class BasicBlock(object):
         return len(self.code)
 
     def clear(self):
-        """Unregisters all instructions."""
+        """Unregister all instructions."""
         self.delete_instructions(self.code)
 
     def add_instruction(self, instruction):
-        """Appends the given instruction to the code."""
+        """Append the given instruction to the code."""
         self.add_instructions([instruction])
 
     def add_instructions(self, instructions):
-        """Appends the given instructions to the code."""
+        """Append the given instructions to the code."""
         for instruction in instructions:
             assert not self.terminated
             self.code.append(instruction)
@@ -237,11 +237,11 @@ class BasicBlock(object):
                     self.add_successor(successor)
 
     def delete_instruction(self, instruction):
-        """Deletes references to the given instruction."""
+        """Delete references to the given instruction."""
         self.delete_instructions([instruction])
 
     def delete_instructions(self, to_delete):
-        """Deletes references to the given instructions."""
+        """Delete references to the given instructions."""
         new_code = []
         for inst in self.code:
             if inst not in to_delete:
@@ -258,37 +258,39 @@ class BasicBlock(object):
         self.code = new_code
 
     def add_unreachable(self):
-        """Appends an unreachable instruction to the block."""
+        """Append an unreachable instruction to the block."""
         assert not self.terminated
         self.code.append(UnreachableInst(self))
         self.terminated = True
 
     def add_successor(self, successor):
-        """Adds a successor block to the set of successors."""
+        """Add a successor block to the set of successors."""
         assert isinstance(successor, BasicBlock)
         self.successors.add(successor)
         successor.predecessors.add(self)
 
     def add_assignment(self, instruction):
-        """Appends an assignment instruction to the block."""
+        """Append an assignment instruction to the block."""
         assert isinstance(instruction, tuple) or \
             isinstance(instruction, AssignExpression) or \
             isinstance(instruction, AssignRHS)
         self.add_instruction(AssignInst(instruction))
 
     def add_jump(self, dest):
-        """Appends a jump instruction to the block with the given destination.
+        """Append a jump instruction to the block with the given destination.
         """
         self.add_instruction(JumpInst(dest))
 
     def add_branch(self, condition, on_true, on_false):
-        """Appends a branch to the block with the given condition and
-        destinations."""
+        """Append a branch to the block with the given condition and
+        destinations.
+        """
         self.add_instruction(BranchInst(condition, on_true, on_false))
 
     def add_return(self, expr):
-        """Appends a return instruction to the block that returns the given
-        expression."""
+        """Append a return instruction to the block that returns the given
+        expression.
+        """
         self.add_instruction(ReturnInst(expr))
 
     def __str__(self):
@@ -307,7 +309,7 @@ class ControlFlowGraph(object):
         self.update()
 
     def is_acyclic(self):
-        """Returns true if the control flow graph contains no loops."""
+        """Return true if the control flow graph contains no loops."""
         return self.acyclic
 
     def update(self):
@@ -344,18 +346,21 @@ class ControlFlowGraph(object):
         return len(self.postorder_traversal)
 
     def postorder(self):
-        """Returns an iterator to a postorder traversal of the set of basic
-        blocks."""
+        """Return an iterator to a postorder traversal of the set of basic
+        blocks.
+        """
         return iter(self.postorder_traversal)
 
     def reverse_postorder(self):
-        """Returns an iterator to a reverse postorder traversal of the set of
-        basic blocks."""
+        """Return an iterator to a reverse postorder traversal of the set of
+        basic blocks.
+        """
         return reversed(self.postorder_traversal)
 
     def get_dot_graph(self):
-        """Return a string in the graphviz language that represents the control
-        flow graph."""
+        """Return a string in the graphviz language that represents the
+        control flow graph.
+        """
         # Wrap long lines.
         wrapper = TextWrapper(width=80, subsequent_indent=4 * ' ')
 
@@ -406,14 +411,15 @@ class FlagAnalysis(object):
     """Keeps track of the values of a set of boolean flags."""
 
     def __init__(self, flags):
-        """Creates a flag analysis object that keeps track of the given set of
-        flags."""
+        """Create a flag analysis object that keeps track of the given set of
+        flags.
+        """
         self.all_flags = set(flags)
         self.must_be_true = set()
         self.must_be_false = set()
 
     def set_true(self, flag):
-        """Returns a new flag analysis object with the given flag set to true.
+        """Return a new flag analysis object with the given flag set to true.
         """
         assert flag in self.all_flags
         import copy
@@ -423,7 +429,7 @@ class FlagAnalysis(object):
         return new_fa
 
     def set_false(self, flag):
-        """Returns a new flag analysis object with the given flag set to false.
+        """Return a new flag analysis object with the given flag set to false.
         """
         assert flag in self.all_flags
         import copy
@@ -433,18 +439,19 @@ class FlagAnalysis(object):
         return new_fa
 
     def is_definitely_true(self, flag):
-        """Determines if the flag must be set to true."""
+        """Determine if the flag must be set to true."""
         assert flag in self.all_flags
         return flag in self.must_be_true
 
     def is_definitely_false(self, flag):
-        """Determines if the flag must be set to false."""
+        """Determine if the flag must be set to false."""
         assert flag in self.all_flags
         return flag in self.must_be_false
 
     def __and__(self, other):
-        """Returns a new flag analysis that represents the conjunction of the
-        inputs."""
+        """Return a new flag analysis that represents the conjunction of the
+        inputs.
+        """
         assert isinstance(other, FlagAnalysis)
         assert self.all_flags == other.all_flags
         new_fa = FlagAnalysis(self.all_flags)
@@ -468,18 +475,21 @@ class SymbolTable(object):
 
         @property
         def is_unreferenced(self):
-            """Returns whether this variable is not referenced by any
-            instructions."""
+            """Return whether this variable is not referenced by any
+            instructions.
+            """
             return len(self.references) == 0
 
         def add_reference(self, inst):
-            """Add an instruction to the list of instructions that reference
-            this variable."""
+            """Add an instruction to the list of instructions that reference this
+            variable.
+            """
             self.references.add(inst)
 
         def remove_reference(self, inst):
-            """Remove an instruction from the list of instructions that
-            reference this variable."""
+            """Remove an instruction from the list of instructions that reference
+            this variable.
+            """
             self.references.discard(inst)
 
     def __init__(self):

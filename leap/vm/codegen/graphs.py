@@ -71,9 +71,10 @@ class SimpleIntGraph(object):
 
 
 class InstructionDAGIntGraph(SimpleIntGraph):
-    """Specialization of SimpleIntGraph that works with instruction DAGs (sets
-    of Instructions). Records all the dependency edges in the DAG, including
-    conditional dependencies within If statements."""
+    """Specialization of SimpleIntGraph that works with instruction DAGs
+    (sets of Instructions). Records all the dependency edges in the
+    DAG, including conditional dependencies within If statements.
+    """
 
     def __init__(self, dag):
         self.id_to_inst = dict((inst.id, inst) for inst in dag)
@@ -91,13 +92,15 @@ class InstructionDAGIntGraph(SimpleIntGraph):
 
     def get_unconditional_edges(self, vertex):
         """Return the set of vertices that are adjacent to this vertex by an
-        unconditional dependency."""
+        unconditional dependency.
+        """
         inst = self.id_to_inst[self.get_id_for_number(vertex)]
         return set(map(self.get_number_for_id, inst.depends_on))
 
     def get_conditional_edges(self, vertex):
         """Return the set of vertices that are adjacent to this vertex by a
-        conditional dependency (i.e., a branch of an If statement)."""
+        conditional dependency (i.e., a branch of an If statement).
+        """
         inst = self.id_to_inst[self.get_id_for_number(vertex)]
         if isinstance(inst, If):
             deps = inst.then_depends_on + inst.else_depends_on

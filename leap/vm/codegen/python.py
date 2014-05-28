@@ -59,11 +59,11 @@ class PythonCodeGenerator(CodeGenerator):
         return self.global_map[var]
 
     def filter_variable_name(self, var):
-        """Converts a variable to a Python identifier."""
+        """Convert a variable to a Python identifier."""
         return ''.join(map(lambda c: c if c in self.ident_chars else '_', var))
 
     def name_variables(self, symbol_table):
-        """Returns a mapping from variable names to Python identifiers."""
+        """Return a mapping from variable names to Python identifiers."""
         name_map = {}
         for var in symbol_table:
             if is_state_variable(var):
@@ -74,7 +74,7 @@ class PythonCodeGenerator(CodeGenerator):
         return name_map
 
     def name_rhss(self, rhss):
-        """Returns a mapping from right hand side names to Python identifiers.
+        """Return a mapping from right hand side names to Python identifiers.
         """
         for rhs in rhss:
             if rhs in self.rhs_map:
@@ -83,8 +83,9 @@ class PythonCodeGenerator(CodeGenerator):
             self.rhs_map[rhs] = get_unique_name(base, self.rhs_map)
 
     def get_globals(self, variable_set):
-        """Returns the global variables in the given sequence of variable
-        names."""
+        """Return the global variables in the given sequence of variable
+        names.
+        """
         return set(filter(is_state_variable, variable_set))
 
     def emit_function(self, var, args, control_flow_graph, name_map, rhs_map):
@@ -250,6 +251,7 @@ class PythonClassEmitter(PythonEmitter):
 
     def incorporate(self, sub_generator):
         """Add the code contained by the subgenerator while respecting the
-        current level of indentation."""
+        current level of indentation.
+        """
         for line in sub_generator.code:
             self(line)

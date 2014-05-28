@@ -72,7 +72,7 @@ class CodeGenerator(object):
         return self.emitter.get_code()
 
     def verify_dag(self, dag):
-        """Verifies that the DAG is well-formed."""
+        """Verify that the DAG is well-formed."""
         verifier = InstructionDAGVerifier()
         errors, warnings = verifier(dag)
         if warnings and not self.suppress_warnings:

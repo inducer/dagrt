@@ -134,7 +134,7 @@ class InstructionDAGPartitioner(object):
         return (block_graph, inst_id_to_block)
 
     def topological_sort(self, dag):
-        """Returns a topological sort of the input DAG."""
+        """Return a topological sort of the input DAG."""
         unvisited = set(dag)
         visiting = set()
         stack = []
@@ -156,8 +156,9 @@ class InstructionDAGPartitioner(object):
         return sort
 
     def unconditional_transitive_reduction(self, dag):
-        """Returns a transitive reduction of the unconditional portion of the
-        input instruction DAG. Conditional edges are kept."""
+        """Return a transitive reduction of the unconditional portion of the
+        input instruction DAG. Conditional edges are kept.
+        """
         # Compute u -> v longest unconditional paths in the DAG.
         longest_path = dict(((u, v), 0 if u == v else -1) for u in dag
                             for v in dag)
@@ -189,8 +190,9 @@ class InstructionDAGPartitioner(object):
         return reduction
 
     def maximal_blocks(self, dag, original_dag):
-        """Returns a partition of the DAG into maximal blocks of straight-line
-        pieces."""
+        """Return a partition of the DAG into maximal blocks of straight-line
+        pieces.
+        """
         # Compute the inverse of the DAG.
         dag_inv = dict((u, set()) for u in dag)
         for vertex, successors in dag.iteritems():
@@ -237,14 +239,14 @@ class FlagAnalysis(object):
     """Keeps track of the values of a set of boolean flags."""
 
     def __init__(self, flags):
-        """Creates a flag analysis object that keeps track of the given set of
+        """Create a flag analysis object that keeps track of the given set of
         flags."""
         self.all_flags = set(flags)
         self.must_be_true = set()
         self.must_be_false = set()
 
     def set_true(self, flag):
-        """Returns a new flag analysis object with the given flag set to true.
+        """Return a new flag analysis object with the given flag set to true.
         """
         assert flag in self.all_flags
         import copy
@@ -254,7 +256,7 @@ class FlagAnalysis(object):
         return new_fa
 
     def set_false(self, flag):
-        """Returns a new flag analysis object with the given flag set to false.
+        """Return a new flag analysis object with the given flag set to false.
         """
         assert flag in self.all_flags
         import copy
@@ -264,18 +266,19 @@ class FlagAnalysis(object):
         return new_fa
 
     def is_definitely_true(self, flag):
-        """Determines if the flag must be set to true."""
+        """Determine if the flag must be set to true."""
         assert flag in self.all_flags
         return flag in self.must_be_true
 
     def is_definitely_false(self, flag):
-        """Determines if the flag must be set to false."""
+        """Determine if the flag must be set to false."""
         assert flag in self.all_flags
         return flag in self.must_be_false
 
     def __and__(self, other):
-        """Returns a new flag analysis that represents the conjunction of the
-        inputs."""
+        """Return a new flag analysis that represents the conjunction of the
+        inputs.
+        """
         assert isinstance(other, FlagAnalysis)
         assert self.all_flags == other.all_flags
         new_fa = FlagAnalysis(self.all_flags)
@@ -403,7 +406,8 @@ class ControlFlowGraphAssembler(object):
 
     def process_block(self, inst_block, top_bb, flag_analysis):
         """Produce the control flow subgraph corresponding to a block of
-        instructions."""
+        instructions.
+        """
 
         get_block_set = lambda inst_set: \
             map(self.inst_id_to_block.__getitem__, inst_set)
