@@ -151,10 +151,7 @@ class MultirateTimesteperAccuracyChecker(object):
 
 # Run example with
 # python test_multirate.py "test_multirate_accuracy(\"F\", 3)"
-@pytest.mark.parametrize(("method", "expected_order"), [
-    ("F", 3),
-    ("Fq", 3)
-    ])
+@pytest.mark.skipif("True")
 def test_multirate_accuracy(method, expected_order, show_dag=False,
                             plot_solution=False):
     from ode_systems import Full
