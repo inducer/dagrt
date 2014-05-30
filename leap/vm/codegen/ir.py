@@ -493,7 +493,6 @@ class SymbolTable(object):
             self.references.discard(inst)
 
     def __init__(self):
-        self.block_ids = None
         self.variables = {}
         self.named_variables = set()
 
