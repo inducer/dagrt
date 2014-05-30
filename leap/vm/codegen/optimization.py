@@ -28,9 +28,9 @@ from leap.vm.utils import peek
 
 
 class Optimizer(object):
-    """Performs optimizations on the code in a control flow graph."""
+    """Performs optimizations on the code in a function."""
 
-    def __call__(self, control_flow_graph):
+    def __call__(self, function):
         cfg_simplify = ControlFlowGraphSimplifier()
         adce = AggressiveDeadCodeElimination()
 
@@ -39,21 +39,21 @@ class Optimizer(object):
         while changed and iterations < 5:
             # Attempt to iterate until convergence.
             changed = False
-            changed |= cfg_simplify(control_flow_graph)
-            changed |= adce(control_flow_graph)
+            changed |= cfg_simplify(function)
+            changed |= adce(function)
             iterations += 1
 
-        return control_flow_graph
+        return function
 
 
 class ControlFlowGraphSimplifier(object):
     """Performs simplification optimizations on the control-flow graph."""
 
-    def __call__(self, control_flow_graph):
+    def __call__(self, function):
         changed = False
-        changed |= self.coalesce_jumps(control_flow_graph)
-        changed |= self.discard_unreachable_blocks(control_flow_graph)
-        changed |= self.merge_basic_blocks(control_flow_graph)
+        changed |= self.coalesce_jumps(function)
+        changed |= self.discard_unreachable_blocks(function)
+        changed |= self.merge_basic_blocks(function)
         return changed
 
     def discard_unreachable_blocks(self, control_flow_graph):

@@ -300,7 +300,7 @@ class BasicBlock(object):
         return '\n'.join(lines)
 
 
-class ControlFlowGraph(object):
+class Function(object):
     """A control flow graph of BasicBlocks."""
 
     def __init__(self, start_block):

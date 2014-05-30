@@ -56,18 +56,18 @@ class CodeGenerator(object):
         # Generate initialization code.
         initialization_deps = code.initialization_dep_on
         initialization = extractor(dag, initialization_deps)
-        initialization_cfg = assembler(initialization, initialization_deps)
+        initialization_code = assembler(initialization, initialization_deps)
         if self.optimize:
-            initialization_cfg = optimizer(initialization_cfg)
-        self.emitter.emit_initialization(initialization_cfg)
+            initialization_code = optimizer(initialization_code)
+        self.emitter.emit_initialization(initialization_code)
 
         # Generate timestepper code.
         stepper_deps = code.step_dep_on
         stepper = extractor(dag, code.step_dep_on)
-        stepper_cfg = assembler(stepper, stepper_deps)
+        stepper_code = assembler(stepper, stepper_deps)
         if self.optimize:
-            stepper_cfg = optimizer(stepper_cfg)
-        self.emitter.emit_stepper(stepper_cfg)
+            stepper_code = optimizer(stepper_code)
+        self.emitter.emit_stepper(stepper_code)
 
         return self.emitter.get_code()
 

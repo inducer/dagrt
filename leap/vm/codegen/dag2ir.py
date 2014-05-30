@@ -27,7 +27,7 @@ from leap.vm.language import Instruction, AssignExpression, AssignNorm, \
     FailStep
 from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import peek, get_unique_name, is_state_variable
-from .ir import SymbolTable, BasicBlock, ControlFlowGraph
+from .ir import SymbolTable, BasicBlock, Function
 from pymbolic import var
 import copy
 
@@ -330,7 +330,7 @@ class ControlFlowGraphAssembler(object):
         if not end_bb.terminated:
             end_bb.add_unreachable()
 
-        return ControlFlowGraph(entry_bb)
+        return Function(entry_bb)
 
     def new_basic_block(self):
         """Create a new, empty basic block with a unique number."""
