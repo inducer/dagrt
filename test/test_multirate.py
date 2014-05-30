@@ -136,7 +136,7 @@ class MultirateTimesteperAccuracyChecker(object):
             self.show_dag()
 
         eocrec = EOCRecorder()
-        for n in range(5,8):
+        for n in range(6,8):
             dt = 2**(-n)
             error = self.get_error(dt, "mrab-%d.dat" % self.order)
             eocrec.add_data_point(dt, error)
@@ -164,7 +164,8 @@ def test_multirate_accuracy(method, expected_order, show_dag=False,
 
 
 @pytest.mark.slowtest
-def test_all_multirate_accuracy():
+@pytest.mark.parametrize("order", [1, 3])
+def test_all_multirate_accuracy(order):
     """Check that the multirate timestepper has the advertised accuracy"""
 
     from leap.method.ab.multirate.methods import methods
@@ -179,9 +180,8 @@ def test_all_multirate_accuracy():
             print("------------------------------------------------------")
             print("METHOD: %s" % name)
             print("------------------------------------------------------")
-            for order in [1, 3, 5]:
-                MultirateTimesteperAccuracyChecker(
-                        methods[name], order, step_ratio, ode = system())()
+            MultirateTimesteperAccuracyChecker(
+                    methods[name], order, step_ratio, ode = system())()
 
 
 if __name__ == "__main__":
