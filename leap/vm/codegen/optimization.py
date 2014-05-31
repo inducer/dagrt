@@ -24,8 +24,7 @@ THE SOFTWARE.
 
 from .ir import AssignInst, BranchInst, JumpInst, ReturnInst
 from .analysis import ReachingDefinitions
-from leap.vm.utils import peek
-
+from pytools import one
 
 class Optimizer(object):
     """Performs optimizations on the code in a function."""
@@ -82,7 +81,7 @@ class ControlFlowGraphSimplifier(object):
         trivial_jumps = {}
         for block in control_flow_graph.postorder():
             if self.block_is_trivial_jump(block):
-                dest = peek(block.successors)
+                dest = one(block.successors)
                 if dest in trivial_jumps:
                     trivial_jumps[block] = trivial_jumps[dest]
                 else:
@@ -135,7 +134,7 @@ class ControlFlowGraphSimplifier(object):
 
             # Extract a maximal basic block.
             while len(block.successors) == 1:
-                block = peek(block.successors)
+                block = one(block.successors)
                 if len(block.predecessors) == 1:
                     region.append(block)
                 else:

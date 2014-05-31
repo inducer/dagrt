@@ -25,7 +25,6 @@ THE SOFTWARE.
 from pytools import memoize_method
 from leap.vm.language import Instruction, If
 from .graphs import InstructionDAGIntGraph
-from leap.vm.utils import peek
 
 
 class InstructionDAGVerifier(object):
@@ -74,24 +73,22 @@ class InstructionDAGVerifier(object):
         instructions.
         """
         graph = InstructionDAGIntGraph(instructions)
-        unvisited = set(graph)
+        visited = set()
         visiting = set()
-        stack = []
-        while unvisited:
-            stack.append(peek(unvisited))
-            while stack:
-                top = stack[-1]
-                if top in unvisited:
-                    unvisited.remove(top)
-                    visiting.add(top)
-                    for dep in graph[top]:
-                        if dep in visiting:
-                            return False
-                        else:
-                            stack.append(dep)
-                else:
-                    visiting.discard(top)
-                    stack.pop()
+        stack = list(graph)
+        while stack:
+            top = stack[-1]
+            if top not in visited:
+                visited.add(top)
+                visiting.add(top)
+                for dep in graph[top]:
+                    if dep in visiting:
+                        return False
+                    else:
+                        stack.append(dep)
+            else:
+                visiting.discard(top)
+                stack.pop()
         return True
 
 

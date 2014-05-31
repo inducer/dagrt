@@ -61,11 +61,6 @@ def is_state_variable(var):
         return False
 
 
-def peek(s):
-    """Return a single element from a non-empty iterable."""
-    return s.__iter__().next()
-
-
 def get_unique_name(prefix, *name_sets):
     """Return a name that begins with prefix and is not found in any of the
     name sets."""

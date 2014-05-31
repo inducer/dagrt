@@ -26,9 +26,10 @@ from leap.vm.language import Instruction, AssignExpression, AssignNorm, \
     AssignDotProduct, AssignSolvedRHS, AssignRHS, If, ReturnState, Raise, \
     FailStep
 from .graphs import InstructionDAGIntGraph
-from leap.vm.utils import peek, get_unique_name, is_state_variable
+from leap.vm.utils import get_unique_name, is_state_variable
 from .ir import SymbolTable, BasicBlock, Function
 from pymbolic import var
+from pytools import one
 import copy
 
 
@@ -135,24 +136,22 @@ class InstructionDAGPartitioner(object):
 
     def topological_sort(self, dag):
         """Return a topological sort of the input DAG."""
-        unvisited = set(dag)
+        visited = set()
         visiting = set()
-        stack = []
+        stack = list(dag)
         sort = []
-        while unvisited:
-            stack.append(peek(unvisited))
-            while stack:
-                top = stack[-1]
-                if top in unvisited:
-                    unvisited.remove(top)
-                    visiting.add(top)
-                    for dep in dag[top]:
-                        stack.append(dep)
-                else:
-                    if top in visiting:
-                        visiting.remove(top)
-                        sort.append(top)
-                    stack.pop()
+        while stack:
+            top = stack[-1]
+            if top not in visited:
+                visited.add(top)
+                visiting.add(top)
+                for dep in dag[top]:
+                    stack.append(dep)
+            else:
+                if top in visiting:
+                    visiting.remove(top)
+                    sort.append(top)
+                stack.pop()
         return sort
 
     def unconditional_transitive_reduction(self, dag):
@@ -213,7 +212,7 @@ class InstructionDAGPartitioner(object):
             block = [instr]
             # Traverse down from instr.
             while len(dag[instr]) == 1:
-                instr = peek(dag[instr])
+                instr = one(dag[instr])
                 if len(dag_inv[instr]) == 1:
                     visited.add(instr)
                     block.append(instr)
