@@ -234,7 +234,7 @@ class InstructionDAGPartitioner(object):
         return (block_graph, inst_to_block)
 
 
-class FlagAnalysis(object):
+class FlagTracker(object):
     """Keeps track of the values of a set of boolean flags."""
 
     def __init__(self, flags):
@@ -248,19 +248,19 @@ class FlagAnalysis(object):
         """Return a new flag analysis object with the given flag set to true.
         """
         assert flag in self.all_flags
-        new_fa = copy.deepcopy(self)
-        new_fa.must_be_true.add(flag)
-        new_fa.must_be_false.discard(flag)
-        return new_fa
+        new_ft = copy.deepcopy(self)
+        new_ft.must_be_true.add(flag)
+        new_ft.must_be_false.discard(flag)
+        return new_ft
 
     def set_false(self, flag):
         """Return a new flag analysis object with the given flag set to false.
         """
         assert flag in self.all_flags
-        new_fa = copy.deepcopy(self)
-        new_fa.must_be_false.add(flag)
-        new_fa.must_be_true.discard(flag)
-        return new_fa
+        new_ft = copy.deepcopy(self)
+        new_ft.must_be_false.add(flag)
+        new_ft.must_be_true.discard(flag)
+        return new_ft
 
     def is_definitely_true(self, flag):
         """Determine if the flag must be set to true."""
@@ -276,12 +276,12 @@ class FlagAnalysis(object):
         """Return a new flag analysis that represents the conjunction of the
         inputs.
         """
-        assert isinstance(other, FlagAnalysis)
+        assert isinstance(other, FlagTracker)
         assert self.all_flags == other.all_flags
-        new_fa = FlagAnalysis(self.all_flags)
-        new_fa.must_be_true = self.must_be_true & other.must_be_true
-        new_fa.must_be_false = self.must_be_false & other.must_be_false
-        return new_fa
+        new_ft = FlagTracker(self.all_flags)
+        new_ft.must_be_true = self.must_be_true & other.must_be_true
+        new_ft.must_be_false = self.must_be_false & other.must_be_false
+        return new_ft
 
 
 class ControlFlowGraphAssembler(object):
@@ -319,12 +319,12 @@ class ControlFlowGraphAssembler(object):
 
         # Set up the initial flag analysis.
         flag_names = set(self.flags.itervalues())
-        flag_analysis = FlagAnalysis(flag_names)
-        flag_analysis.must_be_false = set(flag_names)
+        flag_tracker = FlagTracker(flag_names)
+        flag_tracker.must_be_false = set(flag_names)
 
         # Create the control flow graph.
-        end_bb, flag_analysis = self.process_block(exit_block, entry_bb,
-                                                   flag_analysis)
+        end_bb, flag_tracker = self.process_block(exit_block, entry_bb,
+                                                   flag_tracker)
 
         if not end_bb.terminated:
             end_bb.add_unreachable()
@@ -386,22 +386,22 @@ class ControlFlowGraphAssembler(object):
         start_bb.add_assignment((self.return_val, 0))
         return start_bb
 
-    def process_block_sequence(self, block_sequence, top_bb, flag_analysis):
+    def process_block_sequence(self, block_sequence, top_bb, flag_tracker):
         """Produce a control flow subgraph that corresponds to a sequence of
         instruction blocks.
         """
 
         if not block_sequence:
-            return (top_bb, flag_analysis)
+            return (top_bb, flag_tracker)
 
         main_bb = top_bb
         for block in block_sequence:
-            main_bb, flag_analysis = self.process_block(block, main_bb,
-                                                        flag_analysis)
+            main_bb, flag_tracker = self.process_block(block, main_bb,
+                                                        flag_tracker)
 
-        return (main_bb, flag_analysis)
+        return (main_bb, flag_tracker)
 
-    def process_block(self, inst_block, top_bb, flag_analysis):
+    def process_block(self, inst_block, top_bb, flag_tracker):
         """Produce the control flow subgraph corresponding to a block of
         instructions.
         """
@@ -412,15 +412,15 @@ class ControlFlowGraphAssembler(object):
         # Check the flag analysis to see if we need to compute the block.
         flag = self.flags[inst_block]
 
-        if flag_analysis.is_definitely_true(flag):
-            return (top_bb, flag_analysis)
+        if flag_tracker.is_definitely_true(flag):
+            return (top_bb, flag_tracker)
 
-        needs_flag = not flag_analysis.is_definitely_false(flag)
+        needs_flag = not flag_tracker.is_definitely_false(flag)
 
         # Process all dependencies.
         dependencies = self.block_graph[inst_block]
-        main_bb, flag_analysis = \
-            self.process_block_sequence(dependencies, top_bb, flag_analysis)
+        main_bb, flag_tracker = \
+            self.process_block_sequence(dependencies, top_bb, flag_tracker)
 
         if needs_flag:
             # Add code to check and set the flag for the block.
@@ -453,10 +453,10 @@ class ControlFlowGraphAssembler(object):
                 then_else_merge_bb = self.new_basic_block()
 
                 # Emit basic blocks for then and else components.
-                end_then_bb, then_flag_analysis = self.process_block_sequence(
-                    then_blocks, then_bb, flag_analysis)
-                end_else_bb, else_flag_analysis = self.process_block_sequence(
-                    else_blocks, else_bb, flag_analysis)
+                end_then_bb, then_flag_tracker = self.process_block_sequence(
+                    then_blocks, then_bb, flag_tracker)
+                end_else_bb, else_flag_tracker = self.process_block_sequence(
+                    else_blocks, else_bb, flag_tracker)
 
                 # Emit branch to then and else blocks.
                 main_bb.add_branch(instruction.condition, then_bb, else_bb)
@@ -466,7 +466,7 @@ class ControlFlowGraphAssembler(object):
                 end_else_bb.add_jump(then_else_merge_bb)
 
                 # Set the current basic block to be the merge point.
-                flag_analysis = then_flag_analysis & else_flag_analysis
+                flag_tracker = then_flag_tracker & else_flag_tracker
                 main_bb = then_else_merge_bb
 
             elif isinstance(instruction, ReturnState):
@@ -494,5 +494,5 @@ class ControlFlowGraphAssembler(object):
                 main_bb.add_jump(merge_bb)
                 main_bb = merge_bb
 
-        flag_analysis = flag_analysis.set_true(flag)
-        return (main_bb, flag_analysis)
+        flag_tracker = flag_tracker.set_true(flag)
+        return (main_bb, flag_tracker)
