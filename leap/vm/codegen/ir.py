@@ -407,59 +407,6 @@ class Function(object):
         return '\n'.join(map(str, self.reverse_postorder()))
 
 
-class FlagAnalysis(object):
-    """Keeps track of the values of a set of boolean flags."""
-
-    def __init__(self, flags):
-        """Create a flag analysis object that keeps track of the given set of
-        flags.
-        """
-        self.all_flags = set(flags)
-        self.must_be_true = set()
-        self.must_be_false = set()
-
-    def set_true(self, flag):
-        """Return a new flag analysis object with the given flag set to true.
-        """
-        assert flag in self.all_flags
-        import copy
-        new_fa = copy.deepcopy(self)
-        new_fa.must_be_true.add(flag)
-        new_fa.must_be_false.discard(flag)
-        return new_fa
-
-    def set_false(self, flag):
-        """Return a new flag analysis object with the given flag set to false.
-        """
-        assert flag in self.all_flags
-        import copy
-        new_fa = copy.deepcopy(self)
-        new_fa.must_be_false.add(flag)
-        new_fa.must_be_true.discard(flag)
-        return new_fa
-
-    def is_definitely_true(self, flag):
-        """Determine if the flag must be set to true."""
-        assert flag in self.all_flags
-        return flag in self.must_be_true
-
-    def is_definitely_false(self, flag):
-        """Determine if the flag must be set to false."""
-        assert flag in self.all_flags
-        return flag in self.must_be_false
-
-    def __and__(self, other):
-        """Return a new flag analysis that represents the conjunction of the
-        inputs.
-        """
-        assert isinstance(other, FlagAnalysis)
-        assert self.all_flags == other.all_flags
-        new_fa = FlagAnalysis(self.all_flags)
-        new_fa.must_be_true = self.must_be_true & other.must_be_true
-        new_fa.must_be_false = self.must_be_false & other.must_be_false
-        return new_fa
-
-
 class SymbolTable(object):
     """Holds information regarding the variables in a code fragment."""
 
