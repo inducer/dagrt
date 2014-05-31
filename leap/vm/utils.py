@@ -31,19 +31,19 @@ THE SOFTWARE.
 from pymbolic.mapper.dependency import DependencyMapper
 
 
-class VectorAwareDependencyMapper(DependencyMapper):
-
-    def map_vector(self, expr):
-        return self.combine(map(self.rec, expr.children))
+class ExtendedDependencyMapper(DependencyMapper):
+    """Extends DependencyMapper to handle values encountered in leap
+    IR.
+    """
 
     def map_foreign(self, expr):
         if expr is None or isinstance(expr, str):
             return frozenset()
         else:
-            return super(VectorAwareDependencyMapper, self).map_foreign(expr)
+            return super(ExtendedDependencyMapper, self).map_foreign(expr)
 
 
-variable_mapper = VectorAwareDependencyMapper(composite_leaves=False)
+variable_mapper = ExtendedDependencyMapper(composite_leaves=False)
 
 
 def get_variables(expr):
