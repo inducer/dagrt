@@ -26,6 +26,7 @@ from .ir import AssignInst, BranchInst, JumpInst, ReturnInst
 from .analysis import ReachingDefinitions
 from pytools import one
 
+
 class Optimizer(object):
     """Performs optimizations on the code in a function."""
 
