@@ -30,6 +30,11 @@ class PythonExpressionMapper(StringifyMapper):
     """Converts expressions to Python code."""
 
     def __init__(self, variable_names, numpy='numpy'):
+        """variable_names is a map from a variable name (as a string) to its
+        representation (as a string).
+
+        numpy is the name of the numpy module.
+        """
         super(PythonExpressionMapper, self).__init__(repr)
         self.variable_names = variable_names
         self.numpy = numpy
