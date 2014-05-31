@@ -147,7 +147,7 @@ class MultirateTimesteperAccuracyChecker(object):
         print(eocrec.pretty_print())
 
         orderest = eocrec.estimate_order_of_convergence()[0,1]
-        assert orderest > self.order*0.65
+        assert orderest > self.order*0.70
 
 # Run example with
 # python test_multirate.py "test_multirate_accuracy(\"F\", 3)"
