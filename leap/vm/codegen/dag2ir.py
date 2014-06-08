@@ -115,8 +115,8 @@ class InstructionDAGPartitioner(object):
     def __call__(self, instructions):
         inst_graph = InstructionDAGIntGraph(instructions)
 
-        # The unconditional dependency relation is transitive. Prune as many
-        # unconditional edges as we can while maintaining all dependencies.
+        # Prune as many unconditional edges as we can while maintaining all
+        # dependencies.
         tr_graph = self.unconditional_transitive_reduction(inst_graph)
 
         # Construct maximal length straight line sequences of instructions that
