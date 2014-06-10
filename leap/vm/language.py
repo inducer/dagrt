@@ -25,7 +25,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools import Record, memoize_method
+from pytools import RecordWithoutPickling, memoize_method
 from leap.vm.utils import get_variables
 
 import logging
@@ -81,7 +81,7 @@ Built-in functions:
 """
 
 
-class Instruction(Record):
+class Instruction(RecordWithoutPickling):
     """
     .. attribute:: id
 
@@ -102,7 +102,7 @@ class Instruction(Record):
         if id is not None:
             id = intern(id)
         depends_on = frozenset(kwargs.pop("depends_on", []))
-        Record.__init__(self,
+        RecordWithoutPickling.__init__(self,
                 id=id,
                 depends_on=depends_on,
                 **kwargs)
@@ -380,7 +380,7 @@ class If(Instruction):
 
 # {{{ code container
 
-class TimeIntegratorCode(Record):
+class TimeIntegratorCode(RecordWithoutPickling):
     """
     .. attribute:: initialization_dep_on
 
@@ -408,11 +408,11 @@ class TimeIntegratorCode(Record):
             step_dep_on,
             instructions,
             step_before_fail):
-        Record.__init__(self,
-                initialization_dep_on=initialization_dep_on,
-                step_dep_on=step_dep_on,
-                instructions=instructions,
-                step_before_fail=step_before_fail)
+        RecordWithoutPickling.__init__(self,
+            initialization_dep_on=initialization_dep_on,
+            step_dep_on=step_dep_on,
+            instructions=instructions,
+            step_before_fail=step_before_fail)
 
     @property
     @memoize_method
@@ -516,7 +516,7 @@ class CodeBuilder(object):
         """Return a variable name that is not guaranteed not to be in use and
         not to be generated in the future."""
         from pytools import generate_unique_names
-        for possible_var in generate_unique_names(prefix):
+        for possible_var in generate_unique_names(str(prefix)):
             if possible_var not in self.var_set \
                     and possible_var not in self.generated_var_set:
                 self.generated_var_set.add(possible_var)
@@ -552,7 +552,7 @@ class CodeBuilder(object):
             new_ids.append(insn.id)
 
             self.var_set |= insn.get_assignees()
-            #self.var_set |= insn.get_read_variables()
+            # self.var_set |= insn.get_read_variables()
 
         # For exception safety, only make state change at end.
         self.id_set.update(new_ids)
