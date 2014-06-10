@@ -1,7 +1,5 @@
 """Provide a base class for code generators"""
 
-from __future__ import print_function
-
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
 __license__ = """
@@ -27,6 +25,7 @@ THE SOFTWARE.
 from .analysis import InstructionDAGVerifier
 from .dag2ir import InstructionDAGExtractor, ControlFlowGraphAssembler
 from .optimization import Optimizer
+from warnings import warn
 
 
 class CodeGenerator(object):
@@ -78,6 +77,6 @@ class CodeGenerator(object):
         if warnings and not self.suppress_warnings:
             from sys import stderr
             for warning in warnings:
-                print('Warning: ' + warning, file=stderr)
+                warn(warning)
         if errors:
             raise CodeGenerator.CodeGenerationError(errors)
