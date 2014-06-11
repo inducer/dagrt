@@ -100,7 +100,7 @@ class ControlFlowGraphSimplifier(object):
                 block.add_instruction(JumpInst(dest=new_dest))
                 changed = True
             elif isinstance(terminator, BranchInst) and \
-                (terminator.on_true in trivial_jumps or
+                    (terminator.on_true in trivial_jumps or
                     terminator.on_false in trivial_jumps):
                 new_branch = BranchInst(condition=terminator.condition,
                                         on_true=terminator.on_true,
