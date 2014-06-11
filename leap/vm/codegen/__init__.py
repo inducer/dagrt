@@ -1,7 +1,5 @@
 """Turn timestepper descriptions into source code"""
 
-from __future__ import division, with_statement, print_function
-
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
 __license__ = """
