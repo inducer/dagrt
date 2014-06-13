@@ -30,7 +30,7 @@ from .graphs import InstructionDAGIntGraph
 class InstructionDAGVerifier(object):
     """Verifies that code is well-formed."""
 
-    def __call__(self, instructions, *dependency_lists):
+    def __init__(self, instructions, *dependency_lists):
         warnings = []
         errors = []
 
@@ -42,7 +42,8 @@ class InstructionDAGVerifier(object):
         elif not self.verify_no_circular_dependencies(instructions):
             errors += ['Code has circular dependencies.']
 
-        return (errors, warnings)
+        self.warnings = warnings
+        self.errors = errors
 
     def verify_instructions_well_typed(self, instructions):
         """Ensure that all instructions are of the expected format."""
@@ -61,10 +62,10 @@ class InstructionDAGVerifier(object):
             if isinstance(inst, If):
                 deps |= set(inst.then_depends_on)
                 deps |= set(inst.else_depends_on)
-            if not deps.issubset(ids):
+            if not deps <= ids:
                 return False
         for dependency_list in dependency_lists:
-            if not dependency_list.issubset(ids):
+            if not set(dependency_list) <= ids:
                 return False
         return True
 
