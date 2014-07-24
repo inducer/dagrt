@@ -472,7 +472,8 @@ class ControlFlowGraphAssembler(object):
             elif isinstance(instruction, ReturnState):
                 return_value = (instruction.time, instruction.time_id,
                                 instruction.component_id,
-                                instruction.expression)
+                                instruction.expression,
+                                instruction.next_stage)
                 main_bb.add_assignment((self.return_val, return_value))
 
             elif isinstance(instruction, AssignExpression) or \
