@@ -53,7 +53,7 @@ blocks without "If" statements:
 
 This "depth-first" strategy needs to be modified in the presence of "If"
 instructions. For an "If" instruction, the condition in the "If"
-instruction must be evaluted *before* its dependencies are
+instruction must be evaluated *before* its dependencies are
 executed. Furthermore, the semantics of the DAG are such that after an
 "If" instruction is executed, each conditional dependency on the
 appropriate branch is executed only once.
