@@ -146,9 +146,7 @@ class ReachingDefinitions(object):
     def get_gen_and_kill_sets(self, block, point):
         """Return the gen and kill sets."""
         last_def = {}
-        for pos, inst in enumerate(block.code):
-            if pos == point:
-                break
+        for inst in block.code[:point]:
             for name in inst.get_defined_variables():
                 last_def[name] = inst
         return (set(last_def.iteritems()), set(last_def.iterkeys()))

@@ -22,6 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from . import codegen_base
 from . import python
 
+
+CodeGenerationError = codegen_base.CodeGenerationError
 PythonCodeGenerator = python.PythonCodeGenerator

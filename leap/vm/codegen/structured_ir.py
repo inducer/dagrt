@@ -1,4 +1,4 @@
-"""An intermediate representation for structured code"""
+"""A tree-based intermediate representation for structured code"""
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
@@ -50,7 +50,10 @@ class ControlNode(RecordWithoutPickling):
         """
         raise NotImplementedError()
 
-    def update_predecessors(self, old_successor, exclude=set()):
+    # The update_* methods are used to inform the predecessor /
+    # successor nodes when the current node is updated.
+
+    def update_predecessors(self, old_successor, exclude=frozenset()):
         """Replace instances of old_successors with self in the
         predecessors' sets of successors.
         """
@@ -58,9 +61,9 @@ class ControlNode(RecordWithoutPickling):
             predecessor.successors -= {old_successor}
             predecessor.successors.add(self)
 
-    def update_successors(self, old_predecessor, exclude=set()):
-        """Replace instances of old_predecessors with self in the successors'
-        sets of predecessors.
+    def update_successors(self, old_predecessor, exclude=frozenset()):
+        """Replace instances of old_predecessor with self in the
+        successors' sets of predecessors.
         """
         for successor in self.successors - exclude:
             successor.predecessors -= {old_predecessor}
@@ -110,8 +113,9 @@ class BlockNode(ControlNode):
 class IfThenNode(ControlNode):
     """Represents an if-then control structure.
 
-    Nodes A and B form an if-then control structure if B is single-entry and
-    there exists another node C distinct from A and B such that:
+    Distinct nodes A and B form an if-then control structure if B is
+    single-entry and there exists another node C distinct from A and B
+    such that:
 
       (i)  A has exactly two successors B and C
       (ii) B has exactly one successor C
@@ -140,8 +144,8 @@ class IfThenNode(ControlNode):
 class IfThenElseNode(ControlNode):
     """Represents an if-then-else control structure.
 
-    Nodes A, B, C form an if-then-else control structure if there exists
-    another distinct node D such that
+    Distinct nodes A, B, C form an if-then-else control structure if
+    there exists another distinct node D such that
 
       (i) A has exactly two successors B and C
       (ii) B and C are single entry single exit with successor D

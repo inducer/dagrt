@@ -57,8 +57,8 @@ class ControlFlowGraphSimplifier(object):
         return changed
 
     def discard_unreachable_blocks(self, control_flow_graph):
-        """Searches the control flow graph for reachable blocks by following
-        actual edges. Removes all references to blocks that are unreachable."""
+        """Search the control flow graph for reachable blocks by following
+        actual edges. Remove all references to blocks that are unreachable."""
         reachable = set()
         stack = [control_flow_graph.start_block]
         while stack:
@@ -76,7 +76,7 @@ class ControlFlowGraphSimplifier(object):
         return changed
 
     def coalesce_jumps(self, control_flow_graph):
-        """Bypasses basic blocks that consist of a single jump instruction."""
+        """Bypass basic blocks that consist of a single jump instruction."""
 
         # Find and compute the targets of all blocks that are trivial jumps.
         trivial_jumps = {}
@@ -121,7 +121,7 @@ class ControlFlowGraphSimplifier(object):
         return len(block.code) == 1 and len(block.successors) == 1
 
     def merge_basic_blocks(self, control_flow_graph):
-        """Merges basic blocks that can be trivially combined."""
+        """Merge basic blocks that can be trivially combined."""
 
         regions = []
         has_region = set()

@@ -22,16 +22,61 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import string
 from .expressions import PythonExpressionMapper
-from .codegen_base import CodeGenerator
-from .ir import AssignInst, JumpInst, BranchInst, ReturnInst, \
-    UnreachableInst
+from .codegen_base import StructuredCodeGenerator
 from pytools.py_codegen import PythonCodeGenerator as PythonEmitter
 from pytools.py_codegen import PythonFunctionGenerator as PythonFunctionEmitter
 from pytools.py_codegen import Indentation
 from leap.vm.utils import is_state_variable, get_unique_name
-from leap.vm.language import AssignExpression, AssignRHS
+import re
+
+
+def pad(line, width):
+    line += ' ' * (width - 1 - len(line))
+    line += '\\'
+    return line
+
+
+def wrap_line(line, level=0, width=80, indentation='    '):
+    """The input is a line of Python code at the given indentation
+    level. Return the list of lines that results from wrapping the line to the
+    given width. Lines subsequent to the first line in the returned list are
+    padded with extra indentation. The initial indentation level is not
+    included in the input or output lines.
+
+    Note: This code does not properly handle strings with embedded whitespace
+    and this code also does not properly handle comments.
+    """
+    tokens = re.split('\s+', line)
+    resulting_lines = []
+    at_line_start = True
+    indentation_len = len(level * indentation)
+    current_line = ''
+    for index, word in enumerate(tokens):
+        has_next_word = index < len(tokens) - 1
+        word_len = len(word)
+        if not at_line_start:
+            next_len = indentation_len + len(current_line) + 1 + word_len
+            if next_len < width or (not has_next_word and next_len == width):
+                # The word goes on the same line.
+                current_line += ' ' + word
+            else:
+                # The word goes on the next line.
+                resulting_lines.append(pad(current_line,
+                                           width - indentation_len))
+                at_line_start = True
+                current_line = indentation
+        if at_line_start:
+            current_line += word
+            at_line_start = False
+            if width <= 1 + indentation_len + word_len and has_next_word:
+                # The line is too long.
+                resulting_lines.append(pad(current_line,
+                                           width - indentation_len))
+                at_line_start = True
+                current_line = indentation
+    resulting_lines.append(current_line)
+    return resulting_lines
 
 
 class PythonClassEmitter(PythonEmitter):
@@ -52,10 +97,9 @@ class PythonClassEmitter(PythonEmitter):
 
 
 class PythonNameManager(object):
-    """Maps names that appear in intermediate code to Python
-    identifiers.
+    """Maps names that appear in intermediate code to Python identifiers.
     """
-    
+
     def __init__(self):
         self.local_map = {}
         self.global_map = {}
@@ -112,9 +156,10 @@ class PythonNameManager(object):
 class PythonCodeGenerator(StructuredCodeGenerator):
 
     def __init__(self, **kwargs):
-        super(PythonCodeGenerator, self).__init__(self, **kwargs)
+        super(PythonCodeGenerator, self).__init__(**kwargs)
+        method_name = kwargs['method_name']
         # Used for emitting the method class
-        self.class_emitter = PythonClassEmitter(self.method_name)
+        self.class_emitter = PythonClassEmitter(method_name)
         # Map from variable / RHS names to names in generated code
         self.name_manager = PythonNameManager()
         # Expression mapper
@@ -127,13 +172,12 @@ class PythonCodeGenerator(StructuredCodeGenerator):
     def rhs(self, rhs):
         return self.name_manager.name_rhs(rhs)
 
+    def emit(self, line):
+        level = self.class_emitter.level + self.emitter.level
+        for wrapped_line in wrap_line(line, level):
+            self.emitter(wrapped_line)
+
     def begin_emit(self):
-        pass
-
-    def emit_StateComputed(self):
-        pass
-
-    def emit_StepCompleted(self):
         pass
 
     def emit_constructor(self):
@@ -142,25 +186,42 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         # Perform necessary imports.
         emit('import numpy')
         emit('self.numpy = numpy')
-        # XXX this should be an inner class
         emit('from leap.vm.exec_numpy import StateComputed, StepCompleted')
         emit('self.StateComputed = StateComputed')
         emit('self.StepCompleted = StepCompleted')
         # Save all the rhs components.
-        for rhs in self.rhs_map:
-            emit('%s = rhs_map["%s"]' % (self.rhs_map[rhs], rhs))
+        rhs_map = self.name_manager.rhs_map
+        for rhs_id, rhs in rhs_map.iteritems():
+            emit('{rhs} = rhs_map["{rhs_id}"]'.format(rhs=rhs, rhs_id=rhs_id))
         emit('return')
         self.class_emitter.incorporate(emit)
 
     def emit_set_up(self):
         """Emit the set_up() method."""
+        emit = PythonFunctionEmitter('set_up',
+                                     ('self', 't_start', 'dt_start', 'state'))
+        emit('self.t = t_start')
+        emit('self.dt = dt_start')
+        # Save all the state components.
+        global_map = self.name_manager.global_map
+        for component_id, component in global_map.iteritems():
+            if not component_id.startswith('<state>'):
+                continue
+            component_id = component_id[7:]
+            emit('{component} = state["{component_id}"]'.format(
+                component=component, component_id=component_id))
+        self.class_emitter.incorporate(emit)
 
     def emit_run(self):
         """Emit the run() method."""
-        # XXX respect stages.
         emit = PythonFunctionEmitter('run', ('self', '**kwargs'))
         emit('t_end = kwargs["t_end"]')
         emit('last_step = False')
+        # STAGE_HACK: This implementation of staging support should be replaced
+        # so that the stages are not hard-coded.
+        emit('next_stages = { "initialization": "primary", ' +
+             '"primary": "primary" }')
+        emit('current_stage = "initialization"')
         emit('while True:')
         with Indentation(emit):
             emit('if self.t + self.dt >= t_end:')
@@ -168,57 +229,74 @@ class PythonCodeGenerator(StructuredCodeGenerator):
                 emit('assert self.t <= t_end')
                 emit('self.dt = t_end - self.t')
                 emit('last_step = True')
-            emit('step = self.step()')
-            emit('yield self.StateComputed(t=step[0], time_id=step[1], ' +
-                 'component_id=step[2], state_component=step[3])')
-            emit('if last_step:')
+            emit('stage_function = getattr(self, "stage_" + current_stage)')
+            emit('result = stage_function()')
+            emit('if result:')
             with Indentation(emit):
-                emit('yield self.StepCompleted(t=self.t)')
-                emit('break')
+                emit('result = dict(result)')
+                emit('t = result["time"]')
+                emit('time_id = result["time_id"]')
+                emit('component_id = result["component_id"]')
+                emit('state_component = result["expression"]')
+                emit('yield self.StateComputed(t=t, time_id=time_id, \\')
+                emit('    component_id=component_id, ' +
+                     'state_component=state_component)')
+                emit('if last_step:')
+                with Indentation(emit):
+                    emit('yield self.StepCompleted(t=self.t)')
+                    emit('break')
+            emit('current_stage = next_stages[current_stage]')
+        self.class_emitter.incorporate(emit)
 
     def finish_emit(self):
         self.emit_constructor()
         self.emit_set_up()
         self.emit_run()
 
+    def get_code(self):
+        return self.class_emitter.get()
+
     def emit_def_begin(self, name):
         # The current function is handled by self.emit
-        self.emit = PythonFunctionEmitter(name, ('self',))
+        self.emitter = PythonFunctionEmitter('stage_' + name, ('self',))
+        self.indent = self.emitter.indent
+        self.dedent = self.emitter.dedent
 
     def emit_def_end(self):
-        self.class_emitter.incorporate(self.emit)
-        del self.emit
+        self.class_emitter.incorporate(self.emitter)
+        del self.emitter
 
     def emit_while_loop_begin(self, expr):
         self.emit('while {expr}:'.format(expr=self.expr(expr)))
-        self.emit.indent()
-    
+        self.indent()
+
     def emit_while_loop_end(self):
-        self.emit.dedent()
+        self.dedent()
 
     def emit_if_begin(self, expr):
         self.emit('if {expr}:'.format(expr=self.expr(expr)))
-        self.emit.indent()
-    
+        self.indent()
+
     def emit_if_end(self):
-        self.emit.dedent()
+        self.dedent()
 
     def emit_else_begin(self):
         self.emit('else:')
-        self.emit.indent()
+        self.indent()
 
     def emit_else_end(self):
-        self.emit.dedent()
+        self.dedent()
 
     def emit_assign_expr(self, name, expr):
-        self.emit('{name} = {expr}'.format(name=self.expr(name),
+        self.emit('{name} = {expr}'.format(name=self.name_manager[name],
                                            expr=self.expr(expr)))
 
     def emit_assign_rhs(self, name, rhs, time, arg):
-        self.emit('{name} = {rhs}(t={t}, {expr})'.format(name=self.expr(name),
-                                                         rhs=self.rhs(rhs),
-                                                         t=self.expr(time),
-                                                         expr=self.expr(arg))
+        kwargs = ', '.join('{name}={expr}'.format(name=name,
+            expr=self.expr(val)) for name, val in arg)
+        self.emit('{name} = {rhs}(t={t}, {kwargs})'.format(
+                name=self.name_manager[name], rhs=self.rhs(rhs),
+                t=self.expr(time), kwargs=kwargs))
 
     def emit_return(self, expr):
         self.emit('return {expr}'.format(expr=self.expr(expr)))

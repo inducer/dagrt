@@ -28,6 +28,15 @@ from .structured_ir import SingleNode, BlockNode, IfThenNode, IfThenElseNode, \
 from pytools import one, DictionaryWithDefault
 
 
+def distinct(*items):
+    """Return True if and only if each item in the list is a distinct object."""
+    for i in range(0, len(items)):
+        for j in range(i + 1, len(items)):
+            if items[i] is items[j]:
+                return False
+    return True
+
+
 class StructuralExtractor(object):
     """Creates a control tree from a control flow graph.
 
@@ -61,26 +70,25 @@ class StructuralExtractor(object):
                     continue
 
                 # Check for the structural type of the node.
-                built_node = self.check_for_block_node(node)
-                if not built_node:
-                    built_node = self.check_for_if_then_node(node)
-                if not built_node:
-                    built_node = self.check_for_if_then_else_node(node)
+                new_node = self.check_for_block_node(node)
+                new_node = new_node or self.check_for_if_then_node(node)
+                new_node = new_node or self.check_for_if_then_else_node(node)
 
-                if not built_node:
+                if not new_node:
                     continue
 
                 changed = True
                 # Update struct_of if a new node has been built.
-                for inner_node in built_node.nodes:
-                    struct_of[inner_node] = built_node
+                for inner_node in new_node.nodes:
+                    struct_of[inner_node] = new_node
 
             # If there are no updates, create an unstructured interval object.
             if not changed:
                 return UnstructuredIntervalNode(nodes)
 
-            # Build a new list of nodes that preserves th reverse postorder
-            # ordering of the nodes.
+            # Otherwise, the set of nodes has been updated.  Build a new list
+            # of nodes for the next iteration that preserves the reverse
+            # postorder ordering of the nodes.
             new_nodes = []
 
             for node in nodes:
@@ -139,7 +147,7 @@ class StructuralExtractor(object):
         if len(then_node.successors) != 1 or \
                 len(then_node.predecessors) != 1 or \
                 merge_node not in then_node.successors or \
-                node is then_node or node is merge_node:
+                not distinct(node, then_node, merge_node):
             return None
         return IfThenNode(node, then_node)
 
@@ -150,11 +158,13 @@ class StructuralExtractor(object):
         # Get then and else nodes.
         branch = node.exit_block.code[-1]
         assert isinstance(branch, BranchInst)
+
         then_basic_block = branch.on_true
         else_basic_block = branch.on_false
         then_node, else_node = tuple(node.successors)
         if else_node.entry_block is then_basic_block:
             then_node, else_node = else_node, then_node
+
         assert then_node.entry_block is then_basic_block
         assert else_node.entry_block is else_basic_block
 
@@ -170,7 +180,6 @@ class StructuralExtractor(object):
         merge_node = one(then_node.successors)
 
         # Check for block distinctness.
-        if node is then_node or node is else_node or node is merge_node or \
-                then_node is merge_node or else_node is merge_node:
+        if not distinct(node, then_node, else_node, merge_node):
             return None
         return IfThenElseNode(node, then_node, else_node)

@@ -25,40 +25,28 @@ THE SOFTWARE.
 from .analysis import InstructionDAGVerifier
 from .dag2ir import InstructionDAGExtractor, ControlFlowGraphAssembler
 from .optimization import Optimizer
+from .ir2structured_ir import StructuralExtractor
+from .structured_ir import SingleNode, IfThenNode, IfThenElseNode, BlockNode, \
+    UnstructuredIntervalNode
+from .ir import AssignInst, JumpInst, BranchInst, ReturnInst
+from leap.vm.language import AssignExpression, AssignRHS
+from leap.vm.utils import TODO
 from warnings import warn
 
 from pytools import RecordWithoutPickling, memoize_method
 
-from leap.vm.language import ReturnState
-
 
 class NewTimeIntegratorCode(RecordWithoutPickling):
-    """A TimeIntegratorCode with staging support."""
-    
+    """
+    A TimeIntegratorCode with staging support. This will eventually replace
+    TimeIntegratorCode.
+    """
+
     @classmethod
     def from_old(cls, code):
         stages = {}
         stages['initialization'] = code.initialization_dep_on
         stages['primary'] = code.step_dep_on
-        # Insert a new attribute to the Return instructions that indicates the
-        # name of the next stage.
-        for stage, dependencies in stages.iteritems():
-            stack = list(dependencies)
-            visited = set()
-            while stack:
-                top = stack.pop()
-                if top not in visited:
-                    visited.add(top)
-                    top_inst = code.id_to_insn[top]
-                    stack.extend(list(top_inst.depends_on))
-            for inst_id in visited:
-                inst = code.id_to_insn[inst_id]
-                if isinstance(inst, ReturnState):
-                    # Add a new field to inst.
-                    if stage == 'initialization':
-                        inst.next_stage = 'primary'
-                    elif stage == 'primary':
-                        inst.next_stage = 'primary'
         return cls(code.instructions, stages, 'initialization',
                    code.step_before_fail)
 
@@ -84,17 +72,18 @@ class NewTimeIntegratorCode(RecordWithoutPickling):
         return dict((insn.id, insn) for insn in self.instructions)
 
 
+class CodeGenerationError(Exception):
+
+    def __init__(self, errors):
+        self.errors = errors
+
+    def __str__(self):
+        return 'Errors encountered in input to code generator.\n' + \
+            '\n'.join(self.errors)
+
+
 class CodeGenerator(object):
     """Base class for code generation."""
-
-    class CodeGenerationError(Exception):
-
-        def __init__(self, errors):
-            self.errors = errors
-
-        def __str__(self):
-            return 'Errors encountered in input to code generator.\n' + \
-                '\n'.join(self.errors)
 
     def __init__(self, emitter, optimize=True, suppress_warnings=False):
         self.emitter = emitter
@@ -102,30 +91,7 @@ class CodeGenerator(object):
         self.optimize = optimize
 
     def __call__(self, code):
-        dag = code.instructions
-        self.verify_code(code)
-        extractor = InstructionDAGExtractor()
-        assembler = ControlFlowGraphAssembler()
-        optimizer = Optimizer()
-        new_code = NewTimeIntegratorCode.from_old(code)
-
-        # Generate initialization code.
-        initialization_deps = code.initialization_dep_on
-        initialization = extractor(dag, initialization_deps)
-        initialization_code = assembler(initialization, initialization_deps)
-        if self.optimize:
-            initialization_code = optimizer(initialization_code)
-        self.emitter.emit_initialization(initialization_code)
-
-        # Generate timestepper code.
-        stepper_deps = code.step_dep_on
-        stepper = extractor(dag, code.step_dep_on)
-        stepper_code = assembler(stepper, stepper_deps)
-        if self.optimize:
-            stepper_code = optimizer(stepper_code)
-        self.emitter.emit_stepper(stepper_code)
-
-        return self.emitter.get_code()
+        raise NotImplementedError()
 
     def verify_code(self, code):
         """Verify that the DAG is well-formed."""
@@ -136,32 +102,38 @@ class CodeGenerator(object):
             for warning in verifier.warnings:
                 warn(warning)
         if verifier.errors:
-            raise CodeGenerator.CodeGenerationError(verifier.errors)
+            raise CodeGenerationError(verifier.errors)
 
 
-class StructuredCodeGenerator(object):
-    """Event-driven code generation for structured languages"""
+class StructuredCodeGenerator(CodeGenerator):
+    """Code generation for structured languages"""
+
+    def __init__(self, **kwargs):
+        super(StructuredCodeGenerator, self).__init__(self)
 
     def __call__(self, dag):
-        self.verify_dag(dag)
+        self.verify_code(dag)
+        dag = NewTimeIntegratorCode.from_old(dag)
         dag_extractor = InstructionDAGExtractor()
         assembler = ControlFlowGraphAssembler()
         optimizer = Optimizer()
         structural_extractor = StructuralExtractor()
 
-        for stage, dependencies in code.stages.iteritems():
-            code = extractor(dag, dependencies)
+        for stage, dependencies in dag.stages.iteritems():
+            code = dag_extractor(dag.instructions, dependencies)
             control_flow_graph = assembler(code, dependencies)
             if self.optimize:
                 control_flow_graph = optimizer(control_flow_graph)
-            control_tree = structural_extractor(control_tree)
+            control_tree = structural_extractor(control_flow_graph)
             self.lower_function(stage, control_tree)
+
+        self.finish_emit()
+
+        return self.get_code()
 
     def lower_function(self, function_name, control_tree):
         self.emit_def_begin(function_name)
-        self.emit_prolog()
         self.lower_node(control_tree)
-        self.emit_epilog()
         self.emit_def_end()
 
     def lower_node(self, node):
@@ -205,7 +177,7 @@ class StructuredCodeGenerator(object):
         elif isinstance(inst, JumpInst):
             pass
         elif isinstance(inst, BranchInst):
-            self.emit_if_begin(inst.condition))
+            self.emit_if_begin(inst.condition)
         elif isinstance(inst, ReturnInst):
             self.emit_return(inst.expression)
 

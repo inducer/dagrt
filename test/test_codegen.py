@@ -31,7 +31,7 @@ import numpy as np
 from leap.vm.language import AssignExpression, AssignRHS, If, ReturnState
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
 from leap.vm.exec_numpy import StateComputed, StepCompleted
-from leap.vm.codegen import PythonCodeGenerator
+from leap.vm.codegen import PythonCodeGenerator, CodeGenerationError
 from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
 from pymbolic import var
 from leap.vm.codegen.ir import BasicBlock, SymbolTable, Function
@@ -42,8 +42,8 @@ from pytools import one
 
 
 def exec_in_new_namespace(code):
-    """Executes the given code with empty locals and returns the changes made
-    to the locals namespace."""
+    """Execute the given code with empty locals and returns the changes made to
+    the locals namespace."""
     namespace = {}
     exec(code, globals(), namespace)
     return namespace
@@ -66,7 +66,6 @@ def test_basic_codegen():
     state = exec_in_new_namespace(output)
     m = state['Method']({})
     m.set_up(t_start=0, dt_start=0, state={})
-    m.initialize()
     hist = [s for s in m.run(t_end=0)]
     assert len(hist) == 2
     assert isinstance(hist[0], StateComputed)
@@ -94,7 +93,6 @@ def test_basic_conditional_codegen():
     state = exec_in_new_namespace(output)
     m = state['Method']({})
     m.set_up(t_start=0, dt_start=0, state={'y': 6})
-    m.initialize()
     hist = [s for s in m.run(t_end=0)]
     assert len(hist) == 2
     assert isinstance(hist[0], StateComputed)
@@ -132,7 +130,6 @@ def test_basic_assign_rhs_codegen():
 
     m = state['Method']({'y': y, 'yy': yy})
     m.set_up(t_start=0, dt_start=0, state={'y': 0})
-    m.initialize()
     hist = [s for s in m.run(t_end=0)]
     assert len(hist) == 2
     assert isinstance(hist[0], StateComputed)
@@ -164,7 +161,6 @@ def test_complex_dependency_codegen():
     state = exec_in_new_namespace(output)
     m = state['Method']({})
     m.set_up(t_start=0, dt_start=0, state={'y': 0})
-    m.initialize()
     hist = [s for s in m.run(t_end=0)]
     assert len(hist) == 2
     assert isinstance(hist[0], StateComputed)
@@ -211,7 +207,6 @@ def test_rk_codegen(stepper, expected_order):
 
         method = state['RKMethod']({component_id: rhs})
         method.set_up(t_start=t, dt_start=dt, state={component_id: y})
-        method.initialize()
 
         times = []
         values = []
@@ -278,7 +273,6 @@ def test_multirate_codegen():
         method = namespace['MRABMethod'](rhs_map)
         method.set_up(t_start=t, dt_start=dt, state={'fast': y[0],
                                                      'slow': y[1]})
-        method.initialize()
 
         times = []
         values = []
@@ -322,7 +316,7 @@ def test_circular_dependency_detection():
     codegen = PythonCodeGenerator(method_name='Method')
     try:
         codegen(code)
-    except PythonCodeGenerator.CodeGenerationError:
+    except CodeGenerationError:
         pass
     else:
         assert False
@@ -344,7 +338,7 @@ def test_missing_dependency_detection():
     codegen = PythonCodeGenerator(method_name='Method')
     try:
         codegen(code)
-    except PythonCodeGenerator.CodeGenerationError:
+    except CodeGenerationError:
         pass
     else:
         assert False
@@ -588,6 +582,15 @@ def test_complex_structural_extraction_3():
     assert len(inner_if_node.node_list) == 2
     assert isinstance(inner_if_node.node_list[0], IfThenElseNode)
     assert isinstance(inner_if_node.node_list[1], SingleNode)
+
+
+def test_python_line_wrapping():
+    """Check that the line wrapper breaks a line up correctly."""
+    from leap.vm.codegen.python import wrap_line
+    line = "x += str('' + x + y + zzzzzzzzz)"
+    result = wrap_line(line, level=1, width=14, indentation='    ')
+    assert result == ['x +=     \\', "    str(''\\", '    + x +\\',
+                      '    y +  \\', '    zzzzzzzzz)']
 
 
 if __name__ == "__main__":

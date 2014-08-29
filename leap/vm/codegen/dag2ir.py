@@ -25,6 +25,7 @@ THE SOFTWARE.
 from leap.vm.language import Instruction, AssignExpression, AssignNorm, \
     AssignDotProduct, AssignSolvedRHS, AssignRHS, If, ReturnState, Raise, \
     FailStep
+from leap.vm.utils import TODO
 from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import get_unique_name, is_state_variable
 from .ir import SymbolTable, BasicBlock, Function
@@ -81,14 +82,18 @@ class InstructionDAGEntryExitAugmenter(object):
         ids = {inst.id for inst in instructions}
         entry_id = get_unique_name('entry', ids)
         exit_id = get_unique_name('exit', ids)
-        aug_instructions = copy.deepcopy(instructions)
-        ent = Entry(id=entry_id)
-        ex = Exit(id=exit_id, depends_on=[entry_id] + instructions_dep_on)
-        aug_instructions.add(ex)
-        for inst in aug_instructions:
-            inst.depends_on = frozenset([entry_id] + list(inst.depends_on))
-        aug_instructions.add(ent)
-        return (aug_instructions, ent, ex)
+        augmented_instructions = set()
+        entry_inst = Entry(id=entry_id)
+        exit_inst = Exit(id=exit_id,
+                         depends_on=[entry_id] + instructions_dep_on)
+        augmented_instructions.add(exit_inst)
+        for inst in instructions:
+            new_inst = copy.copy(inst)
+            new_inst.depends_on = \
+                frozenset([entry_id] + list(new_inst.depends_on))
+            augmented_instructions.add(new_inst)
+        augmented_instructions.add(entry_inst)
+        return (augmented_instructions, entry_inst, exit_inst)
 
 
 class InstructionDAGExtractor(object):
@@ -244,23 +249,27 @@ class FlagTracker(object):
         self.must_be_true = set()
         self.must_be_false = set()
 
+    def clone(self):
+        """Return a copy of the object."""
+        return self & self
+
     def set_true(self, flag):
         """Return a new flag analysis object with the given flag set to true.
         """
         assert flag in self.all_flags
-        new_ft = copy.deepcopy(self)
-        new_ft.must_be_true.add(flag)
-        new_ft.must_be_false.discard(flag)
-        return new_ft
+        flag_tracker = self.clone()
+        flag_tracker.must_be_true.add(flag)
+        flag_tracker.must_be_false.discard(flag)
+        return flag_tracker
 
     def set_false(self, flag):
         """Return a new flag analysis object with the given flag set to false.
         """
         assert flag in self.all_flags
-        new_ft = copy.deepcopy(self)
-        new_ft.must_be_false.add(flag)
-        new_ft.must_be_true.discard(flag)
-        return new_ft
+        flag_tracker = self.clone()
+        flag_tracker.must_be_false.add(flag)
+        flag_tracker.must_be_true.discard(flag)
+        return flag_tracker
 
     def is_definitely_true(self, flag):
         """Determine if the flag must be set to true."""
@@ -278,10 +287,10 @@ class FlagTracker(object):
         """
         assert isinstance(other, FlagTracker)
         assert self.all_flags == other.all_flags
-        new_ft = FlagTracker(self.all_flags)
-        new_ft.must_be_true = self.must_be_true & other.must_be_true
-        new_ft.must_be_false = self.must_be_false & other.must_be_false
-        return new_ft
+        flag_tracker = FlagTracker(self.all_flags)
+        flag_tracker.must_be_true = self.must_be_true & other.must_be_true
+        flag_tracker.must_be_false = self.must_be_false & other.must_be_false
+        return flag_tracker
 
 
 class ControlFlowGraphAssembler(object):
@@ -324,7 +333,7 @@ class ControlFlowGraphAssembler(object):
 
         # Create the control flow graph.
         end_bb, flag_tracker = self.process_block(exit_block, entry_bb,
-                                                   flag_tracker)
+                                                  flag_tracker)
 
         if not end_bb.terminated:
             end_bb.add_unreachable()
@@ -383,7 +392,7 @@ class ControlFlowGraphAssembler(object):
         for flag in self.flags.itervalues():
             start_bb.add_assignment((flag, False))
         # Initialize the return value.
-        start_bb.add_assignment((self.return_val, 0))
+        start_bb.add_assignment((self.return_val, None))
         return start_bb
 
     def process_block_sequence(self, block_sequence, top_bb, flag_tracker):
@@ -404,6 +413,10 @@ class ControlFlowGraphAssembler(object):
     def process_block(self, inst_block, top_bb, flag_tracker):
         """Produce the control flow subgraph corresponding to a block of
         instructions.
+
+        Return the final basic block in the subgraph and the flag
+        tracker that corresponds to the state of the flags at the end
+        of the final basic block.
         """
 
         get_block_set = lambda inst_set: \
@@ -470,10 +483,10 @@ class ControlFlowGraphAssembler(object):
                 main_bb = then_else_merge_bb
 
             elif isinstance(instruction, ReturnState):
-                return_value = (instruction.time, instruction.time_id,
-                                instruction.component_id,
-                                instruction.expression,
-                                instruction.next_stage)
+                return_value = (('time', instruction.time),
+                                ('time_id', instruction.time_id),
+                                ('component_id', instruction.component_id),
+                                ('expression', instruction.expression))
                 main_bb.add_assignment((self.return_val, return_value))
 
             elif isinstance(instruction, AssignExpression) or \
@@ -484,10 +497,10 @@ class ControlFlowGraphAssembler(object):
                 main_bb.add_assignment(instruction)
 
             elif isinstance(instruction, Raise):
-                pass
+                raise TODO('Implement IR lowering for Raise instructions.')
 
             elif isinstance(instruction, FailStep):
-                pass
+                raise TODO('Implement IR lowering for FailStep instructions.')
 
         if not main_bb.terminated:
             main_bb.add_assignment((flag, True))
