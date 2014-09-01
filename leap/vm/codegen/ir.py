@@ -75,8 +75,10 @@ class BranchInst(Inst):
         return frozenset([self.on_true, self.on_false])
 
     def __str__(self):
-        return 'if %s then goto block %d else goto block %d' % (string_mapper(
-            self.condition), self.on_true.number, self.on_false.number)
+        return \
+            'if {cond} then goto block {true} else goto block {false}'.format(
+                cond=string_mapper(self.condition), true=self.on_true.number,
+                false=self.on_false.number)
 
 
 class AssignInst(Inst):
@@ -115,11 +117,12 @@ class AssignInst(Inst):
     def __str__(self):
         assignment = self.assignment
         if isinstance(assignment, tuple):
-            return '%s <- %s' % (assignment[0], string_mapper(assignment[1]))
-        elif isinstance(assignment, AssignExpression):
-            return '%s <- %s' % (assignment.assignee,
-                                 string_mapper(assignment.expression))
-        elif isinstance(assignment, AssignRHS):
+            return '{name} <- {expr}'.format(name=assignment[0],
+                                             expr=string_mapper(assignment[1]))
+        if isinstance(assignment, AssignExpression):
+            return '{name} <- {expr}'.format(name=assignment.assignee,
+                expr=string_mapper(assignment.expression))
+        if isinstance(assignment, AssignRHS):
             lines = []
             time = string_mapper(assignment.t)
             rhs = assignment.component_id
@@ -129,14 +132,16 @@ class AssignInst(Inst):
                 for arg_pair in arguments:
                     name = arg_pair[0]
                     expr = string_mapper(arg_pair[1])
-                    arg_list.append('%s=%s' % (name, expr))
+                    arg_list.append(name + '=' + expr)
                 args = ', '.join(arg_list)
                 if len(args) == 0:
-                    lines.append('%s <- %s(%s)' % (assignee, rhs, time))
+                    lines.append('{name} <- {rhs}({t})'.format(name=assignee,
+                        rhs=rhs, t=time))
                 else:
-                    lines.append('%s <- %s(%s, %s)' %
-                                 (assignee, rhs, time, args))
+                    lines.append('{name} <- {rhs}({t}, {args})'.format(
+                                name=assignee, rhs=rhs, t=time, args=args))
             return '\n'.join(lines)
+        raise TODO('Implement string representation for all assignment types')
 
 
 class JumpInst(Inst):
@@ -155,7 +160,7 @@ class JumpInst(Inst):
         return frozenset([self.dest])
 
     def __str__(self):
-        return 'goto block %d' % self.dest.number
+        return 'goto block ' + str(self.dest.number)
 
 
 class ReturnInst(Inst):
@@ -176,7 +181,7 @@ class ReturnInst(Inst):
         return frozenset()
 
     def __str__(self):
-        return 'return %s' % string_mapper(self.expression)
+        return 'return ' + string_mapper(self.expression)
 
 
 class UnreachableInst(Inst):
@@ -295,7 +300,7 @@ class BasicBlock(object):
 
     def __str__(self):
         lines = []
-        lines.append('===== basic block %s =====' % self.number)
+        lines.append('===== basic block {num} ====='.format(num=self.number))
         lines.extend(str(inst) for inst in self.code)
         return '\n'.join(lines)
 
@@ -372,11 +377,11 @@ class Function(object):
             name = str(block.number)
 
             # Draw the block number.
-            lines.append('%s [shape=box,label=<' % name)
+            lines.append('{name} [shape=box,label=<'.format(name=name))
             lines.append('<table border="0">')
             lines.append('<tr>')
             lines.append('<td align="center"><font face="Helvetica">')
-            lines.append('<b>basic block %s</b>' % name)
+            lines.append('<b>basic block {name}</b>'.format(name=name))
             lines.append('</font></td>')
             lines.append('</tr>')
 
@@ -394,11 +399,12 @@ class Function(object):
 
             # Draw the successor edges.
             for successor in block.successors:
-                lines.append('%s -> %d;' % (name, successor.number))
+                lines.append('{name} -> {succ};'.format(name=name,
+                                                        succ=successor.number))
 
         # Add a dummy entry to mark the start block.
         lines.append('entry [style=invisible];')
-        lines.append('entry -> %d;' % self.start_block.number)
+        lines.append('entry -> {entry};'.format(entry=self.start_block.number))
 
         lines.append('}')
         return '\n'.join(lines)

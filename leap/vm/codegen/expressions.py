@@ -55,8 +55,8 @@ class PythonExpressionMapper(StringifyMapper):
             raise ValueError('Representing multidimensional arrays is ' +
                              'not supported')
         elements = [self.rec(element, *args) for element in expr]
-        return '%s.array([%s],dtype=\'object\')' % (self.numpy,
-                                                    ', '.join(elements))
+        return '{numpy}.array([{elements}],dtype=\'object\')'.format(
+            numpy=self.numpy, elements=', '.join(elements))
 
 
 string_mapper = PythonExpressionMapper(DictionaryWithDefault(lambda x: x))

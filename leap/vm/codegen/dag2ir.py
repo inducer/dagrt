@@ -355,7 +355,8 @@ class ControlFlowGraphAssembler(object):
         for block in block_graph:
             block_id = block_count
             block_count += 1
-            flag = symbol_table.get_fresh_variable_name('flag_%d' % block_id)
+            flag = symbol_table.get_fresh_variable_name('flag_' +
+                                                        str(block_id))
             self.flags[block] = flag
             symbol_table.add_variable(flag, 'is_flag')
 
