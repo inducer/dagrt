@@ -2,7 +2,7 @@
 
 from __future__ import division
 
-__copyright__ ="""
+__copyright__ = """
 Copyright (C) 2007 Andreas Kloeckner
 Copyright (C) 2014 Matt Wala
 """
@@ -28,20 +28,20 @@ THE SOFTWARE.
 """
 
 import numpy
-import numpy.linalg as la
 import pytest
 from pytools import memoize_method
 
 
-class MultirateTimesteperAccuracyChecker(object):
+class MultirateTimestepperAccuracyChecker(object):
     """Check that the multirate timestepper has the advertised accuracy."""
 
-    def __init__(self, method, order, step_ratio, ode, display_dag=False,
-                 display_solution=False):
+    def __init__(self, method, order, step_ratio, ode, use_interpreter=True,
+                 display_dag=False, display_solution=False):
         self.method = method
         self.order = order
         self.step_ratio = step_ratio
         self.ode = ode
+        self.use_interpreter = use_interpreter
         self.display_dag = display_dag
         self.display_solution = display_solution
 
@@ -49,14 +49,12 @@ class MultirateTimesteperAccuracyChecker(object):
     def get_code(self):
         from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
         from pytools import DictionaryWithDefault
-        order = DictionaryWithDefault(lambda x : self.order)
+        order = DictionaryWithDefault(lambda x: self.order)
         stepper = TwoRateAdamsBashforthTimeStepper(self.method, order,
                                                        self.step_ratio)
         return stepper()
 
-    def initialize_interpreter(self, dt):
-        from leap.vm.exec_numpy import NumpyInterpreter
-
+    def initialize_method(self, dt):
         # Requires a coupled component.
         def make_coupled(f2f, f2s, s2f, s2s):
             def coupled(t, y):
@@ -65,30 +63,38 @@ class MultirateTimesteperAccuracyChecker(object):
                     s2s(*args)),)
             return coupled
 
-        rhs_map = { '<func>f2f' : self.ode.f2f_rhs,
-            '<func>s2f' : self.ode.s2f_rhs, '<func>f2s' : self.ode.f2s_rhs,
-            '<func>s2s' : self.ode.s2s_rhs, '<func>coupled' : make_coupled(
-            self.ode.f2f_rhs, self.ode.s2f_rhs, self.ode.f2s_rhs,
-            self.ode.s2s_rhs) }
-        interpreter = NumpyInterpreter(self.get_code(), rhs_map)
+        rhs_map = {'<func>f2f': self.ode.f2f_rhs,
+            '<func>s2f': self.ode.s2f_rhs, '<func>f2s': self.ode.f2s_rhs,
+            '<func>s2s': self.ode.s2s_rhs, '<func>coupled': make_coupled(
+                self.ode.f2f_rhs, self.ode.s2f_rhs, self.ode.f2s_rhs,
+                self.ode.s2s_rhs)}
+
+        if self.use_interpreter:
+            from leap.vm.exec_numpy import NumpyInterpreter
+            method = NumpyInterpreter(self.get_code(), rhs_map)
+        else:
+            from leap.vm.codegen import PythonCodeGenerator
+            codegen = PythonCodeGenerator(class_name='MRABMethod')
+            MRABMethod = codegen.get_class(self.get_code())
+            method = MRABMethod(rhs_map)
 
         t = self.ode.t_start
         y = self.ode.initial_values
-        interpreter.set_up(t_start=t, dt_start=dt, state = {'fast': y[0],
-            'slow' : y[1]})
-        interpreter.initialize()
-        return interpreter
+        method.set_up(t_start=t, dt_start=dt, state={'fast': y[0],
+            'slow': y[1]})
+        method.initialize()
+        return method
 
     def get_error(self, dt, name=None, plot_solution=False):
         from leap.vm.exec_numpy import StateComputed
 
         final_t = self.ode.t_end
 
-        interp = self.initialize_interpreter(dt)
+        method = self.initialize_method(dt)
 
         times = []
         values = []
-        for event in interp.run(t_end=final_t):
+        for event in method.run(t_end=final_t):
             if isinstance(event, StateComputed):
                 values.append(event.state_component)
                 times.append(event.t)
@@ -113,8 +119,7 @@ class MultirateTimesteperAccuracyChecker(object):
                 self.plot_solution(times, proj(values, 0), self.ode.soln_0)
                 self.plot_solution(times, proj(values, 1), self.ode.soln_1)
             return abs(sqrt(y[0]**2 + y[1]**2)
-                    - sqrt(self.ode.soln_0(t)**2 + self.ode.soln_1(t)**2)
-                    )
+                    - sqrt(self.ode.soln_0(t)**2 + self.ode.soln_1(t)**2))
 
     def show_dag(self):
         from leap.vm.language import show_dependency_graph
@@ -136,7 +141,7 @@ class MultirateTimesteperAccuracyChecker(object):
             self.show_dag()
 
         eocrec = EOCRecorder()
-        for n in range(6,8):
+        for n in range(6, 8):
             dt = 2**(-n)
             error = self.get_error(dt, "mrab-%d.dat" % self.order)
             eocrec.add_data_point(dt, error)
@@ -146,26 +151,13 @@ class MultirateTimesteperAccuracyChecker(object):
         print("------------------------------------------------------")
         print(eocrec.pretty_print())
 
-        orderest = eocrec.estimate_order_of_convergence()[0,1]
+        orderest = eocrec.estimate_order_of_convergence()[0, 1]
         assert orderest > self.order*0.70
-
-# Run example with
-# python test_multirate.py "test_multirate_accuracy(\"F\", 3)"
-@pytest.mark.skipif("True")
-def test_multirate_accuracy(method, expected_order, show_dag=False,
-                            plot_solution=False):
-    from ode_systems import Full
-    from leap.method.ab.multirate.methods import methods
-    m = methods[method]
-
-    checker = MultirateTimesteperAccuracyChecker(m, expected_order, 2, Full(),
-        show_dag, plot_solution)
-    checker()
 
 
 @pytest.mark.slowtest
 @pytest.mark.parametrize("order", [1, 3])
-def test_all_multirate_accuracy(order):
+def test_all_multirate_accuracy(order, use_interpreter=True):
     """Check that the multirate timestepper has the advertised accuracy"""
 
     from leap.method.ab.multirate.methods import methods
@@ -180,8 +172,9 @@ def test_all_multirate_accuracy(order):
             print("------------------------------------------------------")
             print("METHOD: %s" % name)
             print("------------------------------------------------------")
-            MultirateTimesteperAccuracyChecker(
-                    methods[name], order, step_ratio, ode = system())()
+            MultirateTimestepperAccuracyChecker(
+                    methods[name], order, step_ratio, ode=system(),
+                    use_interpreter=use_interpreter)()
 
 
 if __name__ == "__main__":
@@ -191,4 +184,3 @@ if __name__ == "__main__":
     else:
         from py.test.cmdline import main
         main([__file__])
-
