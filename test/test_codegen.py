@@ -41,14 +41,6 @@ from leap.vm.codegen.ir2structured_ir import StructuralExtractor
 from pytools import one
 
 
-def exec_in_new_namespace(code):
-    """Execute the given code with empty locals and returns the changes made to
-    the locals namespace."""
-    namespace = {}
-    exec(code, globals(), namespace)
-    return namespace
-
-
 def test_basic_codegen():
     """Test whether the code generator returns a working method. The
     generated method always returns 0."""
@@ -61,12 +53,12 @@ def test_basic_codegen():
     code = TimeIntegratorCode(initialization_dep_on=[],
         instructions=cbuild.instructions, step_dep_on=['return'],
         step_before_fail=False)
-    codegen = PythonCodeGenerator(method_name='Method')
-    output = codegen(code)
-    state = exec_in_new_namespace(output)
-    m = state['Method']({})
-    m.set_up(t_start=0, dt_start=0, state={})
-    hist = [s for s in m.run(t_end=0)]
+    codegen = PythonCodeGenerator(class_name='Method')
+    Method = codegen.get_class(code)
+    method = Method({})
+    method.set_up(t_start=0, dt_start=0, state={})
+    method.initialize()
+    hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
     assert isinstance(hist[0], StateComputed)
     assert hist[0].state_component == 0
@@ -88,12 +80,12 @@ def test_basic_conditional_codegen():
     code = TimeIntegratorCode(initialization_dep_on=[],
         instructions=cbuild.instructions, step_dep_on=['return'],
         step_before_fail=False)
-    codegen = PythonCodeGenerator(method_name='Method')
-    output = codegen(code)
-    state = exec_in_new_namespace(output)
-    m = state['Method']({})
-    m.set_up(t_start=0, dt_start=0, state={'y': 6})
-    hist = [s for s in m.run(t_end=0)]
+    codegen = PythonCodeGenerator(class_name='Method')
+    Method = codegen.get_class(code)
+    method = Method({})
+    method.set_up(t_start=0, dt_start=0, state={'y': 6})
+    method.initialize()
+    hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
     assert isinstance(hist[0], StateComputed)
     assert hist[0].state_component == 1
@@ -118,9 +110,8 @@ def test_basic_assign_rhs_codegen():
     code = TimeIntegratorCode(initialization_dep_on=[],
         instructions=cbuild.instructions, step_dep_on=['return'],
         step_before_fail=False)
-    codegen = PythonCodeGenerator(method_name='Method')
-    output = codegen(code)
-    state = exec_in_new_namespace(output)
+    codegen = PythonCodeGenerator(class_name='Method')
+    Method = codegen.get_class(code)
 
     def y(t):
         return 6
@@ -128,9 +119,10 @@ def test_basic_assign_rhs_codegen():
     def yy(t, y):
         return y + 6
 
-    m = state['Method']({'y': y, 'yy': yy})
-    m.set_up(t_start=0, dt_start=0, state={'y': 0})
-    hist = [s for s in m.run(t_end=0)]
+    method = Method({'y': y, 'yy': yy})
+    method.set_up(t_start=0, dt_start=0, state={'y': 0})
+    method.initialize()
+    hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
     assert isinstance(hist[0], StateComputed)
     assert hist[0].state_component == 12
@@ -156,12 +148,12 @@ def test_complex_dependency_codegen():
     code = TimeIntegratorCode(initialization_dep_on=[],
         instructions=cbuild.instructions, step_dep_on=['return'],
         step_before_fail=False)
-    codegen = PythonCodeGenerator(method_name='Method')
-    output = codegen(code)
-    state = exec_in_new_namespace(output)
-    m = state['Method']({})
-    m.set_up(t_start=0, dt_start=0, state={'y': 0})
-    hist = [s for s in m.run(t_end=0)]
+    codegen = PythonCodeGenerator(class_name='Method')
+    Method = codegen.get_class(code)
+    method = Method({})
+    method.set_up(t_start=0, dt_start=0, state={'y': 0})
+    method.initialize()
+    hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
     assert isinstance(hist[0], StateComputed)
     assert hist[0].state_component == 1
@@ -181,9 +173,8 @@ def test_rk_codegen(stepper, expected_order):
 
     code = stepper(component_id)
 
-    codegen = PythonCodeGenerator(method_name='RKMethod')
-    output = codegen(code)
-    state = exec_in_new_namespace(output)
+    codegen = PythonCodeGenerator(class_name='RKMethod')
+    RKMethod = codegen.get_class(code)
 
     def rhs(t, y):
         u, v = y
@@ -205,8 +196,9 @@ def test_rk_codegen(stepper, expected_order):
         y = np.array([1, 3], dtype=np.float64)
         final_t = 10
 
-        method = state['RKMethod']({component_id: rhs})
+        method = RKMethod({component_id: rhs})
         method.set_up(t_start=t, dt_start=dt, state={component_id: y})
+        method.initialize()
 
         times = []
         values = []
@@ -238,9 +230,8 @@ def test_multirate_codegen():
     stepper = TwoRateAdamsBashforthTimeStepper(methods['F'], order, 4)
 
     code = stepper()
-    codegen = PythonCodeGenerator(method_name='MRABMethod')
-    output = codegen(code)
-    namespace = exec_in_new_namespace(output)
+    codegen = PythonCodeGenerator(class_name='MRABMethod')
+    MRABMethod = codegen.get_class(code)
 
     from ode_systems import Basic
     import numpy
@@ -270,9 +261,10 @@ def test_multirate_codegen():
     for n in range(5, 8):
         dt = 2 ** -n
 
-        method = namespace['MRABMethod'](rhs_map)
+        method = MRABMethod(rhs_map)
         method.set_up(t_start=t, dt_start=dt, state={'fast': y[0],
                                                      'slow': y[1]})
+        method.initialize()
 
         times = []
         values = []
@@ -313,7 +305,7 @@ def test_circular_dependency_detection():
     code = TimeIntegratorCode(initialization_dep_on=[],
         instructions=cbuild.instructions, step_dep_on=['return'],
         step_before_fail=False)
-    codegen = PythonCodeGenerator(method_name='Method')
+    codegen = PythonCodeGenerator(class_name='Method')
     try:
         codegen(code)
     except CodeGenerationError:
@@ -335,7 +327,7 @@ def test_missing_dependency_detection():
     code = TimeIntegratorCode(initialization_dep_on=[],
         instructions=instructions, step_dep_on=['return'],
         step_before_fail=False)
-    codegen = PythonCodeGenerator(method_name='Method')
+    codegen = PythonCodeGenerator(class_name='Method')
     try:
         codegen(code)
     except CodeGenerationError:
