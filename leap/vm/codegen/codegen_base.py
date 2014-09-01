@@ -82,15 +82,23 @@ class CodeGenerationError(Exception):
             '\n'.join(self.errors)
 
 
+def exec_in_new_namespace(code):
+    namespace = {}
+    exec(code, globals(), namespace)
+    return namespace
+
+
 class CodeGenerator(object):
     """Base class for code generation."""
 
-    def __init__(self, emitter, optimize=True, suppress_warnings=False):
+    def __init__(self, emitter, class_name, optimize, suppress_warnings):
         self.emitter = emitter
+        self.class_name = class_name
         self.suppress_warnings = suppress_warnings
         self.optimize = optimize
 
     def __call__(self, code):
+        """Return the Python code that implements the method."""
         raise NotImplementedError()
 
     def verify_code(self, code):
@@ -104,12 +112,19 @@ class CodeGenerator(object):
         if verifier.errors:
             raise CodeGenerationError(verifier.errors)
 
+    def get_class(self, code):
+        """Return the compiled Python class for the method."""
+        python_code = self(code)
+        namespace = exec_in_new_namespace(python_code)
+        return namespace[self.class_name]
+
 
 class StructuredCodeGenerator(CodeGenerator):
     """Code generation for structured languages"""
 
-    def __init__(self, **kwargs):
-        super(StructuredCodeGenerator, self).__init__(self)
+    def __init__(self, class_name, optimize, suppress_warnings):
+        super(StructuredCodeGenerator, self).__init__(
+            self, class_name, optimize, suppress_warnings)
 
     def __call__(self, dag):
         self.verify_code(dag)
@@ -119,6 +134,7 @@ class StructuredCodeGenerator(CodeGenerator):
         optimizer = Optimizer()
         structural_extractor = StructuralExtractor()
 
+        self.begin_emit()
         for stage, dependencies in dag.stages.iteritems():
             code = dag_extractor(dag.instructions, dependencies)
             control_flow_graph = assembler(code, dependencies)
@@ -183,10 +199,10 @@ class StructuredCodeGenerator(CodeGenerator):
 
     # Emit routines (to be implemented by subclass)
 
-    def start_emit(self):
+    def begin_emit(self):
         raise NotImplementedError()
 
-    def end_emit(self):
+    def finish_emit(self):
         raise NotImplementedError()
 
     def emit_def_begin(self, name):

@@ -44,14 +44,15 @@ def wrap_line(line, level=0, width=80, indentation='    '):
     padded with extra indentation. The initial indentation level is not
     included in the input or output lines.
 
-    Note: This code does not properly handle strings with embedded whitespace
-    and this code also does not properly handle comments.
+    Note: This code does not correctly handle Python lexical elements that
+    contain whitespace.
     """
     tokens = re.split('\s+', line)
     resulting_lines = []
     at_line_start = True
     indentation_len = len(level * indentation)
     current_line = ''
+    padding_width = width - indentation_len
     for index, word in enumerate(tokens):
         has_next_word = index < len(tokens) - 1
         word_len = len(word)
@@ -62,8 +63,7 @@ def wrap_line(line, level=0, width=80, indentation='    '):
                 current_line += ' ' + word
             else:
                 # The word goes on the next line.
-                resulting_lines.append(pad(current_line,
-                                           width - indentation_len))
+                resulting_lines.append(pad(current_line, padding_width))
                 at_line_start = True
                 current_line = indentation
         if at_line_start:
@@ -71,8 +71,7 @@ def wrap_line(line, level=0, width=80, indentation='    '):
             at_line_start = False
             if width <= 1 + indentation_len + word_len and has_next_word:
                 # The line is too long.
-                resulting_lines.append(pad(current_line,
-                                           width - indentation_len))
+                resulting_lines.append(pad(current_line, padding_width))
                 at_line_start = True
                 current_line = indentation
     resulting_lines.append(current_line)
@@ -85,7 +84,8 @@ class PythonClassEmitter(PythonEmitter):
     def __init__(self, class_name, superclass='object'):
         super(PythonClassEmitter, self).__init__()
         self.class_name = class_name
-        self('class %s(%s):' % (class_name, superclass))
+        self('class {cls}({superclass}):'.format(cls=class_name,
+                                                 superclass=superclass))
         self.indent()
 
     def incorporate(self, sub_generator):
@@ -155,11 +155,11 @@ class PythonNameManager(object):
 
 class PythonCodeGenerator(StructuredCodeGenerator):
 
-    def __init__(self, **kwargs):
-        super(PythonCodeGenerator, self).__init__(**kwargs)
-        method_name = kwargs['method_name']
+    def __init__(self, class_name, optimize=True, suppress_warnings=False):
+        super(PythonCodeGenerator, self).__init__(class_name, optimize,
+                                                  suppress_warnings)
         # Used for emitting the method class
-        self.class_emitter = PythonClassEmitter(method_name)
+        self.class_emitter = PythonClassEmitter(self.class_name)
         # Map from variable / RHS names to names in generated code
         self.name_manager = PythonNameManager()
         # Expression mapper
@@ -248,9 +248,17 @@ class PythonCodeGenerator(StructuredCodeGenerator):
             emit('current_stage = next_stages[current_stage]')
         self.class_emitter.incorporate(emit)
 
+    def emit_initialize(self):
+        # This method is not used by the class, but is here for compatibility
+        # with the NumpyInterpreter interface.
+        emit = PythonFunctionEmitter('initialize', ('self',))
+        emit('pass')
+        self.class_emitter.incorporate(emit)
+
     def finish_emit(self):
         self.emit_constructor()
         self.emit_set_up()
+        self.emit_initialize()
         self.emit_run()
 
     def get_code(self):
@@ -259,8 +267,6 @@ class PythonCodeGenerator(StructuredCodeGenerator):
     def emit_def_begin(self, name):
         # The current function is handled by self.emit
         self.emitter = PythonFunctionEmitter('stage_' + name, ('self',))
-        self.indent = self.emitter.indent
-        self.dedent = self.emitter.dedent
 
     def emit_def_end(self):
         self.class_emitter.incorporate(self.emitter)
@@ -268,24 +274,24 @@ class PythonCodeGenerator(StructuredCodeGenerator):
 
     def emit_while_loop_begin(self, expr):
         self.emit('while {expr}:'.format(expr=self.expr(expr)))
-        self.indent()
+        self.emitter.indent()
 
     def emit_while_loop_end(self):
-        self.dedent()
+        self.emitter.dedent()
 
     def emit_if_begin(self, expr):
         self.emit('if {expr}:'.format(expr=self.expr(expr)))
-        self.indent()
+        self.emitter.indent()
 
     def emit_if_end(self):
-        self.dedent()
+        self.emitter.dedent()
 
     def emit_else_begin(self):
         self.emit('else:')
-        self.indent()
+        self.emitter.indent()
 
     def emit_else_end(self):
-        self.dedent()
+        self.emitter.dedent()
 
     def emit_assign_expr(self, name, expr):
         self.emit('{name} = {expr}'.format(name=self.name_manager[name],
