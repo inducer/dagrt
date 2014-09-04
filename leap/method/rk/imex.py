@@ -212,7 +212,6 @@ class KennedyCarpenterIMEXARK4(KennedyCarpenterIMEXRungeKuttaBase):
             [82889/524892, 0, 15625/83664, 69875/102672,
                 -2260/8211]]
 
-
     assert (len(a_explicit) == len(a_implicit)
             == len(low_order_coeffs)
             == len(high_order_coeffs)

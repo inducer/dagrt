@@ -109,7 +109,6 @@ def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False
     print(eocrec.pretty_print())
 
     orderest = eocrec.estimate_order_of_convergence()[0, 1]
-    #print orderest, order
     assert orderest > expected_order*0.95
 
 # }}}
@@ -189,9 +188,6 @@ def test_adaptive_timestep(method, show_dag=False, plot=False):
             del new_values[:]
 
             logger.info("failed step at t=%s" % event.t)
-
-        #if step % 100 == 0:
-            #print t
 
     times = np.array(times)
     values = np.array(values)

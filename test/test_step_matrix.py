@@ -25,7 +25,6 @@ THE SOFTWARE.
 """
 
 import sys
-import pytest
 
 from leap.method.ab import AdamsBashforthTimeStepper
 import numpy as np
@@ -47,6 +46,7 @@ def test_step_matrix(show_matrix=True, show_dag=False):
 
     def rhs(t, y):
         return -y
+
     def rhs_deriv(n, t, y):
         return -1
 
@@ -65,7 +65,7 @@ def test_step_matrix(show_matrix=True, show_dag=False):
             step_matrices.append(event.step_matrix)
     if show_matrix:
         print('Variables: %s' % [var.name for var in finder.get_state_variables()])
-        np.set_printoptions(precision=2)        
+        np.set_printoptions(precision=2)
         print(step_matrices[-2])
 
 if __name__ == "__main__":

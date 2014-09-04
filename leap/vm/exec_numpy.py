@@ -29,7 +29,6 @@ import numpy.linalg as la
 from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
 from pymbolic.mapper.differentiator import DifferentiationMapper as \
     DifferentiationMapperBase
-from pymbolic.primitives import Vector
 
 
 class FailStepException(Exception):
@@ -87,7 +86,7 @@ class EvaluationMapper(EvaluationMapperBase):
     def map_call(self, expr):
         func = self.functions[expr.function.name]
         return func(*[self.rec(par) for par in expr.parameters])
-    
+
 
 class DifferentiationMapperWithContext(DifferentiationMapperBase):
 
@@ -98,10 +97,11 @@ class DifferentiationMapperWithContext(DifferentiationMapperBase):
 
     def map_call(self, expr):
         raise NotImplementedError
-    
+
     def map_variable(self, expr):
         return self.context[expr.name] if expr.name in self.context else \
             DifferentiationMapperBase.map_variable(self, expr)
+
 
 class NumpyInterpreter(object):
     """A :mod:`numpy`-targeting interpreter for the time integration language
@@ -242,9 +242,10 @@ class NumpyInterpreter(object):
 
     # }}}
 
+
 class StepMatrixFinder(NumpyInterpreter):
     """Constructs a step matrix on-the-fly while interpreting code."""
-    
+
     def __init__(self, code, rhs_map, rhs_deriv_map, variables=None):
         NumpyInterpreter.__init__(self, code, rhs_map)
         self.rhs_deriv_map = rhs_deriv_map
@@ -345,7 +346,7 @@ class StepMatrixFinder(NumpyInterpreter):
         rhs_deriv = self.rhs_deriv_map[insn.component_id]
 
         for assignee, args, ev_args in \
-            zip(insn.assignees, insn.rhs_arguments, evaluated):
+                zip(insn.assignees, insn.rhs_arguments, evaluated):
             for variable in self.variables:
                 total_deriv = 0
                 for n, arg in enumerate(args):
@@ -353,7 +354,7 @@ class StepMatrixFinder(NumpyInterpreter):
                     eval_deriv = self.eval_mapper(deriv)
                     total_deriv += rhs_deriv(1 + n, t, **dict(ev_args)) * eval_deriv
                 self.diff_states[variable][assignee] = self.eval_mapper(total_deriv)
-                
+
     def exec_AssignExpression(self, insn):
         self.state[insn.assignee] = self.eval_mapper(insn.expression)
         for variable in self.variables:

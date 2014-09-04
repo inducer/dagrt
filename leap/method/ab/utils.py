@@ -33,6 +33,7 @@ THE SOFTWARE.
 import numpy
 import numpy.linalg as la
 
+
 def generic_vandermonde(points, functions):
     """Return a Vandermonde matrix.
 
@@ -149,6 +150,7 @@ def make_generic_ab_coefficients(levels, int_start, tap):
 
 def make_ab_coefficients(order):
     return make_generic_ab_coefficients(numpy.arange(0, -order, -1), 0, 1)
+
 
 def linear_comb(coefficients, vectors):
     from operator import add

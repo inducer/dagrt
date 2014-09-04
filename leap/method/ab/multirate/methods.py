@@ -30,20 +30,30 @@ THE SOFTWARE.
 from pytools import Record
 from pymbolic import var
 
+
 # symbols ---------------------------------------------------------------------
 # components
 class CO_FAST:
     pass
+
+
 class CO_SLOW:
     pass
+
 
 # histories:
 class HIST_F2F:
     pass
+
+
 class HIST_F2S:
     pass
+
+
 class HIST_S2F:
     pass
+
+
 class HIST_S2S:
     pass
 
@@ -63,16 +73,19 @@ class IntegrateInTime(Record):
     def visit(self, processor):
         processor.integrate_in_time(self)
 
+
 class HistoryUpdate(Record):
     __slots__ = ["which", "slow_arg", "fast_arg"]
 
     def visit(self, processor):
         processor.history_update(self)
 
+
 class StartSubstepLoop(Record):
     # everything from this point gets executed substep_count times
     def visit(self, processor):
         processor.start_substep_loop(self)
+
 
 class EndSubstepLoop(Record):
     __slots__ = ["loop_end"]
@@ -94,13 +107,13 @@ class MRABMethod(Record):
     """
 
     __slots__ = ["steps", "s2f_hist_is_fast", "result_slow", "result_fast"]
-    
+
 
 methods = {
         # If you are wondering--Stock's nomenclature appears to *not* be
         # a direct transcription of the old, long scheme names.
 
-        "Fqsr": # old: -none-
+        "Fqsr":  # old: -none-
         MRABMethod(s2f_hist_is_fast=True,
             steps=[
                 IntegrateInTime(start=0, end=n, component=CO_SLOW,
@@ -124,7 +137,7 @@ methods = {
                 ],
             result_slow="y_s",
             result_fast="y_f"),
-        "Fq": # old: fastest_first_s
+        "Fq":  # old: fastest_first_s
         MRABMethod(s2f_hist_is_fast=True,
             steps=[
                 StartSubstepLoop(),
@@ -144,7 +157,7 @@ methods = {
                 ],
             result_slow="y_s",
             result_fast="y_f"),
-        "Fsfr": # old: -none-
+        "Fsfr":  # old: -none-
         MRABMethod(s2f_hist_is_fast=False,
             steps=[
                 IntegrateInTime(start=0, end=n, component=CO_SLOW,
@@ -168,7 +181,7 @@ methods = {
                 ],
             result_slow="y_s",
             result_fast="y_f"),
-        "Fsr": # old: -none-
+        "Fsr":  # old: -none-
         MRABMethod(s2f_hist_is_fast=False,
             steps=[
                 IntegrateInTime(start=0, end=n, component=CO_SLOW,
@@ -192,7 +205,7 @@ methods = {
                 ],
             result_slow="y_s",
             result_fast="y_f"),
-        "Ffr": # old: -none-
+        "Ffr":  # old: -none-
         MRABMethod(s2f_hist_is_fast=False,
             steps=[
                 IntegrateInTime(start=0, end=n, component=CO_SLOW,
@@ -216,7 +229,7 @@ methods = {
                 ],
             result_slow="y_s",
             result_fast="y_f"),
-        "F": # old: fastest_first_w
+        "F":  # old: fastest_first_w
         MRABMethod(s2f_hist_is_fast=False,
             steps=[
                 StartSubstepLoop(),
@@ -237,7 +250,7 @@ methods = {
             result_slow="y_s",
             result_fast="y_f"),
         # ---------------------------------------------------------------------
-        "Srf": # old: slowest_first_1
+        "Srf":  # old: slowest_first_1
         MRABMethod(s2f_hist_is_fast=False,
             steps=[
                 IntegrateInTime(start=0, end=n, component=CO_SLOW,
@@ -261,8 +274,8 @@ methods = {
                 ],
             result_slow="y_s",
             result_fast="y_f"),
-        "Sr": # old: slowest_first_2w
-            MRABMethod(s2f_hist_is_fast=False,
+        "Sr":  # old: slowest_first_2w
+        MRABMethod(s2f_hist_is_fast=False,
                 steps=[
                     IntegrateInTime(start=0, end=n, component=CO_SLOW,
                         result_name="\\tilde y_s"),
@@ -285,8 +298,8 @@ methods = {
                     ],
                 result_slow="y_s",
                 result_fast="y_f"),
-        "Sqr": # old: slowest_first_2s
-            MRABMethod(s2f_hist_is_fast=True,
+        "Sqr":  # old: slowest_first_2s
+        MRABMethod(s2f_hist_is_fast=True,
                 steps=[
                     IntegrateInTime(start=0, end=n, component=CO_SLOW,
                         result_name="\\tilde y_s"),
@@ -306,11 +319,11 @@ methods = {
                     EndSubstepLoop(),
                     HistoryUpdate(slow_arg="y_s", fast_arg="y_f",
                         which=HIST_F2S),
-            ],
+                    ],
             result_slow="y_s",
             result_fast="y_f"),
-        "Srs": # old: slowest_first_3w
-            MRABMethod(s2f_hist_is_fast=False,
+        "Srs":  # old: slowest_first_3w
+        MRABMethod(s2f_hist_is_fast=False,
                 steps=[
                     IntegrateInTime(start=0, end=n, component=CO_SLOW,
                         result_name="\\tilde y_s"),
@@ -333,8 +346,8 @@ methods = {
                     ],
                 result_slow="y_s",
                 result_fast="y_f"),
-        "Sqrs": # old: slowest_first_3s
-            MRABMethod(s2f_hist_is_fast=True,
+        "Sqrs":  # old: slowest_first_3s
+        MRABMethod(s2f_hist_is_fast=True,
                 steps=[
                     IntegrateInTime(start=0, end=n, component=CO_SLOW,
                         result_name="\\tilde y_s"),
@@ -357,8 +370,8 @@ methods = {
                     ],
                 result_slow="y_s",
                 result_fast="y_f"),
-        "Srsf": # old: slowest_first_4
-            MRABMethod(s2f_hist_is_fast=False,
+        "Srsf":  # old: slowest_first_4
+        MRABMethod(s2f_hist_is_fast=False,
                 steps=[
                     IntegrateInTime(start=0, end=n, component=CO_SLOW,
                         result_name="\\tilde y_s"),
@@ -382,8 +395,6 @@ methods = {
                 result_slow="y_s",
                 result_fast="y_f")
         }
-
-
 
 
 def _remove_last_yslow_evaluation_from_slowest_first(method):

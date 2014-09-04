@@ -30,10 +30,10 @@ THE SOFTWARE.
 """
 
 import numpy
-from pytools import memoize, memoize_method
+from pytools import memoize_method
 from leap.method.ab import AdamsBashforthTimeStepperBase
 from leap.method.ab.utils import make_generic_ab_coefficients, linear_comb
-from leap.method.ab.multirate.methods import HIST_NAMES, methods
+from leap.method.ab.multirate.methods import HIST_NAMES
 from leap.method.ab.multirate.processors import MRABProcessor
 
 
@@ -44,11 +44,11 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
     [1] C.W. Gear and D.R. Wells, "Multirate linear multistep methods," BIT
     Numerical Mathematics,  vol. 24, Dec. 1984,pg. 484-502.
     """
-    
+
     def __init__(self, method, orders, substep_count):
         super(TwoRateAdamsBashforthTimeStepper, self).__init__()
         self.method = method
-        
+
         # Variables
         from pymbolic import var
 
@@ -68,7 +68,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         # Coupled states for RK initialization
         self.rk_y = var('<p>rk_y')
         self.rk_rhs = var('<p>rk_rhs')
-        
+
         self.large_dt = self.dt
         self.small_dt = self.dt / substep_count
         self.substep_count = substep_count
@@ -86,7 +86,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         self.max_order = max(self.orders.values())
 
         self.histories = {}
-        
+
         for hn in HIST_NAMES:
             hname = hn().__class__.__name__
             vnames = [var('<p>last_rhs_%s_%d' % (hname, i)) for i in
@@ -99,15 +99,15 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                 HIST_S2S: False,
                 HIST_F2S: False
                 }
-    
+
     def emit_initialization(self, cbuild):
         """Initialize method variables. Returns the initialization list."""
 
-        from leap.vm.language import AssignRHS, AssignExpression, If
-        
+        from leap.vm.language import AssignRHS, AssignExpression
+
         add_and_get_ids = cbuild.add_and_get_ids
         initialization = []
-        
+
         # Initial value of step
         initialization += add_and_get_ids(AssignExpression(self.step.name, 0))
 
@@ -121,33 +121,33 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
             AssignRHS(assignees=(self.rk_rhs.name,), t=self.t,
             component_id=self.coupled.name,
             rhs_arguments=((('y', self.rk_y),),), depends_on=[yval]))
-        
+
         cbuild.commit()
-        
+
         return initialization
-    
+
     def emit_startup(self, cbuild):
-        """Initializes the stepper with an RK method.        
+        """Initializes the stepper with an RK method.
         Returns the code that computes the startup history."""
 
-        from leap.vm.language import AssignRHS, AssignExpression, If
+        from leap.vm.language import AssignExpression, If
         add_and_get_ids = cbuild.add_and_get_ids
         from pymbolic import var
         from pymbolic.primitives import Comparison
-                                        
+
         steps = self.max_order * self.substep_count
-        
+
         rhs_history = dict([(i, var('<p>rhs_y_%d' % i)) for i in range(steps)])
-        
+
         startup_conditions = []
-        
+
         # Note: both y and RHS need to be 2x2 matrices and functions need to
         # be adapted to this convention. Yuck
         component_id = self.coupled.name
-        
+
         for i in range(self.max_order):
             rk = []
-            
+
             # Add code to run the current substeps.
             for j in range(self.substep_count):
                 history_index = i * self.substep_count + j
@@ -160,7 +160,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                     self.max_order, self.rk_y, self.rk_rhs, self.t
                     + j * self.small_dt, self.small_dt, depends_on=save_vals,
                     label=('substep%d_%d' % (i, j)))
-                
+
             # Unpack the y values into slow and fast components.
             rk += add_and_get_ids(AssignExpression(self.fast.name,
                     self.rk_y[0] + self.rk_y[1], depends_on=rk),
@@ -172,17 +172,17 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                     condition=Comparison(self.step, "==", i),
                     then_depends_on=rk, else_depends_on=[]))
                 startup_conditions.append(last_step)
-        
+
         cbuild.commit()
 
         # Add code that, once the startup history has been created, will
         # initialize the components to appropriate values.
-        
+
         rhs_hist = [rhs_history[i] for i in range(steps)] + [self.rk_rhs]
         rhs_hist.reverse()
-        
+
         create_histories = []
-        
+
         # RHSs are 2x2 matrices containing history entries
         for i, hn in enumerate(HIST_NAMES):
             hist = rhs_hist
@@ -194,34 +194,29 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                     self.histories[hn][j].name, entry[i],
                     depends_on=rk))
             assert len(self.histories[hn]) == self.orders[hn]
-    
+
         startup_conditions += add_and_get_ids(
             If(condition=Comparison(self.step, "==", self.max_order - 1),
             then_depends_on=create_histories, else_depends_on=[]))
-        
+
         cbuild.commit()
-        
+
         return startup_conditions
-    
+
     def emit_ab_method(self, cbuild):
         """Add code for the main Adams-Bashforth method."""
-
-        from leap.method.ab.multirate.methods import \
-            HIST_F2F, HIST_S2F, HIST_F2S, HIST_S2S
-        
         rhss = [self.f2f, self.s2f, self.f2s, self.s2s]
-
         codegen = MRABCodeEmitter(self, cbuild, (self.fast, self.slow), self.t, rhss)
         codegen.run()
         return codegen.get_instructions()
-    
+
     def emit_main_branch(self, cbuild, startup, main_code):
         """Add code that determines whether to perform initialization or step into
         the main method."""
 
         from leap.vm.language import If, AssignExpression
         from pymbolic.primitives import Comparison
-        
+
         incr_step = cbuild.add_and_get_ids(
             AssignExpression(self.step.name, self.step + 1))
         branch = cbuild.add_and_get_ids(If(condition=Comparison(self.step,
@@ -229,10 +224,10 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
             else_depends_on=main_code))
         cbuild.commit()
         return branch
-        
+
     @memoize_method
-    def get_coefficients(self, for_fast_history, hist_head_time_level, 
-        start_level, end_level, order):
+    def get_coefficients(self, for_fast_history, hist_head_time_level,
+                         start_level, end_level, order):
 
         history_times = numpy.arange(0, -order, -1, dtype=numpy.float64)
 
@@ -245,17 +240,17 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         t_end = end_level / self.substep_count
 
         return make_generic_ab_coefficients(history_times, t_start, t_end)
-    
+
     def __call__(self):
         from leap.vm.language import CodeBuilder, TimeIntegratorCode
-        
+
         cbuild = CodeBuilder()
         initialization = self.emit_initialization(cbuild)
         startup = self.emit_startup(cbuild)
         ab_method = self.emit_ab_method(cbuild)
         glue = self.emit_main_branch(cbuild, startup, ab_method)
         epilogue = self.emit_epilogue(cbuild,
-            numpy.array((self.fast, self.slow), dtype='object'), '', glue)   
+            numpy.array((self.fast, self.slow), dtype='object'), '', glue)
         cbuild.commit()
 
         return TimeIntegratorCode(instructions=cbuild.instructions,
@@ -263,20 +258,21 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                                   step_dep_on=epilogue,
                                   step_before_fail=False)
 
+
 class MRABCodeEmitter(MRABProcessor):
-    
+
     def __init__(self, stepper, cbuild, y, t, rhss):
         MRABProcessor.__init__(self, stepper.method, stepper.substep_count)
         self.stepper = stepper
         self.cbuild = cbuild
         self.t_start = t
-        
+
         # Mapping from method variable names to code variable names
         self.name_to_variable = {}
 
         self.context = {}
         self.var_time_level = {}
-        
+
         # Names of instructions that were generated in the previous step
         self.last_step = []
 
@@ -285,9 +281,9 @@ class MRABCodeEmitter(MRABProcessor):
         y_fast, y_slow = y
         from leap.method.ab.multirate.methods import CO_FAST, CO_SLOW
         self.last_y = {CO_FAST: y_fast, CO_SLOW: y_slow}
-        
+
         self.hist_head_time_level = dict((hn, 0) for hn in HIST_NAMES)
-    
+
     def get_variable(self, name):
         """Return a variable for a name found in the method description."""
 
@@ -298,25 +294,25 @@ class MRABCodeEmitter(MRABProcessor):
             self.name_to_variable[name] = \
                 var(self.cbuild.fresh_var_name(prefix))
         return self.name_to_variable[name]
-    
+
     def run(self):
         super(MRABCodeEmitter, self).run()
-        
-        # Update the slow and fast components.        
+
+        # Update the slow and fast components.
         from leap.method.ab.multirate.methods import CO_FAST, CO_SLOW
         from leap.vm.language import AssignExpression
-        
+
         self.last_step = self.cbuild.add_and_get_ids(
             AssignExpression(self.last_y[CO_SLOW].name,
             self.context[self.method.result_slow], depends_on=self.last_step),
             AssignExpression(self.last_y[CO_FAST].name,
             self.context[self.method.result_fast], depends_on=self.last_step))
-        
+
         self.cbuild.commit()
 
     def integrate_in_time(self, insn):
         from leap.vm.language import AssignExpression
-        
+
         from leap.method.ab.multirate.methods import CO_FAST
         from leap.method.ab.multirate.methods import \
             HIST_F2F, HIST_S2F, HIST_F2S, HIST_S2S
@@ -350,20 +346,20 @@ class MRABCodeEmitter(MRABProcessor):
         hists = self.stepper.histories
         self_history = hists[self_hn][:]
         cross_history = hists[cross_hn][:]
-        
+
         my_new_y = my_y + self.stepper.large_dt * (
                 linear_comb(self_coefficients, self_history)
                 + linear_comb(cross_coefficients, cross_history))
-        
+
         new_y_var = self.get_variable(insn.result_name)
-        
+
         new_y = self.cbuild.add_and_get_ids(AssignExpression(new_y_var.name,
                     my_new_y, depends_on=self.last_step))
-        
+
         self.last_step = new_y
-        
+
         self.cbuild.commit()
-        
+
         self.context[insn.result_name] = new_y_var
         self.var_time_level[insn.result_name] = end_time_level
 
@@ -371,42 +367,41 @@ class MRABCodeEmitter(MRABProcessor):
 
     def history_update(self, insn):
         from leap.vm.language import AssignRHS, AssignExpression
-        
-        time_slow = self.var_time_level[insn.slow_arg]
-        time_fast = self.var_time_level[insn.fast_arg]
 
-        t = (self.t_start 
+        time_slow = self.var_time_level[insn.slow_arg]
+
+        t = (self.t_start
                 + self.stepper.large_dt*time_slow/self.stepper.substep_count)
 
         rhs = self.rhss[HIST_NAMES.index(insn.which)]
 
         hist = self.stepper.histories[insn.which]
-        
+
         reverse_hist = hist[::-1]
-        
+
         # Move all the histories by one step forward
         assignments = []
         for h, h_next in zip(reverse_hist, reverse_hist[1:]):
             assignments += self.cbuild.add_and_get_ids(AssignExpression(h.name,
                                 h_next, depends_on=self.last_step + assignments))
-        
+
         # Compute the new RHS
         assignments += self.cbuild.add_and_get_ids(
             AssignRHS(assignees=(hist[0].name,),
             component_id=rhs.name, t=t, rhs_arguments=((('u',
             self.context[insn.fast_arg]), ('v', self.context[insn.slow_arg])),),
-            depends_on=self.last_step + assignments))
-        
+                      depends_on=self.last_step + assignments))
+
         self.last_step = assignments
-        
+
         self.cbuild.commit()
-        
+
         if self.stepper.hist_is_fast[insn.which]:
             self.hist_head_time_level[insn.which] += 1
         else:
             self.hist_head_time_level[insn.which] += self.stepper.substep_count
 
         MRABProcessor.history_update(self, insn)
-    
+
     def get_instructions(self):
         return self.last_step

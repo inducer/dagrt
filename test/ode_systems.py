@@ -457,9 +457,11 @@ class WeakCoupledInit(LinearODESystemsBase):
         self.c1 = 1 - self.c2
         self.initial_values = np.array([self.soln_0(self.t_start),
             self.soln_1(self.t_start)])
-        #print self.initial_values
-        #raw_input("init values")
-        #self.initial_values = np.array([1,1])
+        """
+        print self.initial_values
+        raw_input("init values")
+        self.initial_values = np.array([1,1])
+        """
 
     def f2f_rhs(self, t, u, v):
         return self.a11*u
@@ -628,9 +630,11 @@ class StiffComp2(LinearODESystemsBase):
         self.c2 = 1
         self.initial_values = np.array([self.soln_0(self.t_start),
             self.soln_1(self.t_start)])
-        #print self.initial_values
-        #raw_input("init values")
-        #self.initial_values = np.array([1,1])
+        """
+        print self.initial_values
+        raw_input("init values")
+        self.initial_values = np.array([1,1])
+        """
 
     def f2f_rhs(self, t, u, v):
         return self.a11*u

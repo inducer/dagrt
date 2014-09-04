@@ -223,68 +223,68 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                         depends_on=["rel_error_zero_check"],
                         id="reject_check"),
                     # then
-                        # reject step
+                    # reject step
 
-                        If(
-                            condition=var("isnan")(var("rel_error")),
-                            then_depends_on=["min_adjust_dt"],
-                            else_depends_on=["rej_adjust_dt"],
-                            depends_on=["rel_error_zero_check"],
-                            id="adjust_dt"),
-                        # then
-                        AssignExpression("<dt>",
-                            self.min_dt_shrinkage*dt,
-                            id="min_adjust_dt"),
-                        # else
-                        AssignExpression("<dt>",
-                            Max((
-                                0.9 * dt * var("rel_error")**(-1/self.low_order),
-                                self.min_dt_shrinkage * dt)),
-                            id="rej_adjust_dt"),
-                        # endif
+                    If(
+                        condition=var("isnan")(var("rel_error")),
+                        then_depends_on=["min_adjust_dt"],
+                        else_depends_on=["rej_adjust_dt"],
+                        depends_on=["rel_error_zero_check"],
+                        id="adjust_dt"),
+                    # then
+                    AssignExpression("<dt>",
+                        self.min_dt_shrinkage*dt,
+                        id="min_adjust_dt"),
+                    # else
+                    AssignExpression("<dt>",
+                        Max((
+                            0.9 * dt * var("rel_error")**(-1/self.low_order),
+                            self.min_dt_shrinkage * dt)),
+                        id="rej_adjust_dt"),
+                    # endif
 
-                        If(
-                            condition=Comparison(t + dt, "==", t),
-                            then_depends_on=["tstep_underflow"],
-                            else_depends_on=[],
-                            id="check_underflow",
-                            depends_on=["adjust_dt"]),
-                        # then
-                        Raise(TimeStepUnderflow, id="tstep_underflow"),
-                        # endif
+                    If(
+                        condition=Comparison(t + dt, "==", t),
+                        then_depends_on=["tstep_underflow"],
+                        else_depends_on=[],
+                        id="check_underflow",
+                        depends_on=["adjust_dt"]),
+                    # then
+                    Raise(TimeStepUnderflow, id="tstep_underflow"),
+                    # endif
 
-                        FailStep(
-                            id="rej_step",
-                            depends_on=["check_underflow"]),
+                    FailStep(
+                        id="rej_step",
+                        depends_on=["check_underflow"]),
 
                     # else
-                        # accept step
+                    # accept step
 
-                        AssignExpression("<dt>",
-                            Min((
-                                0.9 * dt * var("rel_error")**(-1/self.high_order),
-                                self.max_dt_growth * dt)),
-                            id="acc_adjust_dt",
-                            depends_on=["increment_t"],
-                            ),
-                        AssignExpression(
-                            state.name, limiter(var("high_order_end_state")),
-                            id="update_state",
-                            depends_on=["compute_les", "compute_hes",
-                                "compute_state_norm"]),
+                    AssignExpression("<dt>",
+                        Min((
+                            0.9 * dt * var("rel_error")**(-1/self.high_order),
+                            self.max_dt_growth * dt)),
+                        id="acc_adjust_dt",
+                        depends_on=["increment_t"],
+                        ),
+                    AssignExpression(
+                        state.name, limiter(var("high_order_end_state")),
+                        id="update_state",
+                        depends_on=["compute_les", "compute_hes",
+                            "compute_state_norm"]),
 
-                        ReturnState(
-                            id="ret_state",
-                            time_id="final",
-                            time=t + dt,
-                            component_id=component_id,
-                            expression=state,
-                            depends_on=["update_state"]),
+                    ReturnState(
+                        id="ret_state",
+                        time_id="final",
+                        time=t + dt,
+                        component_id=component_id,
+                        expression=state,
+                        depends_on=["update_state"]),
 
-                        AssignExpression(
-                            "<t>", t + dt,
-                            id="increment_t",
-                            depends_on=["ret_state"]),
+                    AssignExpression(
+                        "<t>", t + dt,
+                        id="increment_t",
+                        depends_on=["ret_state"]),
                     # endif
                     )
 

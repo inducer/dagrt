@@ -2,7 +2,10 @@
 
 from __future__ import division
 
-__copyright__ = "Copyright (C) 2009 Andreas Stock, Andreas Kloeckner"
+__copyright__ = """
+Copyright (C) 2009 Andreas Stock, Andreas Kloeckner
+Copyright (C) 2014 Matt Wala
+"""
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,8 +26,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-
-
 
 
 class MRABProcessor(object):
@@ -62,8 +63,6 @@ class MRABProcessor(object):
 
         while not self.insn_counter >= len(self.method.steps):
             self.method.steps[self.insn_counter].visit(self)
-
-
 
 
 class MRABToTeXProcessor(MRABProcessor):
@@ -128,8 +127,8 @@ class MRABToTeXProcessor(MRABProcessor):
 
         self.result.append(
                 "\mrabintegrate {%s}{%f}{%f}{%s} {%f}{%s} {%f}{%s}"
-                % (insn.result_name.replace("y_", ""), 
-                    self.eval_expr(insn.start)/self.substep_count, 
+                % (insn.result_name.replace("y_", ""),
+                    self.eval_expr(insn.start)/self.substep_count,
                     self.eval_expr(insn.end)/self.substep_count,
                     self_name,
                     src_self_where, src_self_speed,

@@ -157,7 +157,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
     def rk_bootstrap(self, cbuild, component_id):
         """Initialize the timestepper with an RK method."""
 
-        from leap.vm.language import AssignRHS, AssignExpression, If
+        from leap.vm.language import AssignExpression, If
 
         add_and_get_ids = cbuild.add_and_get_ids
         from pymbolic import var
@@ -191,8 +191,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         return rk
 
     def __call__(self, component_id):
-        from leap.vm.language import AssignRHS, AssignNorm, \
-            AssignExpression, ReturnState, If, Raise, FailStep, \
+        from leap.vm.language import AssignRHS, AssignExpression, If, \
             TimeIntegratorCode, CodeBuilder
 
         cbuild = CodeBuilder()
