@@ -69,11 +69,6 @@ def wrap_line(line, level=0, width=80, indentation='    '):
         if at_line_start:
             current_line += word
             at_line_start = False
-            if width <= 1 + indentation_len + word_len and has_next_word:
-                # The line is too long.
-                resulting_lines.append(pad(current_line, padding_width))
-                at_line_start = True
-                current_line = indentation
     resulting_lines.append(current_line)
     return resulting_lines
 
