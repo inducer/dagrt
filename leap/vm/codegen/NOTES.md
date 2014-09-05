@@ -106,12 +106,12 @@ Stage 5: Language-specific code generation
 
 See: `codegen_base.py`
 
-The code generator performs an inorder traversal of the control
-tree. The code generator makes appropriate calls to the language
-specific backend, telling the backend to generate functions and
-high-level statements. In order to implement a backend to a high-level
-language, the user needs to subclass CodeGenerator and implement the
-appropriate statement generation events.
+The code generator performs a traversal of the control tree. The code
+generator makes appropriate calls to the language specific backend,
+telling the backend to generate functions and high-level statements. In
+order to implement a backend to a high-level language, the user needs to
+subclass CodeGenerator and implement the appropriate statement
+generation events.
 
 Coding conventions
 ==================
