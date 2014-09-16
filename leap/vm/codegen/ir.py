@@ -276,9 +276,6 @@ class BasicBlock(object):
 
     def add_assignment(self, instruction):
         """Append an assignment instruction to the block."""
-        assert isinstance(instruction, tuple) or \
-            isinstance(instruction, AssignExpression) or \
-            isinstance(instruction, AssignRHS)
         self.add_instruction(AssignInst(instruction))
 
     def add_jump(self, dest):

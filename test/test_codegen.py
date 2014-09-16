@@ -28,7 +28,8 @@ import sys
 import pytest
 import numpy as np
 
-from leap.vm.language import AssignExpression, AssignRHS, If, ReturnState
+from leap.vm.language import AssignExpression, AssignNorm, AssignRHS, If, \
+    ReturnState
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
 from leap.vm.exec_numpy import StateComputed, StepCompleted
 from leap.vm.codegen import PythonCodeGenerator, CodeGenerationError
@@ -89,6 +90,33 @@ def test_basic_conditional_codegen():
     assert len(hist) == 2
     assert isinstance(hist[0], StateComputed)
     assert hist[0].state_component == 1
+    assert isinstance(hist[1], StepCompleted)
+
+
+def test_basic_assign_norm_codegen():
+    """Test code generation of the AssignNorm instruction."""
+    cbuild = CodeBuilder()
+    cbuild.add_and_get_ids(
+        AssignExpression(id='assign_1', assignee='x',
+                         expression=np.array([-3, 4])),
+        AssignNorm(id='assign_2', assignee='n', expression=var('x'), p=2,
+                   depends_on=['assign_1']),
+        ReturnState(id='return', time=0, time_id='final',
+                    expression=var('n'), component_id='<state>',
+                    depends_on=['assign_2']))
+    cbuild.commit()
+    code = TimeIntegratorCode(initialization_dep_on=[],
+        instructions=cbuild.instructions, step_dep_on=['return'],
+        step_before_fail=False)
+    codegen = PythonCodeGenerator(class_name='Method')
+    Method = codegen.get_class(code)
+    method = Method({})
+    method.set_up(t_start=0, dt_start=0, state={})
+    method.initialize()
+    hist = [s for s in method.run(t_end=0)]
+    assert len(hist) == 2
+    assert isinstance(hist[0], StateComputed)
+    assert np.isclose(hist[0].state_component, 5.0)
     assert isinstance(hist[1], StepCompleted)
 
 

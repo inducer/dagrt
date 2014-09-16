@@ -29,7 +29,7 @@ from .ir2structured_ir import StructuralExtractor
 from .structured_ir import SingleNode, IfThenNode, IfThenElseNode, BlockNode, \
     UnstructuredIntervalNode
 from .ir import AssignInst, JumpInst, BranchInst, ReturnInst
-from leap.vm.language import AssignExpression, AssignRHS
+from leap.vm.language import AssignExpression, AssignNorm, AssignRHS
 from leap.vm.utils import TODO
 from warnings import warn
 
@@ -181,6 +181,9 @@ class StructuredCodeGenerator(CodeGenerator):
             elif isinstance(assignment, AssignExpression):
                 self.emit_assign_expr(assignment.assignee,
                                       assignment.expression)
+            elif isinstance(assignment, AssignNorm):
+                self.emit_assign_norm(assignment.assignee,
+                                      assignment.expression, assignment.p)
             elif isinstance(assignment, AssignRHS):
                 # Lower each parallel assignment sequentially, for now.
                 rhs = assignment.component_id
@@ -230,6 +233,9 @@ class StructuredCodeGenerator(CodeGenerator):
         raise NotImplementedError()
 
     def emit_assign_expr(self, name, expr):
+        raise NotImplementedError()
+
+    def emit_assign_norm(self, name, expr, p):
         raise NotImplementedError()
 
     def emit_assign_rhs(self, name, rhs, time, arg):
