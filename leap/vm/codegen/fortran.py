@@ -1,4 +1,4 @@
-"""Python code generator"""
+"""Fortran code generator"""
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
@@ -22,44 +22,26 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from .expressions import PythonExpressionMapper
+from .expressions import FortranExpressionMapper
 from .codegen_base import StructuredCodeGenerator
 from pytools.py_codegen import PythonCodeGenerator as PythonEmitter
 from pytools.py_codegen import PythonFunctionGenerator as PythonFunctionEmitter
 from pytools.py_codegen import Indentation
 from leap.vm.utils import is_state_variable, get_unique_name
-from leap.vm.codegen.utils import wrap_line_base
+from .utils import wrap_line as wrap_line_base
 from functools import partial
 import re  # noqa
 
 
-def pad_python(line, width):
+def pad_fortran(line, width):
     line += ' ' * (width - 1 - len(line))
-    line += '\\'
+    line += '&'
     return line
 
-wrap_line = partial(wrap_line_base, pad_python)
+wrap_line = partial(wrap_line_base, pad_fortran)
 
 
-class PythonClassEmitter(PythonEmitter):
-    """Emits code for a Python class."""
-
-    def __init__(self, class_name, superclass='object'):
-        super(PythonClassEmitter, self).__init__()
-        self.class_name = class_name
-        self('class {cls}({superclass}):'.format(cls=class_name,
-                                                 superclass=superclass))
-        self.indent()
-
-    def incorporate(self, sub_generator):
-        """Add the code contained by the subgenerator while respecting the
-        current level of indentation.
-        """
-        for line in sub_generator.code:
-            self(line)
-
-
-class PythonNameManager(object):
+class FortranNameManager(object):
     """Maps names that appear in intermediate code to Python identifiers.
     """
 
@@ -116,18 +98,14 @@ class PythonNameManager(object):
             return self.name_local(name)
 
 
-class PythonCodeGenerator(StructuredCodeGenerator):
+class FortranCodeGenerator(StructuredCodeGenerator):
 
     def __init__(self, class_name, optimize=True, suppress_warnings=False):
-        super(PythonCodeGenerator, self).__init__(class_name, optimize,
-                                                  suppress_warnings)
-        # Used for emitting the method class
-        self.class_emitter = PythonClassEmitter(self.class_name)
-        # Map from variable / RHS names to names in generated code
-        self.name_manager = PythonNameManager()
-        # Expression mapper
-        self.expr_mapper = PythonExpressionMapper(self.name_manager,
-                                                  numpy='self.numpy')
+        super(FortranCodeGenerator, self).__init__(
+                class_name, optimize, suppress_warnings)
+
+        self.name_manager = FortranNameManager()
+        self.expr_mapper = FortranExpressionMapper(self.name_manager)
 
     def expr(self, expr):
         return self.expr_mapper(expr)
@@ -145,9 +123,10 @@ class PythonCodeGenerator(StructuredCodeGenerator):
 
     def emit_constructor(self):
         """Emit the constructor."""
+
         emit = PythonFunctionEmitter('__init__', ('self', 'rhs_map'))
         # Perform necessary imports.
-        emit('import numpy')
+        emit('')
         emit('self.numpy = numpy')
         emit('from leap.vm.exec_numpy import StateComputed, StepCompleted')
         emit('self.StateComputed = StateComputed')
@@ -259,11 +238,6 @@ class PythonCodeGenerator(StructuredCodeGenerator):
     def emit_assign_expr(self, name, expr):
         self.emit('{name} = {expr}'.format(name=self.name_manager[name],
                                            expr=self.expr(expr)))
-
-    def emit_assign_norm(self, name, expr, p):
-        # NOTE: Doesn't handle inf.
-        self.emit('{name} = self.numpy.linalg.norm({expr}, ord={ord})'.format(
-                name=self.name_manager[name], expr=self.expr(expr), ord=p))
 
     def emit_assign_rhs(self, name, rhs, time, arg):
         kwargs = ', '.join('{name}={expr}'.format(name=name,
