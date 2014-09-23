@@ -30,7 +30,6 @@ from pytools.py_codegen import Indentation
 from leap.vm.utils import is_state_variable, get_unique_name
 from leap.vm.codegen.utils import wrap_line_base
 from functools import partial
-import re  # noqa
 
 
 def pad_python(line, width):
