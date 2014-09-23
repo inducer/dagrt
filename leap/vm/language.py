@@ -180,18 +180,49 @@ class AssignSolvedRHS(Instruction):
 
     # FIXME This needs some thought.
     """
+
+    Find a value y that satifies y = base + scale * component_id(t, y).
+
     .. attribute:: assignee
 
         A string, the name of the variable being assigned to.
 
     .. attribute:: component_id
+
+        Identifier of the right hand side to be evaluated. Typically a number
+        or a string.
+
+    .. attribute:: base
+    .. attribute:: scale
+
     .. attribute:: t
-    .. attribute:: states
-    .. attribute:: solve_component
-    .. attribute:: rhs
+
+        A :mod:`pymbolic` expression for the time at which the right hand side
+        is to be evaluated. Time is implicitly the first argument to each
+        expression.
     """
 
     exec_method = intern("exec_AssignSolvedRHS")
+
+    def get_assignees(self):
+        return frozenset([self.assignee])
+
+    def get_read_variables(self):
+        return get_variables(self.t) | get_variables(self.base) | \
+            get_variables(self.scale)
+
+    def __str__(self):
+        lines = ["at time: %s" % self.t]
+
+        lines.append("{assignee} <- {component_id} such that "
+                     "{component_id} = {base} + {scale} * rhs:{component_id} "
+                     "(t={t}, {component_id})".format(assignee=self.assignee,
+                                                 component_id=self.component_id,
+                                                      base=self.base,
+                                                      scale=self.scale,
+                                                      t=self.t))
+
+        return "\n".join(lines)
 
 
 class AssignExpression(Instruction):

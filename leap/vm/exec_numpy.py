@@ -112,7 +112,7 @@ class NumpyInterpreter(object):
     .. automethod:: run
     """
 
-    def __init__(self, code, rhs_map):
+    def __init__(self, code, rhs_map, solver='linear'):
         """
         :arg code: an instance of :class:`leap.vm.TimeIntegratorCode`
         :arg rhs_map: a mapping from component ids to right-hand-side
@@ -130,6 +130,8 @@ class NumpyInterpreter(object):
         self.rhs_map = rhs_map
 
         self.eval_mapper = EvaluationMapper(self.state, self.functions)
+
+        self.solver = solver
 
     def set_up(self, t_start, dt_start, state):
         """
@@ -207,6 +209,18 @@ class NumpyInterpreter(object):
             self.state[assignee] = rhs(t, **dict(
                     (name, self.eval_mapper(expr))
                     for name, expr in args))
+
+    def exec_AssignSolvedRHS(self, insn):
+        if self.solver == 'linear':
+            assignee = insn.assignee
+            eval_scale = self.eval_mapper(insn.scale)
+            eval_base = self.eval_mapper(insn.base)
+            eval_alpha = self.rhs_map[insn.component_id](0.0, 1.0)
+            self.state[assignee] = \
+                (eval_base / (1.0 - eval_scale * eval_alpha))
+            return
+
+        raise ValueError("Unknown solver type!")
 
     def exec_ReturnState(self, insn):
         return StateComputed(

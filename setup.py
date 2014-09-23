@@ -51,6 +51,7 @@ def main():
               "leap.method.rk",
               "leap.method.ab",
               "leap.method.ab.multirate",
+              "leap.method.im_euler",
               "leap.vm",
               "leap.vm.codegen"
               ],
