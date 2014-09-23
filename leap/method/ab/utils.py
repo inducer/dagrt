@@ -152,6 +152,10 @@ def make_ab_coefficients(order):
     return make_generic_ab_coefficients(numpy.arange(0, -order, -1), 0, 1)
 
 
+def make_implicit_ab_coefficients(order):
+    return make_generic_ab_coefficients(numpy.arange(1, -order + 1, -1), 0, 1)
+
+
 def linear_comb(coefficients, vectors):
     from operator import add
     return reduce(add,
