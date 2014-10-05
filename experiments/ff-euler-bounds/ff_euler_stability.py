@@ -64,14 +64,14 @@ def estimate_stable_dt(jacobian, eigvals, eigvects):
             return jacobian_eigvect_cond * h * perturbation_norm
 
         def upper_bound(h):
-            return -(lambda_re + delta(h)) / ((lambda_norm + delta(h)) ** 2) - h
+            return -2 * (lambda_re + delta(h)) / ((lambda_norm + delta(h)) ** 2) - h
 
         try:
             dt = np.min([dt, opt.newton(upper_bound, 0.1)])
         except:
             return None
 
-    return dt
+    return max(dt, 0)
 
 
 def is_stable(jacobian, dt):
@@ -152,7 +152,13 @@ def collect_data():
     spectral_radiuses_at_estimates = []
 
     for jacobian, eigvals, eigvects in make_test_matrices():
+        # Skip singular matrices.
+        if la.det(jacobian) == 0:
+            num_skipped_tests += 1
+            continue
         num_total_tests += 1
+        # Estimate the true dt (as the average of the "experimental"
+        # and "computational" values).
         dt_experimental = experimental_stable_dt(jacobian)
         dt_computational = computational_stable_dt(jacobian)
         if not dt_computational and not dt_experimental:
@@ -164,14 +170,17 @@ def collect_data():
             dt_true = dt_computational
         else:
             dt_true = np.mean([dt_experimental, dt_computational])
+        # Get the analytical estimate.
         dt_estimate = estimate_stable_dt(jacobian, eigvals, eigvects)
         if not dt_estimate:
             num_estimate_failures += 1
             continue
+        # Ensure that the analytical estimate is valid.
         step_matrix = make_ff_euler_step_matrix(jacobian, dt_estimate)
         radius = la.norm(la.eigvals(step_matrix), ord=np.inf)
         if radius > 1.0:
             assert np.isclose(radius - 1.0, 0, atol=1.0e-3)
+        # Record statistics.
         relative_error = (dt_estimate - dt_true) / dt_true
         if not np.isfinite(relative_error) or not \
                 np.isfinite(radius) or dt_estimate > dt_true:
