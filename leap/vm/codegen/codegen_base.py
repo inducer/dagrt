@@ -40,6 +40,26 @@ class NewTimeIntegratorCode(RecordWithoutPickling):
     """
     A TimeIntegratorCode with staging support. This will eventually replace
     TimeIntegratorCode.
+
+    .. attribute:: instructions
+
+        is a list of Instruction instances, in no particular
+        order
+
+    .. attribute:: stages
+
+        is a map from stage names to lists of ids corresponding to
+        execution dependencies
+
+    .. attribute:: initial_stage
+
+        the name of the starting stage
+
+    .. attribute:: step_before_fail
+
+        is a boolean that indicates whether the described
+        method may generate state updates for a time step it later decides
+        to fail
     """
 
     @classmethod
@@ -51,16 +71,6 @@ class NewTimeIntegratorCode(RecordWithoutPickling):
                    code.step_before_fail)
 
     def __init__(self, instructions, stages, initial_stage, step_before_fail):
-        """
-        - instructions is a list of Instruction instances, in no particular
-          order
-        - stages is a map from stage names to lists of ids corresponding to
-          execution dependencies
-        - initial_state is the name of the starting stage
-        - step_before_fail is a boolean that indicates whether the described
-          method may generate state updates for a time step it later decides
-          to fail
-        """
         RecordWithoutPickling.__init__(self, instructions=instructions,
                                        stages=stages,
                                        initial_stage=initial_stage,
