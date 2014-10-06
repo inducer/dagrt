@@ -5,12 +5,6 @@
 def main():
     from setuptools import setup
 
-    try:
-        from distutils.command.build_py import build_py_2to3 as build_py
-    except ImportError:
-        # 2.x
-        from distutils.command.build_py import build_py
-
     version_dict = {}
     init_filename = "leap/version.py"
     exec(compile(open(init_filename, "r").read(), init_filename, "exec"),
@@ -32,7 +26,6 @@ def main():
               'License :: OSI Approved :: MIT License',
               'Natural Language :: English',
               'Programming Language :: Python',
-              'Programming Language :: Python :: 2.5',
               'Programming Language :: Python :: 2.6',
               'Programming Language :: Python :: 2.7',
               'Programming Language :: Python :: 3.3',
@@ -60,9 +53,7 @@ def main():
               "pymbolic>=2014.1",
               "pytest>=2.3",
               ],
-
-          # 2to3 invocation
-          cmdclass={'build_py': build_py})
+          )
 
 
 if __name__ == '__main__':
