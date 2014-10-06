@@ -37,8 +37,92 @@ def distinct(*items):
     return True
 
 
-class StructuralExtractor(object):
-    """Creates a control tree from a control flow graph.
+# {{{ node check functions
+
+def _check_for_if_then_node(node):
+    if len(node.successors) != 2:
+        return None
+
+    # Get then and merge nodes.
+    then_node, merge_node = tuple(node.successors)
+
+    # Swap then and merge nodes if necessary.
+    if then_node in merge_node.successors:
+        then_node, merge_node = merge_node, then_node
+
+    # Check for expected structure.
+    if len(then_node.successors) != 1 or \
+            len(then_node.predecessors) != 1 or \
+            merge_node not in then_node.successors or \
+            not distinct(node, then_node, merge_node):
+        return None
+    return IfThenNode(node, then_node)
+
+
+def _check_for_if_then_else_node(node):
+    if len(node.successors) != 2:
+        return None
+
+    # Get then and else nodes.
+    branch = node.exit_block.code[-1]
+    assert isinstance(branch, BranchInst)
+
+    then_basic_block = branch.on_true
+    else_basic_block = branch.on_false
+    then_node, else_node = tuple(node.successors)
+    if else_node.entry_block is then_basic_block:
+        then_node, else_node = else_node, then_node
+
+    assert then_node.entry_block is then_basic_block
+    assert else_node.entry_block is else_basic_block
+
+    # Check for no other predecessors to then and else.
+    if len(then_node.predecessors) != 1 or \
+            len(else_node.predecessors) != 1:
+        return None
+
+    # Check for a common merge point of then and else.
+    if then_node.successors != else_node.successors or \
+            len(then_node.successors) != 1:
+        return None
+    merge_node = one(then_node.successors)
+
+    # Check for block distinctness.
+    if not distinct(node, then_node, else_node, merge_node):
+        return None
+    return IfThenElseNode(node, then_node, else_node)
+
+
+def _check_for_block_node(node):
+    # Follow the predecessors.
+    predecessor_nodes = []
+    current_node = node
+    while len(current_node.predecessors) == 1 and \
+          len(one(current_node.predecessors).successors) == 1:
+        current_node = one(current_node.predecessors)
+        predecessor_nodes.append(current_node)
+
+    # Follow the successors.
+    successor_nodes = []
+    current_node = node
+    while len(current_node.successors) == 1 and \
+          len(one(current_node.successors).predecessors) == 1:
+        current_node = one(current_node.successors)
+        successor_nodes.append(current_node)
+
+    # Check if a block has been detected.
+    if not predecessor_nodes and not successor_nodes:
+        return None
+
+    # Construct the block.
+    return BlockNode(list(reversed(predecessor_nodes)) + [node] +
+                     successor_nodes)
+
+# }}}
+
+
+def extract_structure(function):
+    """Top-level entry point to create a control tree from a control flow graph.
 
     Based on:
        Sharir, Micha. "Structural analysis: a new approach to flow analysis
@@ -46,6 +130,10 @@ class StructuralExtractor(object):
     """
 
     def __call__(self, function):
+        """
+        :arg function: a :class:`leap.vm.codegen.ir.Function` instance
+        """
+
         # Wrap all basic blocks with SingleNodes.
         block_nodes = dict((block, SingleNode(block)) for block in function)
         # Add successors / predecessors to block nodes.
@@ -70,9 +158,9 @@ class StructuralExtractor(object):
                     continue
 
                 # Check for the structural type of the node.
-                new_node = self.check_for_block_node(node)
-                new_node = new_node or self.check_for_if_then_node(node)
-                new_node = new_node or self.check_for_if_then_else_node(node)
+                new_node = _check_for_block_node(node)
+                new_node = new_node or _check_for_if_then_node(node)
+                new_node = new_node or _check_for_if_then_else_node(node)
 
                 if not new_node:
                     continue
@@ -107,79 +195,4 @@ class StructuralExtractor(object):
 
         return one(nodes)
 
-    def check_for_block_node(self, node):
-        # Follow the predecessors.
-        predecessor_nodes = []
-        current_node = node
-        while len(current_node.predecessors) == 1 and \
-              len(one(current_node.predecessors).successors) == 1:
-            current_node = one(current_node.predecessors)
-            predecessor_nodes.append(current_node)
-
-        # Follow the successors.
-        successor_nodes = []
-        current_node = node
-        while len(current_node.successors) == 1 and \
-              len(one(current_node.successors).predecessors) == 1:
-            current_node = one(current_node.successors)
-            successor_nodes.append(current_node)
-
-        # Check if a block has been detected.
-        if not predecessor_nodes and not successor_nodes:
-            return None
-
-        # Construct the block.
-        return BlockNode(list(reversed(predecessor_nodes)) + [node] +
-                         successor_nodes)
-
-    def check_for_if_then_node(self, node):
-        if len(node.successors) != 2:
-            return None
-
-        # Get then and merge nodes.
-        then_node, merge_node = tuple(node.successors)
-
-        # Swap then and merge nodes if necessary.
-        if then_node in merge_node.successors:
-            then_node, merge_node = merge_node, then_node
-
-        # Check for expected structure.
-        if len(then_node.successors) != 1 or \
-                len(then_node.predecessors) != 1 or \
-                merge_node not in then_node.successors or \
-                not distinct(node, then_node, merge_node):
-            return None
-        return IfThenNode(node, then_node)
-
-    def check_for_if_then_else_node(self, node):
-        if len(node.successors) != 2:
-            return None
-
-        # Get then and else nodes.
-        branch = node.exit_block.code[-1]
-        assert isinstance(branch, BranchInst)
-
-        then_basic_block = branch.on_true
-        else_basic_block = branch.on_false
-        then_node, else_node = tuple(node.successors)
-        if else_node.entry_block is then_basic_block:
-            then_node, else_node = else_node, then_node
-
-        assert then_node.entry_block is then_basic_block
-        assert else_node.entry_block is else_basic_block
-
-        # Check for no other predecessors to then and else.
-        if len(then_node.predecessors) != 1 or \
-                len(else_node.predecessors) != 1:
-            return None
-
-        # Check for a common merge point of then and else.
-        if then_node.successors != else_node.successors or \
-                len(then_node.successors) != 1:
-            return None
-        merge_node = one(then_node.successors)
-
-        # Check for block distinctness.
-        if not distinct(node, then_node, else_node, merge_node):
-            return None
-        return IfThenElseNode(node, then_node, else_node)
+# vim: foldmethod=marker
