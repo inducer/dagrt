@@ -33,7 +33,7 @@ from pymbolic import var
 from leap.vm.codegen.ir import BasicBlock, SymbolTable, Function
 from leap.vm.codegen.structured_ir import SingleNode, BlockNode, IfThenNode, \
     IfThenElseNode, UnstructuredIntervalNode
-from leap.vm.codegen.ir2structured_ir import extract_structure
+from leap.vm.codegen.ir2structured_ir import StructuralExtractor
 from pytools import one
 
 
@@ -89,7 +89,8 @@ def test_basic_structural_extraction():
     block = BasicBlock(0, SymbolTable())
     block.add_return(None)
     main = Function(block)
-    control_tree = extract_structure(main)
+    structural_extractor = StructuralExtractor()
+    control_tree = structural_extractor(main)
     assert isinstance(control_tree, SingleNode)
     assert len(control_tree.predecessors) == 0
     assert len(control_tree.successors) == 0
@@ -109,7 +110,8 @@ def test_block_structural_extraction():
         else:
             block.add_jump(blocks[i + 1])
     main = Function(blocks[0])
-    control_tree = extract_structure(main)
+    structural_extractor = StructuralExtractor()
+    control_tree = structural_extractor(main)
     assert isinstance(control_tree, BlockNode)
     assert len(control_tree.nodes) == 4
     assert len(control_tree.node_list) == 4
@@ -129,7 +131,8 @@ def test_if_then_structural_extraction():
     blocks[1].add_jump(blocks[2])
     blocks[2].add_return(None)
     main = Function(blocks[0])
-    control_tree = extract_structure(main)
+    structural_extractor = StructuralExtractor()
+    control_tree = structural_extractor(main)
     assert isinstance(control_tree, BlockNode)
     assert len(control_tree.node_list) == 2
     if_then_node = control_tree.node_list[0]
@@ -150,7 +153,8 @@ def test_if_then_else_structural_extraction():
     blocks[2].add_jump(blocks[3])
     blocks[3].add_return(None)
     main = Function(blocks[0])
-    control_tree = extract_structure(main)
+    structural_extractor = StructuralExtractor()
+    control_tree = structural_extractor(main)
     assert isinstance(control_tree, BlockNode)
     assert len(control_tree.node_list) == 2
     if_then_else_node = control_tree.node_list[0]
@@ -187,7 +191,8 @@ def test_unstructured_interval_structural_extraction():
     blocks[4].add_jump(blocks[5])
     blocks[5].add_return(None)
     main = Function(blocks[0])
-    control_tree = extract_structure(main)
+    structural_extractor = StructuralExtractor()
+    control_tree = structural_extractor(main)
     assert isinstance(control_tree, UnstructuredIntervalNode)
     assert set(blocks) == set(node.basic_block for node in control_tree.nodes)
 
@@ -201,7 +206,8 @@ def test_unstructured_interval_structural_extraction_2():
     blocks[0].add_branch(None, blocks[0], blocks[1])
     blocks[1].add_return(None)
     main = Function(blocks[0])
-    control_tree = extract_structure(main)
+    structural_extractor = StructuralExtractor()
+    control_tree = structural_extractor(main)
     assert isinstance(control_tree, UnstructuredIntervalNode)
     assert len(control_tree.nodes) == 2
 
@@ -229,7 +235,8 @@ def test_complex_structural_extraction():
     blocks[4].add_jump(blocks[5])
     blocks[5].add_return(None)
     main = Function(blocks[0])
-    control_tree = extract_structure(main)
+    structural_extractor = StructuralExtractor()
+    control_tree = structural_extractor(main)
     assert isinstance(control_tree, BlockNode)
     assert len(control_tree.node_list) == 2
     assert isinstance(control_tree.node_list[0], IfThenElseNode)
@@ -263,7 +270,8 @@ def test_complex_structural_extraction_2():
     blocks[5].add_jump(blocks[6])
     blocks[6].add_return(None)
     main = Function(blocks[0])
-    control_tree = extract_structure(main)
+    structural_extractor = StructuralExtractor()
+    control_tree = structural_extractor(main)
     assert isinstance(control_tree, UnstructuredIntervalNode)
     assert len(control_tree.nodes) == 3
     node_a, node_b, node_c = tuple(control_tree.nodes)
@@ -304,7 +312,8 @@ def test_complex_structural_extraction_3():
     blocks[4].add_jump(blocks[5])
     blocks[5].add_return(None)
     main = Function(blocks[0])
-    control_tree = extract_structure(main)
+    structural_extractor = StructuralExtractor()
+    control_tree = structural_extractor(main)
     assert len(control_tree.node_list) == 2
     assert isinstance(control_tree.node_list[0], IfThenNode)
     assert isinstance(control_tree.node_list[1], SingleNode)

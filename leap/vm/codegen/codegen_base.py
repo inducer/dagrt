@@ -25,7 +25,7 @@ THE SOFTWARE.
 from .analysis import InstructionDAGVerifier
 from .dag2ir import InstructionDAGExtractor, ControlFlowGraphAssembler
 from .optimization import Optimizer
-from .ir2structured_ir import extract_structure
+from .ir2structured_ir import StructuralExtractor
 from .structured_ir import SingleNode, IfThenNode, IfThenElseNode, BlockNode, \
     UnstructuredIntervalNode
 from .ir import AssignInst, JumpInst, BranchInst, ReturnInst
@@ -142,6 +142,7 @@ class StructuredCodeGenerator(CodeGenerator):
         dag_extractor = InstructionDAGExtractor()
         assembler = ControlFlowGraphAssembler()
         optimizer = Optimizer()
+        structural_extractor = StructuralExtractor()
 
         self.begin_emit()
         for stage, dependencies in dag.stages.iteritems():
@@ -149,7 +150,7 @@ class StructuredCodeGenerator(CodeGenerator):
             control_flow_graph = assembler(code, dependencies)
             if self.optimize:
                 control_flow_graph = optimizer(control_flow_graph)
-            control_tree = extract_structure(control_flow_graph)
+            control_tree = structural_extractor(control_flow_graph)
             self.lower_function(stage, control_tree)
 
         self.finish_emit()
