@@ -133,30 +133,29 @@ def make_test_matrices():
     lambda_2 = -1.0
     for lambda_1 in np.linspace(-1, -0.1, LAMBDA_SPACING):
         for alpha in np.linspace(0, np.pi, THETA_SPACING):
-            for beta in np.linspace(np.pi / OFFSET_SPACING, np.pi, OFFSET_SPACING):
+            for beta in np.linspace(np.pi / OFFSET_SPACING,
+                                    np.pi * (1 - 1 / OFFSET_SPACING),
+                                    OFFSET_SPACING - 2):
                 eigvects = np.array([[np.cos(alpha), np.cos(alpha + beta)],
                                      [np.sin(alpha), np.sin(alpha + beta)]])
                 eigvals_diag = np.array([[lambda_1, 0.0], [0.0, lambda_2]])
                 try:
                     result = eigvects.dot(eigvals_diag.dot(la.inv(eigvects)))
+                    assert la.det(result) != 0
                     yield (result, [lambda_1, lambda_2], eigvects)
                 except:
                     continue
 
 
 def collect_data():
-    num_total_tests = 0
+    num_tests = 0
     num_skipped_tests = 0
     num_estimate_failures = 0
     timestep_relative_errors = []
     spectral_radiuses_at_estimates = []
 
     for jacobian, eigvals, eigvects in make_test_matrices():
-        # Skip singular matrices.
-        if la.det(jacobian) == 0:
-            num_skipped_tests += 1
-            continue
-        num_total_tests += 1
+        num_tests += 1
         # Estimate the true dt (as the average of the "experimental"
         # and "computational" values).
         dt_experimental = experimental_stable_dt(jacobian)
@@ -182,15 +181,14 @@ def collect_data():
             assert np.isclose(radius - 1.0, 0, atol=1.0e-3)
         # Record statistics.
         relative_error = (dt_estimate - dt_true) / dt_true
-        if not np.isfinite(relative_error) or not \
-                np.isfinite(radius) or dt_estimate > dt_true:
+        if dt_estimate > dt_true:
             num_skipped_tests += 1
             continue
         timestep_relative_errors.append(relative_error)
         spectral_radiuses_at_estimates.append(radius)
 
-    print('Number of total tests: ' + str(num_total_tests))
-    print('Number of tests skipped due to computational failure: '
+    print('Total number of tests: ' + str(num_tests))
+    print('Number of tests skipped due to inability to get exact timestep: '
           + str(num_skipped_tests))
     print('Number of tests skipped due to inability to estimate timestep: '
           + str(num_estimate_failures))
