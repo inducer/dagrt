@@ -60,7 +60,7 @@ class ControlFlowGraphSimplifier(object):
         """Search the control flow graph for reachable blocks by following
         actual edges. Remove all references to blocks that are unreachable."""
         reachable = set()
-        stack = [control_flow_graph.start_block]
+        stack = [control_flow_graph.entry_block]
         while stack:
             top = stack.pop()
             if top not in reachable:
