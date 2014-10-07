@@ -22,9 +22,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from . import codegen_base
+from . import analysis
 from . import python
+from . import fortran
 
 
-CodeGenerationError = codegen_base.CodeGenerationError
+CodeGenerationError = analysis.CodeGenerationError
 PythonCodeGenerator = python.PythonCodeGenerator
+FortranCodeGenerator = fortran.FortranCodeGenerator

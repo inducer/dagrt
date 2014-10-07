@@ -26,20 +26,12 @@ THE SOFTWARE.
 
 import sys
 import pytest
-import numpy as np
 
 from leap.vm.language import AssignExpression, AssignNorm, AssignRHS, If, \
     ReturnState
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
-from leap.vm.exec_numpy import StateComputed, StepCompleted
-from leap.vm.codegen import FortranCodeGenerator, CodeGenerationError
+from leap.vm.codegen.fortran import FortranCodeGenerator
 from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
-from pymbolic import var
-from leap.vm.codegen.ir import BasicBlock, SymbolTable, Function
-from leap.vm.codegen.structured_ir import SingleNode, BlockNode, IfThenNode, \
-    IfThenElseNode, UnstructuredIntervalNode
-from leap.vm.codegen.ir2structured_ir import StructuralExtractor
-from pytools import one
 
 
 def test_basic_codegen():
@@ -55,6 +47,23 @@ def test_basic_codegen():
         instructions=cbuild.instructions, step_dep_on=['return'],
         step_before_fail=False)
     codegen = FortranCodeGenerator("simple")
+    print(codegen(code))
+
+
+@pytest.mark.parametrize("stepper", [
+    ODE23TimeStepper(use_high_order=False),
+    ODE23TimeStepper(use_high_order=True),
+    ODE45TimeStepper(use_high_order=False),
+    ODE45TimeStepper(use_high_order=True),
+    ])
+def test_rk_codegen(stepper):
+    """Test whether Runge-Kutta timestepper code generation works."""
+
+    component_id = 'y'
+
+    code = stepper(component_id)
+
+    codegen = FortranCodeGenerator('RKMethod')
     print(codegen(code))
 
 

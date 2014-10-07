@@ -27,6 +27,8 @@ from leap.vm.language import Instruction, If
 from .graphs import InstructionDAGIntGraph
 
 
+# {{{ verifier
+
 class InstructionDAGVerifier(object):
     """Verifies that code is well-formed."""
 
@@ -92,6 +94,40 @@ class InstructionDAGVerifier(object):
                 stack.pop()
         return True
 
+
+class CodeGenerationError(Exception):
+    def __init__(self, errors):
+        self.errors = errors
+
+    def __str__(self):
+        return 'Errors encountered in input to code generator.\n' + \
+            '\n'.join(self.errors)
+
+
+class CodeGenerationWarning(UserWarning):
+    pass
+
+
+def verify_code(code):
+    """Verify that the DAG is well-formed."""
+    from .analysis import InstructionDAGVerifier
+    verifier = InstructionDAGVerifier(code.instructions,
+                                      code.initialization_dep_on,
+                                      code.step_dep_on)
+    if verifier.errors:
+        raise CodeGenerationError(verifier.errors)
+    if verifier.warnings:
+        # Python comes with a facility to silence/filter warnigns,
+        # no need to replicate that functionality.
+
+        from warnings import warn
+        for warning in verifier.warnings:
+            warn(warning, CodeGenerationWarning)
+
+# }}}
+
+
+# {{{ reaching definitions
 
 class ReachingDefinitions(object):
     """Performs a reaching definitions analysis and computes use-def chains."""
@@ -163,3 +199,7 @@ class ReachingDefinitions(object):
         index = block.code.index(instruction)
         gen, kill = self.get_gen_and_kill_sets(block, index)
         return gen | self.remove_killed(self.def_in[block], kill)
+
+# }}}
+
+# vim: foldmethod=marker

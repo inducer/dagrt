@@ -24,9 +24,10 @@ THE SOFTWARE.
 
 from .expressions import PythonExpressionMapper
 from .codegen_base import StructuredCodeGenerator
-from pytools.py_codegen import PythonCodeGenerator as PythonEmitter
-from pytools.py_codegen import PythonFunctionGenerator as PythonFunctionEmitter
-from pytools.py_codegen import Indentation
+from pytools.py_codegen import (
+        PythonCodeGenerator as PythonEmitter,
+        PythonFunctionGenerator as PythonFunctionEmitter,
+        Indentation)
 from leap.vm.utils import is_state_variable, get_unique_name
 from leap.vm.codegen.utils import wrap_line_base
 from functools import partial
@@ -115,18 +116,64 @@ class PythonNameManager(object):
             return self.name_local(name)
 
 
+def exec_in_new_namespace(code):
+    namespace = {}
+    exec(code, globals(), namespace)
+    return namespace
+
+
 class PythonCodeGenerator(StructuredCodeGenerator):
 
-    def __init__(self, class_name, optimize=True, suppress_warnings=False):
-        super(PythonCodeGenerator, self).__init__(class_name, optimize,
-                                                  suppress_warnings)
-        # Used for emitting the method class
-        self.class_emitter = PythonClassEmitter(self.class_name)
+    def __init__(self, class_name):
+        self.class_name = class_name
+
+        self.class_emitter = PythonClassEmitter(class_name)
+
         # Map from variable / RHS names to names in generated code
         self.name_manager = PythonNameManager()
-        # Expression mapper
+
         self.expr_mapper = PythonExpressionMapper(self.name_manager,
                                                   numpy='self.numpy')
+
+    def __call__(self, dag, optimize=True):
+        from .analysis import verify_code
+        verify_code(dag)
+
+        from .codegen_base import NewTimeIntegratorCode
+        dag = NewTimeIntegratorCode.from_old(dag)
+
+        from .dag2ir import InstructionDAGExtractor, ControlFlowGraphAssembler
+        from .optimization import Optimizer
+        from .ir2structured_ir import StructuralExtractor
+
+        dag_extractor = InstructionDAGExtractor()
+        assembler = ControlFlowGraphAssembler()
+        optimizer = Optimizer()
+        extract_structure = StructuralExtractor()
+
+        self.begin_emit(dag)
+        for stage_name, dependencies in dag.stages.iteritems():
+            code = dag_extractor(dag.instructions, dependencies)
+            function = assembler(stage_name, code, dependencies)
+            if optimize:
+                function = optimizer(function)
+            control_tree = extract_structure(function)
+            self.lower_function(stage_name, control_tree)
+
+        self.finish_emit(dag)
+
+        return self.get_code()
+
+    def lower_function(self, function_name, control_tree):
+        self.emit_def_begin(function_name)
+        self.lower_node(control_tree)
+        self.emit_def_end()
+
+    def get_class(self, code):
+        """Return the compiled Python class for the method."""
+        python_code = self(code)
+        namespace = exec_in_new_namespace(python_code)
+        return namespace[self.class_name]
 
     def expr(self, expr):
         return self.expr_mapper(expr)
@@ -139,7 +186,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         for wrapped_line in wrap_line(line, level):
             self.emitter(wrapped_line)
 
-    def begin_emit(self):
+    def begin_emit(self, dag):
         pass
 
     def emit_constructor(self):
@@ -217,7 +264,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         emit('pass')
         self.class_emitter.incorporate(emit)
 
-    def finish_emit(self):
+    def finish_emit(self, dag):
         self.emit_constructor()
         self.emit_set_up()
         self.emit_initialize()

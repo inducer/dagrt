@@ -26,6 +26,44 @@ from pymbolic.mapper.stringifier import StringifyMapper
 from pytools import DictionaryWithDefault
 
 
+# {{{ fortran
+
+class FortranExpressionMapper(StringifyMapper):
+    """Converts expressions to Fortran code."""
+
+    def __init__(self, variable_names):
+        """variable_names is a map from a variable name (as a string) to its
+        representation (as a string).
+
+        numpy is the name of the numpy module.
+        """
+        super(FortranExpressionMapper, self).__init__(repr)
+        self.variable_names = variable_names
+
+    def map_foreign(self, expr, *args):
+        if expr is None:
+            raise NotImplementedError()
+        elif isinstance(expr, str):
+            return repr(expr)
+        else:
+            return super(FortranExpressionMapper, self).map_foreign(expr, *args)
+
+    def map_variable(self, expr, enclosing_prec):
+        return self.variable_names[expr.name]
+
+    def map_numpy_array(self, expr, *args):
+        if len(expr.shape) > 1:
+            raise ValueError('Representing multidimensional arrays is ' +
+                             'not supported')
+        elements = [self.rec(element, *args) for element in expr]
+        return '{numpy}.array([{elements}],dtype=\'object\')'.format(
+            numpy=self.numpy, elements=', '.join(elements))
+
+# }}}
+
+
+# {{{ python
+
 class PythonExpressionMapper(StringifyMapper):
     """Converts expressions to Python code."""
 
@@ -58,5 +96,8 @@ class PythonExpressionMapper(StringifyMapper):
         return '{numpy}.array([{elements}],dtype=\'object\')'.format(
             numpy=self.numpy, elements=', '.join(elements))
 
-
 string_mapper = PythonExpressionMapper(DictionaryWithDefault(lambda x: x))
+
+# }}}
+
+# vim: foldmethod=marker

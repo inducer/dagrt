@@ -28,11 +28,13 @@ from leap.vm.language import Instruction, AssignExpression, AssignNorm, \
 from leap.vm.utils import TODO
 from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import get_unique_name, is_state_variable
-from .ir import SymbolTable, BasicBlock, Function
+import leap.vm.codegen.ir as ir
 from pymbolic import var
 from pytools import one
 import copy
 
+
+# {{{ dummy dag nodes
 
 class Entry(Instruction):
     """Dummy entry point for the instruction DAG."""
@@ -69,6 +71,10 @@ class Exit(Instruction):
 
     exec_method = "exec_Exit"
 
+# }}}
+
+
+# {{{ dummy node adder
 
 class InstructionDAGEntryExitAugmenter(object):
     """Augments an instruction DAG with entry and exit instructions."""
@@ -95,6 +101,10 @@ class InstructionDAGEntryExitAugmenter(object):
         augmented_instructions.add(entry_inst)
         return (augmented_instructions, entry_inst, exit_inst)
 
+# }}}
+
+
+# {{{ extractor
 
 class InstructionDAGExtractor(object):
     """Returns only the portion of the DAG necessary for satisfying the
@@ -112,6 +122,10 @@ class InstructionDAGExtractor(object):
                     stack.append(vertex)
         return set(map(graph.get_vertex_for_number, reachable))
 
+# }}}
+
+
+# {{{ partitioner
 
 class InstructionDAGPartitioner(object):
     """Partition a list of instructions into maximal straight line
@@ -238,6 +252,10 @@ class InstructionDAGPartitioner(object):
                     if i in original_dag.get_unconditional_edges(block[0]))
         return (block_graph, inst_to_block)
 
+# }}}
+
+
+# {{{ flag tracker
 
 class FlagTracker(object):
     """Keeps track of the values of a set of boolean flags."""
@@ -292,11 +310,15 @@ class FlagTracker(object):
         flag_tracker.must_be_false = self.must_be_false & other.must_be_false
         return flag_tracker
 
+# }}}
+
+
+# {{{ CFG assembler
 
 class ControlFlowGraphAssembler(object):
     """Constructs a control flow graph from an instruction DAG."""
 
-    def __call__(self, instructions, instructions_dep_on):
+    def __call__(self, name, instructions, instructions_dep_on):
         # Add Entry and Exit instructions to the DAG.
         augmenter = InstructionDAGEntryExitAugmenter()
         aug_instructions, ent, ex = \
@@ -317,7 +339,7 @@ class ControlFlowGraphAssembler(object):
 
         # Initialize a new variable to hold the return value.
         self.return_val = self.symbol_table.get_fresh_variable_name('retval')
-        self.symbol_table.add_variable(self.return_val, 'is_return_val')
+        self.symbol_table.add_variable(self.return_val, is_return_value=True)
 
         # Find the exit block and create a new basic block out of it.
         exit_block = inst_id_to_block[ex.id]
@@ -338,19 +360,20 @@ class ControlFlowGraphAssembler(object):
         if not end_bb.terminated:
             end_bb.add_unreachable()
 
-        return Function(entry_bb)
+        return ir.Function(name, entry_bb)
 
     def new_basic_block(self):
         """Create a new, empty basic block with a unique number."""
         number = self.basic_block_count
         self.basic_block_count += 1
-        return BasicBlock(number, self.symbol_table)
+        return ir.BasicBlock(number, self.symbol_table)
 
     def initialize_flags(self, block_graph):
         """Create the flags for the blocks."""
         self.flags = {}
         block_count = 0
         symbol_table = self.symbol_table
+
         # Create a flag for each block and insert into the symbol table.
         for block in block_graph:
             block_id = block_count
@@ -358,28 +381,24 @@ class ControlFlowGraphAssembler(object):
             flag = symbol_table.get_fresh_variable_name('flag_' +
                                                         str(block_id))
             self.flags[block] = flag
-            symbol_table.add_variable(flag, 'is_flag')
+            symbol_table.add_variable(flag, is_flag=True)
 
     def initialize_symbol_table(self, aug_instructions, block_graph):
         """Create a new symbol table and add all variables that have been
         used in the instruction list to the symbol table."""
 
-        symbol_table = SymbolTable()
+        symbol_table = ir.SymbolTable()
 
         # Get a list of all used variable names and right hand sides.
         var_names = set()
         rhs_names = set()
         for inst in aug_instructions:
-            var_names |= set(inst.get_assignees())
+            var_names |= inst.get_assignees()
             var_names |= set(inst.get_read_variables())
-            if isinstance(inst, AssignRHS):
-                rhs_names.add(inst.component_id)
 
-        # Create a symbol table entry for each variable.
         for var_name in var_names:
-            symbol_table.add_variable(var_name)
-            if is_state_variable(var_name):
-                symbol_table[var_name].is_global = True
+            symbol_table.add_variable(
+                    var_name, is_global=is_state_variable(var_name))
 
         # Record the RHSs.
         symbol_table.rhs_names = rhs_names
@@ -511,3 +530,7 @@ class ControlFlowGraphAssembler(object):
 
         flag_tracker = flag_tracker.set_true(flag)
         return (main_bb, flag_tracker)
+
+# }}}
+
+# vim: foldmethod=marker

@@ -121,7 +121,7 @@ def _check_for_block_node(node):
 # }}}
 
 
-def extract_structure(function):
+class StructuralExtractor(object):
     """Top-level entry point to create a control tree from a control flow graph.
 
     Based on:

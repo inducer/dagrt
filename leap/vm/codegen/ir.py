@@ -30,6 +30,8 @@ from textwrap import TextWrapper
 from cgi import escape
 
 
+# {{{ dag instructions
+
 class Inst(RecordWithoutPickling):
     """Base class for instructions in the ControlFlowGraph."""
 
@@ -202,6 +204,10 @@ class UnreachableInst(Inst):
     def __str__(self):
         return 'unreachable'
 
+# }}}
+
+
+# {{{ basic block
 
 class BasicBlock(object):
     """A maximal straight-line sequence of instructions."""
@@ -301,11 +307,16 @@ class BasicBlock(object):
         lines.extend(str(inst) for inst in self.code)
         return '\n'.join(lines)
 
+# }}}
+
+
+# {{{ function
 
 class Function(object):
     """A control flow graph of BasicBlocks."""
 
-    def __init__(self, start_block):
+    def __init__(self, name, start_block):
+        self.name = name
         self.start_block = start_block
         self.symbol_table = start_block.symbol_table
         self.update()
@@ -409,38 +420,61 @@ class Function(object):
     def __str__(self):
         return '\n'.join(map(str, self.reverse_postorder()))
 
+# }}}
+
+
+# {{{ symbol table
+
+class SymbolTableEntry(RecordWithoutPickling):
+    """Holds information about the contents of a variable. This includes
+    all instructions that reference the variable.
+
+    .. attribute:: is_return_value
+    .. attribute:: is_flag
+    .. attribute:: is_global
+
+    .. attribute:: references
+
+        A list of :class:`Inst` instances referencing this variable.
+    """
+
+    def __init__(self,
+            is_return_value=False,
+            is_flag=False,
+            is_global=False,
+            references=None):
+        if references is None:
+            references = set()
+
+        super(SymbolTableEntry, self).__init__(
+                is_return_value=is_return_value,
+                is_flag=is_flag,
+                is_global=is_global,
+                references=references,
+                )
+
+    @property
+    def is_unreferenced(self):
+        """Return whether this variable is not referenced by any
+        instructions.
+        """
+        return len(self.references) == 0
+
+    def add_reference(self, inst):
+        """Add an instruction to the list of instructions that reference this
+        variable.
+        """
+        self.references.add(inst)
+
+    def remove_reference(self, inst):
+        """Remove an instruction from the list of instructions that reference
+        this variable.
+        """
+        self.references.discard(inst)
+
 
 class SymbolTable(object):
     """Holds information regarding the variables in a code fragment."""
-
-    class SymbolTableEntry(RecordWithoutPickling):
-        """Holds information about the contents of a variable. This includes
-        all instructions that reference the variable."""
-
-        def __init__(self, *attrs):
-            all_attrs = ['is_global', 'is_return_value', 'is_flag']
-            attr_dict = dict((attr, attr in attrs) for attr in all_attrs)
-            super(SymbolTable.SymbolTableEntry, self).__init__(attr_dict)
-            self.references = set()
-
-        @property
-        def is_unreferenced(self):
-            """Return whether this variable is not referenced by any
-            instructions.
-            """
-            return len(self.references) == 0
-
-        def add_reference(self, inst):
-            """Add an instruction to the list of instructions that reference this
-            variable.
-            """
-            self.references.add(inst)
-
-        def remove_reference(self, inst):
-            """Remove an instruction from the list of instructions that reference
-            this variable.
-            """
-            self.references.discard(inst)
 
     def __init__(self):
         self.variables = {}
@@ -457,6 +491,12 @@ class SymbolTable(object):
         for variable in variables:
             assert variable in self.variables
             self.variables[variable].remove_reference(inst)
+
+            # FIXME This is weird--we shouldn't automatically delete
+            # unreferenced variables. There's a funny asymmetry
+            # between freshly created variables that don't have
+            # a reference yet and ones that lose their last reference
+            # and thus get deleted.
             if self.variables[variable].is_unreferenced:
                 del self.variables[variable]
 
@@ -466,11 +506,15 @@ class SymbolTable(object):
     def __getitem__(self, var):
         return self.variables[var]
 
-    def add_variable(self, var, *attrs):
-        self.variables[var] = SymbolTable.SymbolTableEntry(*attrs)
+    def add_variable(self, var, **kwargs):
+        self.variables[var] = SymbolTableEntry(**kwargs)
         self.named_variables.add(var)
 
     def get_fresh_variable_name(self, prefix):
         name = get_unique_name(prefix, self.named_variables)
         self.named_variables.add(name)
         return name
+
+# }}}
+
+# vim: foldmethod=marker

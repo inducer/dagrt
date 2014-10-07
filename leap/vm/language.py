@@ -63,7 +63,7 @@ following special variable names are supported:
     (that survives from one step to the next)
 
 ``<state>NAME``
-    State identifier under user control
+    State identifier under user (=scheme writer) control
 
     This variable contains persistent state.
     (that survives from one step to the next)
@@ -184,11 +184,21 @@ class AssignSolvedRHS(Instruction):
 
         A string, the name of the variable being assigned to.
 
-    .. attribute:: component_id
+    .. attribute:: component_ids
     .. attribute:: t
     .. attribute:: states
     .. attribute:: solve_component
+    .. attribute:: lhs
+
+        A list of expressions involving 
+
     .. attribute:: rhs
+    .. attribute:: solver_id
+
+        An identifier for the solver that is to be used to solve the
+        linear system. This identifier is intended to match information
+        about solvers which becomes available at the execution or
+        code generation stage.
     """
 
     exec_method = intern("exec_AssignSolvedRHS")
