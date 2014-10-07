@@ -86,9 +86,12 @@ def test_missing_dependency_detection():
 
 def test_basic_structural_extraction():
     """Check that structural extraction correctly detects a basic block."""
-    block = BasicBlock(0, SymbolTable())
+    sym_tab = SymbolTable()
+    main = Function("f", sym_tab)
+    block = BasicBlock(0, main)
+    main.assign_entry_block(block)
+
     block.add_return(None)
-    main = Function("f", block)
     structural_extractor = StructuralExtractor()
     control_tree = structural_extractor(main)
     assert isinstance(control_tree, SingleNode)
@@ -103,13 +106,16 @@ def test_block_structural_extraction():
     basic blocks.
     """
     sym_tab = SymbolTable()
-    blocks = [BasicBlock(i, sym_tab) for i in range(0, 4)]
+    main = Function("f", sym_tab)
+
+    blocks = [BasicBlock(i, main) for i in range(0, 4)]
     for i, block in enumerate(blocks):
         if i == 3:
             block.add_return(None)
         else:
             block.add_jump(blocks[i + 1])
-    main = Function("f", blocks[0])
+    main.assign_entry_block(blocks[0])
+
     structural_extractor = StructuralExtractor()
     control_tree = structural_extractor(main)
     assert isinstance(control_tree, BlockNode)
@@ -126,11 +132,13 @@ def test_if_then_structural_extraction():
     structure.
     """
     sym_tab = SymbolTable()
-    blocks = [BasicBlock(i, sym_tab) for i in range(0, 3)]
+    main = Function("f", sym_tab)
+    blocks = [BasicBlock(i, main) for i in range(0, 3)]
     blocks[0].add_branch(None, blocks[1], blocks[2])
     blocks[1].add_jump(blocks[2])
     blocks[2].add_return(None)
-    main = Function("f", blocks[0])
+    main.assign_entry_block(blocks[0])
+
     structural_extractor = StructuralExtractor()
     control_tree = structural_extractor(main)
     assert isinstance(control_tree, BlockNode)
@@ -147,12 +155,14 @@ def test_if_then_else_structural_extraction():
     control structure.
     """
     sym_tab = SymbolTable()
-    blocks = [BasicBlock(i, sym_tab) for i in range(0, 4)]
+    main = Function("f", sym_tab)
+    blocks = [BasicBlock(i, main) for i in range(0, 4)]
     blocks[0].add_branch(None, blocks[1], blocks[2])
     blocks[1].add_jump(blocks[3])
     blocks[2].add_jump(blocks[3])
     blocks[3].add_return(None)
-    main = Function("f", blocks[0])
+    main.assign_entry_block(blocks[0])
+
     structural_extractor = StructuralExtractor()
     control_tree = structural_extractor(main)
     assert isinstance(control_tree, BlockNode)
@@ -183,14 +193,16 @@ def test_unstructured_interval_structural_extraction():
 
     """
     sym_tab = SymbolTable()
-    blocks = [BasicBlock(i, sym_tab) for i in range(0, 6)]
+    main = Function("f", sym_tab)
+    blocks = [BasicBlock(i, main) for i in range(0, 6)]
     blocks[0].add_branch(None, blocks[1], blocks[2])
     blocks[1].add_jump(blocks[3])
     blocks[2].add_branch(None, blocks[3], blocks[4])
     blocks[3].add_jump(blocks[5])
     blocks[4].add_jump(blocks[5])
     blocks[5].add_return(None)
-    main = Function("f", blocks[0])
+    main.assign_entry_block(blocks[0])
+
     structural_extractor = StructuralExtractor()
     control_tree = structural_extractor(main)
     assert isinstance(control_tree, UnstructuredIntervalNode)
@@ -202,10 +214,12 @@ def test_unstructured_interval_structural_extraction_2():
     basic block with a self loop as an unstructured interval.
     """
     sym_tab = SymbolTable()
-    blocks = [BasicBlock(i, sym_tab) for i in range(0, 2)]
+    main = Function("f", sym_tab)
+    blocks = [BasicBlock(i, main) for i in range(0, 2)]
     blocks[0].add_branch(None, blocks[0], blocks[1])
     blocks[1].add_return(None)
-    main = Function("f", blocks[0])
+    main.assign_entry_block(blocks[0])
+
     structural_extractor = StructuralExtractor()
     control_tree = structural_extractor(main)
     assert isinstance(control_tree, UnstructuredIntervalNode)
@@ -227,14 +241,17 @@ def test_complex_structural_extraction():
 
     """
     sym_tab = SymbolTable()
-    blocks = [BasicBlock(i, sym_tab) for i in range(0, 6)]
+    main = Function("f", sym_tab)
+
+    blocks = [BasicBlock(i, main) for i in range(0, 6)]
     blocks[0].add_branch(None, blocks[1], blocks[3])
     blocks[1].add_branch(None, blocks[2], blocks[5])
     blocks[2].add_jump(blocks[5])
     blocks[3].add_branch(None, blocks[5], blocks[4])
     blocks[4].add_jump(blocks[5])
     blocks[5].add_return(None)
-    main = Function("f", blocks[0])
+    main.assign_entry_block(blocks[0])
+
     structural_extractor = StructuralExtractor()
     control_tree = structural_extractor(main)
     assert isinstance(control_tree, BlockNode)
@@ -261,7 +278,9 @@ def test_complex_structural_extraction_2():
 
     """
     sym_tab = SymbolTable()
-    blocks = [BasicBlock(i, sym_tab) for i in range(0, 7)]
+    main = Function("f", sym_tab)
+
+    blocks = [BasicBlock(i, main) for i in range(0, 7)]
     blocks[0].add_branch(None, blocks[1], blocks[4])
     blocks[1].add_branch(None, blocks[2], blocks[3])
     blocks[2].add_jump(blocks[3])
@@ -269,7 +288,8 @@ def test_complex_structural_extraction_2():
     blocks[4].add_branch(None, blocks[5], blocks[6])
     blocks[5].add_jump(blocks[6])
     blocks[6].add_return(None)
-    main = Function("f", blocks[0])
+    main.assign_entry_block(blocks[0])
+
     structural_extractor = StructuralExtractor()
     control_tree = structural_extractor(main)
     assert isinstance(control_tree, UnstructuredIntervalNode)
@@ -304,14 +324,17 @@ def test_complex_structural_extraction_3():
 
     """
     sym_tab = SymbolTable()
-    blocks = [BasicBlock(i, sym_tab) for i in range(0, 6)]
+    main = Function("f", sym_tab)
+
+    blocks = [BasicBlock(i, main) for i in range(0, 6)]
     blocks[0].add_branch(None, blocks[1], blocks[2])
     blocks[1].add_jump(blocks[3])
     blocks[2].add_jump(blocks[3])
     blocks[3].add_branch(None, blocks[4], blocks[5])
     blocks[4].add_jump(blocks[5])
     blocks[5].add_return(None)
-    main = Function("f", blocks[0])
+    main.assign_entry_block(blocks[0])
+
     structural_extractor = StructuralExtractor()
     control_tree = structural_extractor(main)
     assert len(control_tree.node_list) == 2

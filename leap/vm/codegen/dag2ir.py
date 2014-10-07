@@ -337,6 +337,9 @@ class ControlFlowGraphAssembler(object):
         self.initialize_symbol_table(aug_instructions, block_graph)
         self.initialize_flags(block_graph)
 
+        # Create the function object to associate with each basic block.
+        self.function = ir.Function(name, self.symbol_table)
+
         # Initialize a new variable to hold the return value.
         self.return_val = self.symbol_table.get_fresh_variable_name('retval')
         self.symbol_table.add_variable(self.return_val, is_return_value=True)
@@ -360,13 +363,14 @@ class ControlFlowGraphAssembler(object):
         if not end_bb.terminated:
             end_bb.add_unreachable()
 
-        return ir.Function(name, entry_bb)
+        self.function.assign_entry_block(entry_bb)
+        return self.function
 
     def new_basic_block(self):
         """Create a new, empty basic block with a unique number."""
         number = self.basic_block_count
         self.basic_block_count += 1
-        return ir.BasicBlock(number, self.symbol_table)
+        return ir.BasicBlock(number, self.function)
 
     def initialize_flags(self, block_graph):
         """Create the flags for the blocks."""
