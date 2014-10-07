@@ -31,6 +31,7 @@ from pytools.py_codegen import (
 from leap.vm.utils import is_state_variable, get_unique_name
 from leap.vm.codegen.utils import wrap_line_base
 from functools import partial
+import six
 
 
 def pad_python(line, width):
@@ -152,7 +153,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         extract_structure = StructuralExtractor()
 
         self.begin_emit(dag)
-        for stage_name, dependencies in dag.stages.iteritems():
+        for stage_name, dependencies in six.iteritems(dag.stages):
             code = dag_extractor(dag.instructions, dependencies)
             function = assembler(stage_name, code, dependencies)
             if optimize:
@@ -200,7 +201,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         emit('self.StepCompleted = StepCompleted')
         # Save all the rhs components.
         rhs_map = self.name_manager.rhs_map
-        for rhs_id, rhs in rhs_map.iteritems():
+        for rhs_id, rhs in six.iteritems(rhs_map):
             emit('{rhs} = rhs_map["{rhs_id}"]'.format(rhs=rhs, rhs_id=rhs_id))
         emit('return')
         self.class_emitter.incorporate(emit)
@@ -213,7 +214,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         emit('self.dt = dt_start')
         # Save all the state components.
         global_map = self.name_manager.global_map
-        for component_id, component in global_map.iteritems():
+        for component_id, component in six.iteritems(global_map):
             if not component_id.startswith('<state>'):
                 continue
             component_id = component_id[7:]

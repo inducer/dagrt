@@ -25,6 +25,7 @@ THE SOFTWARE.
 from pytools import memoize_method
 from leap.vm.language import Instruction, If
 from .graphs import InstructionDAGIntGraph
+import six
 
 
 # {{{ verifier
@@ -185,7 +186,7 @@ class ReachingDefinitions(object):
         for inst in block.code[:point]:
             for name in inst.get_defined_variables():
                 last_def[name] = inst
-        return (set(last_def.iteritems()), set(last_def.iterkeys()))
+        return (set(six.iteritems(last_def)), set(six.iterkeys(last_def)))
 
     def remove_killed(self, definitions, kill):
         """Return the result of removing all definitions that are killed."""

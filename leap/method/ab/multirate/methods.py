@@ -29,6 +29,7 @@ THE SOFTWARE.
 
 from pytools import Record
 from pymbolic import var
+import six
 
 
 # symbols ---------------------------------------------------------------------
@@ -432,7 +433,7 @@ def _remove_last_yslow_evaluation_from_slowest_first(method):
 
 def _add_slowest_first_variants(methods):
     result = {}
-    for name, method in methods.iteritems():
+    for name, method in six.iteritems(methods):
         result[name] = method
         if "r" in name:
             result[name.replace("r", "")] = \
