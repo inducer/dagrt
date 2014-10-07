@@ -29,7 +29,7 @@ from pytools import RecordWithoutPickling, memoize_method
 from leap.vm.utils import get_variables
 
 import logging
-import six
+import six.moves
 logger = logging.getLogger(__name__)
 
 # {{{ instructions
@@ -101,7 +101,7 @@ class Instruction(RecordWithoutPickling):
     def __init__(self, **kwargs):
         id = kwargs.pop("id", None)
         if id is not None:
-            id = six.intern(id)
+            id = six.moves.intern(id)
         depends_on = frozenset(kwargs.pop("depends_on", []))
         RecordWithoutPickling.__init__(self,
                 id=id,
@@ -171,7 +171,7 @@ class AssignRHS(Instruction):
 
         return "\n".join(lines)
 
-    exec_method = six.intern("exec_AssignRHS")
+    exec_method = six.moves.intern("exec_AssignRHS")
 
 
 class AssignSolvedRHS(Instruction):
@@ -202,7 +202,7 @@ class AssignSolvedRHS(Instruction):
         code generation stage.
     """
 
-    exec_method = six.intern("exec_AssignSolvedRHS")
+    exec_method = six.moves.intern("exec_AssignSolvedRHS")
 
 
 class AssignExpression(Instruction):
@@ -304,7 +304,7 @@ class ReturnState(Instruction):
                 self.time_id,
                 self.component_id)
 
-    exec_method = six.intern("exec_ReturnState")
+    exec_method = six.moves.intern("exec_ReturnState")
 
 
 class Raise(Instruction):
@@ -340,7 +340,7 @@ class Raise(Instruction):
 
         return result
 
-    exec_method = six.intern("exec_Raise")
+    exec_method = six.moves.intern("exec_Raise")
 
 
 class FailStep(Instruction):
@@ -356,7 +356,7 @@ class FailStep(Instruction):
     def __str__(self):
         return "FailStep"
 
-    exec_method = six.intern("exec_FailStep")
+    exec_method = six.moves.intern("exec_FailStep")
 
 
 class If(Instruction):
@@ -382,7 +382,7 @@ class If(Instruction):
     def __str__(self):
         return "If %s" % self.condition
 
-    exec_method = six.intern("exec_If")
+    exec_method = six.moves.intern("exec_If")
 
 # }}}
 
