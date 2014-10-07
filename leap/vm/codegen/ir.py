@@ -206,19 +206,24 @@ class UnreachableInst(Inst):
 class BasicBlock(object):
     """A maximal straight-line sequence of instructions."""
 
-    def __init__(self, number, symbol_table):
+    def __init__(self, number, function):
         self.code = []
         self.predecessors = set()
         self.successors = set()
         self.terminated = False
         self.number = number
-        self.symbol_table = symbol_table
+        self._function = function
 
     def __iter__(self):
         return iter(self.code)
 
     def __len__(self):
         return len(self.code)
+
+    @property
+    def symbol_table():
+        """Return the symbol table."""
+        return self._function.symbol_table
 
     def clear(self):
         """Unregister all instructions."""
@@ -305,9 +310,11 @@ class BasicBlock(object):
 class Function(object):
     """A control flow graph of BasicBlocks."""
 
-    def __init__(self, start_block):
-        self.start_block = start_block
-        self.symbol_table = start_block.symbol_table
+    def __init__(self, symbol_table):
+        self.symbol_table = symbol_table
+
+    def assign_entry_block(self, block):
+        self.entry_block = block
         self.update()
 
     def is_acyclic(self):
@@ -317,7 +324,7 @@ class Function(object):
     def update(self):
         """Traverse the graph and construct the set of basic blocks."""
         self.postorder_traversal = []
-        stack = [self.start_block]
+        stack = [self.entry_block]
         visiting = set()
         visited = set()
         acyclic = True
@@ -401,7 +408,7 @@ class Function(object):
 
         # Add a dummy entry to mark the start block.
         lines.append('entry [style=invisible];')
-        lines.append('entry -> {entry};'.format(entry=self.start_block.number))
+        lines.append('entry -> {entry};'.format(entry=self.entry_block.number))
 
         lines.append('}')
         return '\n'.join(lines)
