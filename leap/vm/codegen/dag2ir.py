@@ -32,6 +32,7 @@ import leap.vm.codegen.ir as ir
 from pymbolic import var
 from pytools import one
 import copy
+import six
 
 
 # {{{ dummy dag nodes
@@ -147,9 +148,9 @@ class InstructionDAGPartitioner(object):
         id_for_num = inst_graph.get_id_for_number
         to_id = lambda block: tuple(map(id_for_num, block))
         block_graph = dict([to_id(bl), map(to_id, bls)] for (bl, bls) in
-                           num_block_graph.iteritems())
+                           six.iteritems(num_block_graph))
         inst_id_to_block = dict([id_for_num(i), to_id(bl)] for (i, bl) in
-                                num_to_block.iteritems())
+                                six.iteritems(num_to_block))
 
         return (block_graph, inst_id_to_block)
 
@@ -213,7 +214,7 @@ class InstructionDAGPartitioner(object):
         """
         # Compute the inverse of the DAG.
         dag_inv = dict((u, set()) for u in dag)
-        for vertex, successors in dag.iteritems():
+        for vertex, successors in six.iteritems(dag):
             for successor in successors:
                 dag_inv[successor].add(vertex)
 
@@ -352,7 +353,7 @@ class ControlFlowGraphAssembler(object):
         entry_bb = self.get_entry_block()
 
         # Set up the initial flag analysis.
-        flag_names = set(self.flags.itervalues())
+        flag_names = set(six.itervalues(self.flags))
         flag_tracker = FlagTracker(flag_names)
         flag_tracker.must_be_false = set(flag_names)
 
@@ -413,7 +414,7 @@ class ControlFlowGraphAssembler(object):
         """Create the entry block of the control flow graph."""
         start_bb = self.new_basic_block()
         # Initialize the flag variables.
-        for flag in self.flags.itervalues():
+        for flag in six.itervalues(self.flags):
             start_bb.add_assignment((flag, False))
         # Initialize the return value.
         start_bb.add_assignment((self.return_val, None))

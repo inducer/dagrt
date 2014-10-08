@@ -30,6 +30,8 @@ from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
 from pymbolic.mapper.differentiator import DifferentiationMapper as \
     DifferentiationMapperBase
 
+import six
+
 
 class FailStepException(Exception):
     pass
@@ -138,7 +140,7 @@ class NumpyInterpreter(object):
 
         self.state["<t>"] = t_start
         self.state["<dt>"] = dt_start
-        for key, val in state.iteritems():
+        for key, val in six.iteritems(state):
             if key.startswith("<"):
                 raise ValueError("state variables may not start with '<'")
             self.state["<state>"+key] = val
@@ -175,7 +177,7 @@ class NumpyInterpreter(object):
 
                 finally:
                     # discard non-permanent per-step state
-                    for name in list(self.state.iterkeys()):
+                    for name in list(six.iterkeys(self.state)):
                         if (
                                 not name.startswith("<state>")
                                 and not name.startswith("<p>")
@@ -275,7 +277,7 @@ class StepMatrixFinder(NumpyInterpreter):
                 all_state_vars.append(var_name)
         all_state_vars.sort()
         from pymbolic import var
-        return map(var, all_state_vars)
+        return list(map(var, all_state_vars))
 
     def build_step_matrix(self):
         nv = len(self.variables)
@@ -315,7 +317,7 @@ class StepMatrixFinder(NumpyInterpreter):
                         yield event
                 finally:
                     # discard non-permanent per-step state
-                    for name in list(self.state.iterkeys()):
+                    for name in list(six.iterkeys(self.state)):
                         if (
                                 not name.startswith("<state>")
                                 and not name.startswith("<p>")

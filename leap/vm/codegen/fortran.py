@@ -31,6 +31,7 @@ from pytools.py_codegen import (
 from .utils import wrap_line_base
 from functools import partial
 import re  # noqa
+import six
 
 from pytools import Record
 
@@ -237,7 +238,7 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         optimizer = Optimizer()
         extract_structure = StructuralExtractor()
 
-        for stage_name, dependencies in dag.stages.iteritems():
+        for stage_name, dependencies in six.iteritems(dag.stages):
             code = dag_extractor(dag.instructions, dependencies)
             function = assembler(stage_name, code, dependencies)
             if optimize:

@@ -29,7 +29,9 @@ from pytools import RecordWithoutPickling, memoize_method
 from leap.vm.utils import get_variables
 
 import logging
+import six
 import six.moves
+
 logger = logging.getLogger(__name__)
 
 # {{{ instructions
@@ -581,7 +583,7 @@ class CodeBuilder(object):
                 var_to_writers.setdefault(wvar, []).append(insn)
 
         # toss out variables written more than once
-        for wvar in list(var_to_writers.iterkeys()):
+        for wvar in list(six.iterkeys(var_to_writers)):
             if len(var_to_writers[wvar]) > 1:
                 del var_to_writers[wvar]
 

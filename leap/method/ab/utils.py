@@ -32,6 +32,7 @@ THE SOFTWARE.
 
 import numpy
 import numpy.linalg as la
+import six.moves
 
 
 def generic_vandermonde(points, functions):
@@ -158,6 +159,6 @@ def make_implicit_ab_coefficients(order):
 
 def linear_comb(coefficients, vectors):
     from operator import add
-    return reduce(add,
+    return six.moves.reduce(add,
             (coeff * v for coeff, v in
                 zip(coefficients, vectors)))
