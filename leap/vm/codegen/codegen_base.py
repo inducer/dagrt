@@ -28,7 +28,7 @@ from .ir import AssignInst, JumpInst, BranchInst, ReturnInst
 from leap.vm.language import AssignExpression, AssignNorm, AssignRHS
 from leap.vm.utils import TODO
 
-from pytools import RecordWithoutPickling, memoize_method
+from pytools import RecordWithoutPickling
 
 
 class NewTimeIntegratorCode(RecordWithoutPickling):
@@ -80,6 +80,10 @@ class StructuredCodeGenerator(object):
         raise NotImplementedError()
 
     def lower_node(self, node):
+        """Emit the code in the ControlTree node.
+
+        :arg node: A :class:`ControlTree` node to lower
+        """
         if isinstance(node, SingleNode):
             for inst in node.basic_block.code:
                 self.lower_inst(inst)
@@ -102,6 +106,7 @@ class StructuredCodeGenerator(object):
                     'Implement lowering for unstructured intervals')
 
     def lower_inst(self, inst):
+        """Emit the code for an instruction."""
         if isinstance(inst, AssignInst):
             assignment = inst.assignment
             if isinstance(assignment, tuple):
@@ -130,10 +135,10 @@ class StructuredCodeGenerator(object):
 
     # Emit routines (to be implemented by subclass)
 
-    def begin_emit(self):
+    def begin_emit(self, dag):
         raise NotImplementedError()
 
-    def finish_emit(self):
+    def finish_emit(self, dag):
         raise NotImplementedError()
 
     def emit_def_begin(self, name):
