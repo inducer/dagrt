@@ -51,12 +51,12 @@ class ControlFlowGraphSimplifier(object):
 
     def __call__(self, function):
         changed = False
-        changed |= self.coalesce_jumps(function)
-        changed |= self.discard_unreachable_blocks(function)
-        changed |= self.merge_basic_blocks(function)
+        changed |= self._coalesce_jumps(function)
+        changed |= self._discard_unreachable_blocks(function)
+        changed |= self._merge_basic_blocks(function)
         return changed
 
-    def discard_unreachable_blocks(self, control_flow_graph):
+    def _discard_unreachable_blocks(self, control_flow_graph):
         """Search the control flow graph for reachable blocks by following
         actual edges. Remove all references to blocks that are unreachable."""
         reachable = set()
@@ -75,13 +75,13 @@ class ControlFlowGraphSimplifier(object):
             control_flow_graph.update()
         return changed
 
-    def coalesce_jumps(self, control_flow_graph):
+    def _coalesce_jumps(self, control_flow_graph):
         """Bypass basic blocks that consist of a single jump instruction."""
 
         # Find and compute the targets of all blocks that are trivial jumps.
         trivial_jumps = {}
         for block in control_flow_graph.postorder():
-            if self.block_is_trivial_jump(block):
+            if self._block_is_trivial_jump(block):
                 dest = one(block.successors)
                 if dest in trivial_jumps:
                     trivial_jumps[block] = trivial_jumps[dest]
@@ -117,10 +117,10 @@ class ControlFlowGraphSimplifier(object):
             control_flow_graph.update()
         return changed
 
-    def block_is_trivial_jump(self, block):
+    def _block_is_trivial_jump(self, block):
         return len(block.code) == 1 and len(block.successors) == 1
 
-    def merge_basic_blocks(self, control_flow_graph):
+    def _merge_basic_blocks(self, control_flow_graph):
         """Merge basic blocks that can be trivially combined."""
 
         regions = []
@@ -176,14 +176,14 @@ class AggressiveDeadCodeElimination(object):
         essential = set()
         for block in control_flow_graph:
             essential |= \
-                {inst for inst in block if self.is_trivially_essential(inst)}
+                {inst for inst in block if self._is_trivially_essential(inst)}
 
         # Working backwards from the set of trivially essential instructions,
         # discover all essential instructions.
         worklist = list(essential)
         while worklist:
             inst = worklist.pop()
-            dependencies = self.get_dependent_instructions(
+            dependencies = self._get_dependent_instructions(
                 inst, reaching_definitions)
             for dependency in dependencies:
                 if dependency not in essential:
@@ -199,13 +199,13 @@ class AggressiveDeadCodeElimination(object):
 
         return changed
 
-    def get_dependent_instructions(self, inst, reaching_definitions):
+    def _get_dependent_instructions(self, inst, reaching_definitions):
         definitions = reaching_definitions.get_reaching_definitions(inst)
         variables = inst.get_used_variables()
         insts = {pair[1] for pair in definitions if pair[0] in variables}
         return insts
 
-    def is_trivially_essential(self, inst):
+    def _is_trivially_essential(self, inst):
         if isinstance(inst, ReturnInst):
             # All return instructions are essential.
             return True
