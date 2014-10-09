@@ -31,24 +31,38 @@ import six
 # {{{ verifier
 
 class InstructionDAGVerifier(object):
-    """Verifies that code is well-formed."""
+    """Verifies that code is well-formed.
+
+    .. attribute:: warnings
+
+        is a human-readable list of warnings detected by the verifier.
+
+    .. attribute:: errors
+
+        is a human-readable list of errors detected by the verifier.
+    """
 
     def __init__(self, instructions, *dependency_lists):
+        """
+        :arg instructions: A set of instructions to verify
+        :arg dependency_lists: A list of sets of instruction ids. Each set of
+            instruction ids represents the dependencies for a stage.
+        """
         warnings = []
         errors = []
 
-        if not self.verify_instructions_well_typed(instructions):
+        if not self._verify_instructions_well_typed(instructions):
             errors += ['Instructions are not well formed.']
-        elif not self.verify_all_dependencies_exist(instructions,
-                                                    *dependency_lists):
+        elif not self._verify_all_dependencies_exist(instructions,
+                                                     *dependency_lists):
             errors += ['Code is missing a dependency.']
-        elif not self.verify_no_circular_dependencies(instructions):
+        elif not self._verify_no_circular_dependencies(instructions):
             errors += ['Code has circular dependencies.']
 
         self.warnings = warnings
         self.errors = errors
 
-    def verify_instructions_well_typed(self, instructions):
+    def _verify_instructions_well_typed(self, instructions):
         """Ensure that all instructions are of the expected format."""
         for inst in instructions:
             # TODO: To what extent should the verifier check the correctness
@@ -57,7 +71,7 @@ class InstructionDAGVerifier(object):
                 return False
         return True
 
-    def verify_all_dependencies_exist(self, instructions, *dependency_lists):
+    def _verify_all_dependencies_exist(self, instructions, *dependency_lists):
         """Ensure that all instruction dependencies exist."""
         ids = set(inst.id for inst in instructions)
         for inst in instructions:
@@ -72,7 +86,7 @@ class InstructionDAGVerifier(object):
                 return False
         return True
 
-    def verify_no_circular_dependencies(self, instructions):
+    def _verify_no_circular_dependencies(self, instructions):
         """Ensure that there are no circular dependencies among the
         instructions.
         """
@@ -134,6 +148,9 @@ class ReachingDefinitions(object):
     """Performs a reaching definitions analysis and computes use-def chains."""
 
     def __init__(self, control_flow_graph):
+        """
+        :arg control_flow_graph: The :class:`Function` to analyze
+        """
         # A definition is a pair (variable, instruction) representing a
         # variable name and the instruction which defines the variable.
 
@@ -144,7 +161,7 @@ class ReachingDefinitions(object):
 
         # Initialize the gen, kill, and definition sets for dataflow analysis.
         for block in control_flow_graph:
-            gen, kill = self.get_gen_and_kill_sets(block, len(block))
+            gen, kill = self._get_gen_and_kill_sets(block, len(block))
             def_gen[block] = gen
             def_kill[block] = kill
             def_in[block] = set()
@@ -166,7 +183,7 @@ class ReachingDefinitions(object):
                 def_in[block] = reach
 
                 kill = def_kill[block]
-                reach_out = self.remove_killed(reach, kill)
+                reach_out = self._remove_killed(reach, kill)
 
                 reach_out |= def_gen[block]
                 changed |= len(reach_out) > len(def_out[block])
@@ -177,10 +194,9 @@ class ReachingDefinitions(object):
             if control_flow_graph.is_acyclic():
                 break
 
-        self.def_in = def_in
-        self.def_out = def_out
+        self._def_in = def_in
 
-    def get_gen_and_kill_sets(self, block, point):
+    def _get_gen_and_kill_sets(self, block, point):
         """Return the gen and kill sets."""
         last_def = {}
         for inst in block.code[:point]:
@@ -188,18 +204,21 @@ class ReachingDefinitions(object):
                 last_def[name] = inst
         return (set(six.iteritems(last_def)), set(six.iterkeys(last_def)))
 
-    def remove_killed(self, definitions, kill):
+    def _remove_killed(self, definitions, kill):
         """Return the result of removing all definitions that are killed."""
         return set(pair for pair in definitions if pair[0] not in kill)
 
     @memoize_method
     def get_reaching_definitions(self, instruction):
-        """Returns the set of all definitions that reach the instruction on some
-        execution path."""
+        """Return the set of all definitions that reach the instruction on some
+        execution path. A definition is a pair (variable, instruction).
+
+        :arg instruction: The instruction to analyze
+        """
         block = instruction.block
         index = block.code.index(instruction)
-        gen, kill = self.get_gen_and_kill_sets(block, index)
-        return gen | self.remove_killed(self.def_in[block], kill)
+        gen, kill = self._get_gen_and_kill_sets(block, index)
+        return gen | self._remove_killed(self._def_in[block], kill)
 
 # }}}
 
