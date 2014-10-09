@@ -56,7 +56,7 @@ def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False
         from leap.vm.language import show_dependency_graph
         show_dependency_graph(code)
 
-    from leap.vm.exec_numpy import NumpyInterpreter, StateComputed
+    from leap.vm.exec_numpy import NumpyInterpreter
 
     def rhs(t, y):
         u, v = y
@@ -85,7 +85,7 @@ def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False
         times = []
         values = []
         for event in interp.run(t_end=final_t):
-            if isinstance(event, StateComputed):
+            if isinstance(event, interp.StateComputed):
                 assert event.component_id == component_id
                 values.append(event.state_component[0])
                 times.append(event.t)
@@ -151,9 +151,7 @@ def test_adaptive_timestep(method, show_dag=False, plot=False):
     example = VanDerPolOscillator()
     y = example.ic()
 
-    from leap.vm.exec_numpy import (
-            NumpyInterpreter,
-            StateComputed, StepCompleted, StepFailed)
+    from leap.vm.exec_numpy import NumpyInterpreter
 
     interp = NumpyInterpreter(code, rhs_map={component_id: example})
     interp.set_up(t_start=example.t_start, dt_start=1e-5, state={component_id: y})
@@ -169,13 +167,13 @@ def test_adaptive_timestep(method, show_dag=False, plot=False):
     step_sizes = []
 
     for event in interp.run(t_end=example.t_end):
-        if isinstance(event, StateComputed):
+        if isinstance(event, interp.StateComputed):
             assert event.component_id == component_id
             assert event.t < example.t_end + 1e-12
 
             new_values.append(event.state_component)
             new_times.append(event.t)
-        elif isinstance(event, StepCompleted):
+        elif isinstance(event, interp.StepCompleted):
             step_sizes.append(event.t - last_t)
             last_t = event.t
 
@@ -183,7 +181,7 @@ def test_adaptive_timestep(method, show_dag=False, plot=False):
             values.extend(new_values)
             del new_times[:]
             del new_values[:]
-        elif isinstance(event, StepFailed):
+        elif isinstance(event, interp.StepFailed):
             del new_times[:]
             del new_values[:]
 

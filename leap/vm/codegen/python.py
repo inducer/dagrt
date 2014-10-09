@@ -41,6 +41,35 @@ def pad_python(line, width):
 
 wrap_line = partial(wrap_line_base, pad_python)
 
+_inner_class_code = '''from collections import namedtuple
+
+class StateComputed(namedtuple("StateComputed",
+         ["t", "time_id", "component_id", "state_component"])):
+    """
+    .. attribute:: t
+    .. attribute:: time_id
+    .. attribute:: component_id
+
+        Identifier of the state component being returned.
+
+    .. attribute:: state_component
+    """
+
+class StepCompleted(namedtuple("StepCompleted", ["t"])):
+    """
+    .. attribute:: t
+
+        Floating point number.
+    """
+
+class StepFailed(namedtuple("StepFailed", ["t"])):
+    """
+    .. attribute:: t
+
+        Floating point number.
+    """
+'''
+
 
 class PythonClassEmitter(PythonEmitter):
     """Emits code for a Python class."""
@@ -188,7 +217,14 @@ class PythonCodeGenerator(StructuredCodeGenerator):
             self.emitter(wrapped_line)
 
     def begin_emit(self, dag):
-        pass
+        self.emit_inner_classes()
+
+    def emit_inner_classes(self):
+        """Emit the inner classes that describe objects returned by the method."""
+        emit = PythonEmitter()
+        for line in _inner_class_code.splitlines():
+            emit(line)
+        self.class_emitter.incorporate(emit)
 
     def emit_constructor(self):
         """Emit the constructor."""
@@ -196,9 +232,6 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         # Perform necessary imports.
         emit('import numpy')
         emit('self.numpy = numpy')
-        emit('from leap.vm.exec_numpy import StateComputed, StepCompleted')
-        emit('self.StateComputed = StateComputed')
-        emit('self.StepCompleted = StepCompleted')
         # Save all the rhs components.
         rhs_map = self.name_manager.rhs_map
         for rhs_id, rhs in six.iteritems(rhs_map):
@@ -243,11 +276,10 @@ class PythonCodeGenerator(StructuredCodeGenerator):
             emit('result = stage_function()')
             emit('if result:')
             with Indentation(emit):
-                emit('result = dict(result)')
-                emit('t = result["time"]')
-                emit('time_id = result["time_id"]')
-                emit('component_id = result["component_id"]')
-                emit('state_component = result["expression"]')
+                emit('t = result[0][1]')
+                emit('time_id = result[1][1]')
+                emit('component_id = result[2][1]')
+                emit('state_component = result[3][1]')
                 emit('yield self.StateComputed(t=t, time_id=time_id, \\')
                 emit('    component_id=component_id, ' +
                      'state_component=state_component)')

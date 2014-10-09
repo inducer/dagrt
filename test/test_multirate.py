@@ -86,8 +86,6 @@ class MultirateTimestepperAccuracyChecker(object):
         return method
 
     def get_error(self, dt, name=None, plot_solution=False):
-        from leap.vm.exec_numpy import StateComputed
-
         final_t = self.ode.t_end
 
         method = self.initialize_method(dt)
@@ -95,7 +93,7 @@ class MultirateTimestepperAccuracyChecker(object):
         times = []
         values = []
         for event in method.run(t_end=final_t):
-            if isinstance(event, StateComputed):
+            if isinstance(event, method.StateComputed):
                 values.append(event.state_component)
                 times.append(event.t)
 

@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools import Record
+from collections import namedtuple
 import numpy as np
 import numpy.linalg as la
 
@@ -35,46 +35,6 @@ import six
 
 class FailStepException(Exception):
     pass
-
-
-# {{{ events returned from run()
-
-class StateComputed(Record):
-    """
-    .. attribute:: t
-    .. attribute:: time_id
-    .. attribute:: component_id
-
-        Identifier of the state component being returned.
-
-    .. attribute:: state_component
-    """
-
-
-class StepCompleted(Record):
-    """
-    .. attribute:: t
-
-        Floating point number.
-
-    .. attribute:: number
-
-        Integer, initial state is 0.
-    """
-
-
-class StepFailed(Record):
-    """
-    .. attribute:: t
-
-        Floating point number.
-
-    .. attribute:: number
-
-        Integer, initial state is 0.
-    """
-
-# }}}
 
 
 class EvaluationMapper(EvaluationMapperBase):
@@ -113,6 +73,35 @@ class NumpyInterpreter(object):
     .. automethod:: initialize
     .. automethod:: run
     """
+
+# {{{ events returned from run()
+
+    class StateComputed(namedtuple("StateComputed",
+              ["t", "time_id", "component_id", "state_component"])):
+        """
+        .. attribute:: t
+        .. attribute:: time_id
+        .. attribute:: component_id
+
+            Identifier of the state component being returned.
+
+        .. attribute:: state_component
+        """
+
+    class StepCompleted(namedtuple("StepCompleted", ["t"])):
+        """
+        .. attribute:: t
+
+            Floating point number.
+        """
+
+    class StepFailed(namedtuple("StepFailed", ["t"])):
+        """
+        .. attribute:: t
+
+            Floating point number.
+        """
+# }}}
 
     def __init__(self, code, rhs_map):
         """
@@ -185,10 +174,10 @@ class NumpyInterpreter(object):
                             del self.state[name]
 
             except FailStepException:
-                yield StepFailed(t=self.state["<t>"])
+                yield self.StepFailed(t=self.state["<t>"])
                 continue
 
-            yield StepCompleted(t=self.state["<t>"])
+            yield self.StepCompleted(t=self.state["<t>"])
 
             if last_step:
                 break
@@ -211,7 +200,7 @@ class NumpyInterpreter(object):
                     for name, expr in args))
 
     def exec_ReturnState(self, insn):
-        return StateComputed(
+        return self.StateComputed(
                     t=self.eval_mapper(insn.time),
                     time_id=insn.time_id,
                     component_id=insn.component_id,
@@ -309,7 +298,7 @@ class StepMatrixFinder(NumpyInterpreter):
                     self.exec_controller.reset()
                     self.exec_controller.update_plan(self.code.step_dep_on)
                     for event in self.exec_controller(self):
-                        if isinstance(event, StateComputed):
+                        if isinstance(event, self.StateComputed):
                             event.step_matrix = self.build_step_matrix()
                             # Discard computed derivatives.
                             for variable in self.variables:
@@ -325,10 +314,10 @@ class StepMatrixFinder(NumpyInterpreter):
                             del self.state[name]
 
             except FailStepException:
-                yield StepFailed(t=self.state["<t>"])
+                yield self.StepFailed(t=self.state["<t>"])
                 continue
 
-            yield StepCompleted(t=self.state["<t>"])
+            yield self.StepCompleted(t=self.state["<t>"])
 
             if last_step:
                 break

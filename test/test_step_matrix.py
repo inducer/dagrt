@@ -42,7 +42,7 @@ def test_step_matrix(show_matrix=True, show_dag=False):
     if show_dag:
         from leap.vm.language import show_dependency_graph
         show_dependency_graph(code)
-    from leap.vm.exec_numpy import StepMatrixFinder, StateComputed
+    from leap.vm.exec_numpy import StepMatrixFinder
 
     def rhs(t, y):
         return -y
@@ -61,7 +61,7 @@ def test_step_matrix(show_matrix=True, show_dag=False):
     finder.set_up(t_start=t, dt_start=dt, state={component_id: y})
     finder.initialize()
     for event in finder.run(t_end=final_t):
-        if isinstance(event, StateComputed):
+        if isinstance(event, finder.StateComputed):
             step_matrices.append(event.step_matrix)
     if show_matrix:
         print('Variables: %s' % [var.name for var in finder.get_state_variables()])
