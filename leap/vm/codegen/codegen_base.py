@@ -71,11 +71,6 @@ class NewTimeIntegratorCode(RecordWithoutPickling):
                                        initial_stage=initial_stage,
                                        step_before_fail=step_before_fail)
 
-    @property
-    @memoize_method
-    def id_to_insn(self):
-        return dict((insn.id, insn) for insn in self.instructions)
-
 
 class StructuredCodeGenerator(object):
     """Code generation for structured languages"""
