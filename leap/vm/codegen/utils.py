@@ -59,3 +59,9 @@ def wrap_line_base(pad_func, line, level=0, width=80, indentation='    '):
             at_line_start = False
     resulting_lines.append(current_line)
     return resulting_lines
+
+
+def exec_in_new_namespace(code):
+    namespace = {}
+    exec(code, globals(), namespace)
+    return namespace

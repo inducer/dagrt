@@ -103,10 +103,5 @@ def show_dot_graph(dot):
     browser_open("file://" + full_svg_file_name)
 
 
-class TODO(Exception):
-
-    def __init__(self, todo_string):
-        self.todo_string = todo_string
-
-    def __str__(self):
-        return 'TODO: ' + self.todo_string
+class TODO(NotImplementedError):
+    pass

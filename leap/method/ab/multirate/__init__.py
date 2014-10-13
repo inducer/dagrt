@@ -163,9 +163,9 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
             # Unpack the y values into slow and fast components.
             rk += add_and_get_ids(AssignExpression(self.fast.name,
-                    self.rk_y[0] + self.rk_y[1], depends_on=rk),
+                    self.rk_y.index(0) + self.rk_y.index(1), depends_on=rk),
                     AssignExpression(self.slow.name,
-                    self.rk_y[2] + self.rk_y[3], depends_on=rk))
+                    self.rk_y.index(2) + self.rk_y.index(3), depends_on=rk))
             # Add code to run the current step based on the value of <p>step
             if i < self.max_order - 1:
                 last_step, = add_and_get_ids(If(
@@ -191,7 +191,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
             hist = hist[:self.orders[hn]]
             for j, entry in enumerate(hist):
                 create_histories += add_and_get_ids(AssignExpression(
-                    self.histories[hn][j].name, entry[i],
+                    self.histories[hn][j].name, entry.index(i),
                     depends_on=rk))
             assert len(self.histories[hn]) == self.orders[hn]
 

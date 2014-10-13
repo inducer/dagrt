@@ -30,13 +30,25 @@ from textwrap import TextWrapper
 from cgi import escape
 
 
+# {{{ dag instructions
+
 class Inst(RecordWithoutPickling):
-    """Base class for instructions in the ControlFlowGraph."""
+    """Base class for instructions in the control flow graph.
+
+    .. attribute:: block
+        The containing BasicBlock (may be None)
+
+    .. attribute:: terminal
+        A boolean valued class attribute. Indicates if the instances of the
+        instruction class function as the terminating instruction of a basic
+        block.
+    """
+
+    terminal = False
 
     def __init__(self, **kwargs):
         if 'block' not in kwargs:
             kwargs['block'] = None
-        assert 'terminal' in kwargs
         super(Inst, self).__init__(**kwargs)
 
     def set_block(self, block):
@@ -56,13 +68,25 @@ class Inst(RecordWithoutPickling):
         raise NotImplementedError()
 
 
-class BranchInst(Inst):
-    """A conditional branch."""
+class TerminatorInst(Inst):
+    """Base class for instructions that terminate a basic block."""
+    terminal = True
+
+
+class BranchInst(TerminatorInst):
+    """A conditional branch.
+
+    .. attribute:: condition
+        A pymbolic expression for the condition
+
+    .. attribute:: on_true
+    .. attribute:: on_false
+        The BasicBlocks that are destinations of the branch
+    """
 
     def __init__(self, condition, on_true, on_false, block=None):
         super(BranchInst, self).__init__(condition=condition, on_true=on_true,
-                                         on_false=on_false, block=block,
-                                         terminal=True)
+                                         on_false=on_false, block=block)
 
     def get_defined_variables(self):
         return frozenset()
@@ -82,20 +106,23 @@ class BranchInst(Inst):
 
 
 class AssignInst(Inst):
-    """Assigns a value."""
+    """Assigns a value.
+
+    .. attribute:: assignment
+
+        The assignment expression may be in these forms:
+            - a (`var`, `expr`) tuple, where `var` is a string and `expr` is a
+                pymbolic expression.
+            - One of the following :class:`leap.vm.language.Instruction` types:
+                - AssignExpression
+                - AssignRHS
+                - AssignSolvedRHS
+                - AssignDotProduct
+                - AssignNorm
+    """
 
     def __init__(self, assignment, block=None):
-        """
-        The inner assignment may be in these forms:
-
-            - a (var, expr) tuple, where var is a string and expr is a
-                pymbolic expression.
-
-            - One of the following instruction types: AssignExpression,
-                AssignRHS, AssignSolvedRHS, AssignDotProduct, AssignNorm
-        """
-        super(AssignInst, self).__init__(assignment=assignment, block=block,
-                                         terminal=False)
+        super(AssignInst, self).__init__(assignment=assignment, block=block)
 
     @memoize_method
     def get_defined_variables(self):
@@ -144,11 +171,15 @@ class AssignInst(Inst):
         raise TODO('Implement string representation for all assignment types')
 
 
-class JumpInst(Inst):
-    """Jumps to another basic block."""
+class JumpInst(TerminatorInst):
+    """Jumps to another basic block.
+
+    .. attribute:: dest
+        The BasicBlock that is the destination of the jump
+    """
 
     def __init__(self, dest, block=None):
-        super(JumpInst, self).__init__(dest=dest, block=block, terminal=True)
+        super(JumpInst, self).__init__(dest=dest, block=block)
 
     def get_defined_variables(self):
         return frozenset()
@@ -163,12 +194,15 @@ class JumpInst(Inst):
         return 'goto block ' + str(self.dest.number)
 
 
-class ReturnInst(Inst):
-    """Returns from the function."""
+class ReturnInst(TerminatorInst):
+    """Returns from the function.
+
+    .. attribute:: expression
+        A pymbolic expression for the return value
+    """
 
     def __init__(self, expression, block=None):
-        super(ReturnInst, self).__init__(expression=expression, block=block,
-                                         terminal=True)
+        super(ReturnInst, self).__init__(expression=expression, block=block)
 
     def get_defined_variables(self):
         return frozenset()
@@ -184,11 +218,11 @@ class ReturnInst(Inst):
         return 'return ' + string_mapper(self.expression)
 
 
-class UnreachableInst(Inst):
+class UnreachableInst(TerminatorInst):
     """Indicates an unreachable point in the code."""
 
     def __init__(self, block=None):
-        super(UnreachableInst, self).__init__(block=block, terminal=True)
+        super(UnreachableInst, self).__init__(block=block)
 
     def get_defined_variables(self):
         return frozenset()
@@ -202,23 +236,46 @@ class UnreachableInst(Inst):
     def __str__(self):
         return 'unreachable'
 
+# }}}
+
+
+# {{{ basic block
 
 class BasicBlock(object):
-    """A maximal straight-line sequence of instructions."""
+    """A maximal straight-line sequence of instructions.
 
-    def __init__(self, number, symbol_table):
+    .. attribute:: code
+        A list of Insts in the basic block
+
+    .. attribute:: number
+        The basic block number
+
+    .. attribute:: predecessors
+    .. attribute:: successors
+        The sets of predecessor and successor blocks
+
+    .. attribute:: terminated
+        A boolean indicating if the code ends in a TerminatorInst
+    """
+
+    def __init__(self, number, function):
         self.code = []
         self.predecessors = set()
         self.successors = set()
         self.terminated = False
         self.number = number
-        self.symbol_table = symbol_table
+        self._function = function
 
     def __iter__(self):
         return iter(self.code)
 
     def __len__(self):
         return len(self.code)
+
+    @property
+    def symbol_table(self):
+        """Return the symbol table."""
+        return self._function.symbol_table
 
     def clear(self):
         """Unregister all instructions."""
@@ -301,13 +358,30 @@ class BasicBlock(object):
         lines.extend(str(inst) for inst in self.code)
         return '\n'.join(lines)
 
+# }}}
+
+
+# {{{ function
 
 class Function(object):
-    """A control flow graph of BasicBlocks."""
+    """A control flow graph of BasicBlocks.
 
-    def __init__(self, start_block):
-        self.start_block = start_block
-        self.symbol_table = start_block.symbol_table
+    .. attribute:: name
+        The name of the function
+
+    .. attribute:: entry_block
+        The BasicBlock that is the entry of the flow graph
+
+    .. attribute:: symbol_table
+        The associated SymbolTable
+    """
+
+    def __init__(self, name, symbol_table):
+        self.name = name
+        self.symbol_table = symbol_table
+
+    def assign_entry_block(self, block):
+        self.entry_block = block
         self.update()
 
     def is_acyclic(self):
@@ -317,7 +391,7 @@ class Function(object):
     def update(self):
         """Traverse the graph and construct the set of basic blocks."""
         self.postorder_traversal = []
-        stack = [self.start_block]
+        stack = [self.entry_block]
         visiting = set()
         visited = set()
         acyclic = True
@@ -401,7 +475,7 @@ class Function(object):
 
         # Add a dummy entry to mark the start block.
         lines.append('entry [style=invisible];')
-        lines.append('entry -> {entry};'.format(entry=self.start_block.number))
+        lines.append('entry -> {entry};'.format(entry=self.entry_block.number))
 
         lines.append('}')
         return '\n'.join(lines)
@@ -409,42 +483,69 @@ class Function(object):
     def __str__(self):
         return '\n'.join(map(str, self.reverse_postorder()))
 
+# }}}
+
+
+# {{{ symbol table
+
+class SymbolTableEntry(RecordWithoutPickling):
+    """Holds information about the contents of a variable. This includes
+    all instructions that reference the variable.
+
+    .. attribute:: is_return_value
+    .. attribute:: is_flag
+    .. attribute:: is_global
+
+    .. attribute:: references
+
+        A list of :class:`Inst` instances referencing this variable.
+    """
+
+    def __init__(self,
+            is_return_value=False,
+            is_flag=False,
+            is_global=False,
+            references=None):
+        if references is None:
+            references = set()
+
+        super(SymbolTableEntry, self).__init__(
+                is_return_value=is_return_value,
+                is_flag=is_flag,
+                is_global=is_global,
+                references=references,
+                )
+
+    @property
+    def is_unreferenced(self):
+        """Return whether this variable is not referenced by any
+        instructions.
+        """
+        return len(self.references) == 0
+
+    def add_reference(self, inst):
+        """Add an instruction to the list of instructions that reference this
+        variable.
+        """
+        self.references.add(inst)
+
+    def remove_reference(self, inst):
+        """Remove an instruction from the list of instructions that reference
+        this variable.
+        """
+        self.references.discard(inst)
+
 
 class SymbolTable(object):
-    """Holds information regarding the variables in a code fragment."""
+    """Holds information regarding the variables in a code fragment.
 
-    class SymbolTableEntry(RecordWithoutPickling):
-        """Holds information about the contents of a variable. This includes
-        all instructions that reference the variable."""
-
-        def __init__(self, *attrs):
-            all_attrs = ['is_global', 'is_return_value', 'is_flag']
-            attr_dict = dict((attr, attr in attrs) for attr in all_attrs)
-            super(SymbolTable.SymbolTableEntry, self).__init__(attr_dict)
-            self.references = set()
-
-        @property
-        def is_unreferenced(self):
-            """Return whether this variable is not referenced by any
-            instructions.
-            """
-            return len(self.references) == 0
-
-        def add_reference(self, inst):
-            """Add an instruction to the list of instructions that reference this
-            variable.
-            """
-            self.references.add(inst)
-
-        def remove_reference(self, inst):
-            """Remove an instruction from the list of instructions that reference
-            this variable.
-            """
-            self.references.discard(inst)
+    .. attribute:: variables
+        A map from variable name to SymbolTableEntry
+    """
 
     def __init__(self):
         self.variables = {}
-        self.named_variables = set()
+        self._named_variables = set()
 
     def register_instruction(self, inst):
         variables = inst.get_defined_variables() | inst.get_used_variables()
@@ -457,6 +558,12 @@ class SymbolTable(object):
         for variable in variables:
             assert variable in self.variables
             self.variables[variable].remove_reference(inst)
+
+            # FIXME This is weird--we shouldn't automatically delete
+            # unreferenced variables. There's a funny asymmetry
+            # between freshly created variables that don't have
+            # a reference yet and ones that lose their last reference
+            # and thus get deleted.
             if self.variables[variable].is_unreferenced:
                 del self.variables[variable]
 
@@ -466,11 +573,15 @@ class SymbolTable(object):
     def __getitem__(self, var):
         return self.variables[var]
 
-    def add_variable(self, var, *attrs):
-        self.variables[var] = SymbolTable.SymbolTableEntry(*attrs)
-        self.named_variables.add(var)
+    def add_variable(self, var, **kwargs):
+        self.variables[var] = SymbolTableEntry(**kwargs)
+        self._named_variables.add(var)
 
     def get_fresh_variable_name(self, prefix):
-        name = get_unique_name(prefix, self.named_variables)
-        self.named_variables.add(name)
+        name = get_unique_name(prefix, self._named_variables)
+        self._named_variables.add(name)
         return name
+
+# }}}
+
+# vim: foldmethod=marker

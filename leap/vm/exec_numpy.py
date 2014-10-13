@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools import Record
+from collections import namedtuple
 import numpy as np
 import numpy.linalg as la
 
@@ -30,49 +30,11 @@ from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
 from pymbolic.mapper.differentiator import DifferentiationMapper as \
     DifferentiationMapperBase
 
+import six
+
 
 class FailStepException(Exception):
     pass
-
-
-# {{{ events returned from run()
-
-class StateComputed(Record):
-    """
-    .. attribute:: t
-    .. attribute:: time_id
-    .. attribute:: component_id
-
-        Identifier of the state component being returned.
-
-    .. attribute:: state_component
-    """
-
-
-class StepCompleted(Record):
-    """
-    .. attribute:: t
-
-        Floating point number.
-
-    .. attribute:: number
-
-        Integer, initial state is 0.
-    """
-
-
-class StepFailed(Record):
-    """
-    .. attribute:: t
-
-        Floating point number.
-
-    .. attribute:: number
-
-        Integer, initial state is 0.
-    """
-
-# }}}
 
 
 class EvaluationMapper(EvaluationMapperBase):
@@ -112,7 +74,36 @@ class NumpyInterpreter(object):
     .. automethod:: run
     """
 
-    def __init__(self, code, rhs_map, solver='linear'):
+# {{{ events returned from run()
+
+    class StateComputed(namedtuple("StateComputed",
+              ["t", "time_id", "component_id", "state_component"])):
+        """
+        .. attribute:: t
+        .. attribute:: time_id
+        .. attribute:: component_id
+
+            Identifier of the state component being returned.
+
+        .. attribute:: state_component
+        """
+
+    class StepCompleted(namedtuple("StepCompleted", ["t"])):
+        """
+        .. attribute:: t
+
+            Floating point number.
+        """
+
+    class StepFailed(namedtuple("StepFailed", ["t"])):
+        """
+        .. attribute:: t
+
+            Floating point number.
+        """
+# }}}
+
+    def __init__(self, code, rhs_map):
         """
         :arg code: an instance of :class:`leap.vm.TimeIntegratorCode`
         :arg rhs_map: a mapping from component ids to right-hand-side
@@ -140,7 +131,7 @@ class NumpyInterpreter(object):
 
         self.state["<t>"] = t_start
         self.state["<dt>"] = dt_start
-        for key, val in state.iteritems():
+        for key, val in six.iteritems(state):
             if key.startswith("<"):
                 raise ValueError("state variables may not start with '<'")
             self.state["<state>"+key] = val
@@ -177,7 +168,7 @@ class NumpyInterpreter(object):
 
                 finally:
                     # discard non-permanent per-step state
-                    for name in list(self.state.iterkeys()):
+                    for name in list(six.iterkeys(self.state)):
                         if (
                                 not name.startswith("<state>")
                                 and not name.startswith("<p>")
@@ -185,10 +176,10 @@ class NumpyInterpreter(object):
                             del self.state[name]
 
             except FailStepException:
-                yield StepFailed(t=self.state["<t>"])
+                yield self.StepFailed(t=self.state["<t>"])
                 continue
 
-            yield StepCompleted(t=self.state["<t>"])
+            yield self.StepCompleted(t=self.state["<t>"])
 
             if last_step:
                 break
@@ -223,7 +214,7 @@ class NumpyInterpreter(object):
         raise ValueError("Unknown solver type!")
 
     def exec_ReturnState(self, insn):
-        return StateComputed(
+        return self.StateComputed(
                     t=self.eval_mapper(insn.time),
                     time_id=insn.time_id,
                     component_id=insn.component_id,
@@ -289,7 +280,7 @@ class StepMatrixFinder(NumpyInterpreter):
                 all_state_vars.append(var_name)
         all_state_vars.sort()
         from pymbolic import var
-        return map(var, all_state_vars)
+        return list(map(var, all_state_vars))
 
     def build_step_matrix(self):
         nv = len(self.variables)
@@ -321,7 +312,7 @@ class StepMatrixFinder(NumpyInterpreter):
                     self.exec_controller.reset()
                     self.exec_controller.update_plan(self.code.step_dep_on)
                     for event in self.exec_controller(self):
-                        if isinstance(event, StateComputed):
+                        if isinstance(event, self.StateComputed):
                             event.step_matrix = self.build_step_matrix()
                             # Discard computed derivatives.
                             for variable in self.variables:
@@ -329,7 +320,7 @@ class StepMatrixFinder(NumpyInterpreter):
                         yield event
                 finally:
                     # discard non-permanent per-step state
-                    for name in list(self.state.iterkeys()):
+                    for name in list(six.iterkeys(self.state)):
                         if (
                                 not name.startswith("<state>")
                                 and not name.startswith("<p>")
@@ -337,10 +328,10 @@ class StepMatrixFinder(NumpyInterpreter):
                             del self.state[name]
 
             except FailStepException:
-                yield StepFailed(t=self.state["<t>"])
+                yield self.StepFailed(t=self.state["<t>"])
                 continue
 
-            yield StepCompleted(t=self.state["<t>"])
+            yield self.StepCompleted(t=self.state["<t>"])
 
             if last_step:
                 break

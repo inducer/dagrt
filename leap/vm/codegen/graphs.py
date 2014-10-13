@@ -30,44 +30,48 @@ class SimpleIntGraph(object):
     of a graph with vertices represented by integers."""
 
     def __init__(self, vertices, edge_fn):
+        """
+        :arg vertices: The set of vertices
+        :arg edge_fn: A function that returns an adjacency list for each vertex
+        """
         # Assign a number to each vertex.
-        self.vertex_to_num = {}
-        self.num_to_vertex = {}
+        self._vertex_to_num = {}
+        self._num_to_vertex = {}
         num_vertices = 0
         for vertex in vertices:
-            if vertex not in self.vertex_to_num:
-                self.vertex_to_num[vertex] = num_vertices
-                self.num_to_vertex[num_vertices] = vertex
+            if vertex not in self._vertex_to_num:
+                self._vertex_to_num[vertex] = num_vertices
+                self._num_to_vertex[num_vertices] = vertex
                 num_vertices += 1
-        self.num_vertices = num_vertices
+        self._num_vertices = num_vertices
 
-        self.edges = {}
+        self._edges = {}
         # Collect edge information on each vertex.
         for vertex in vertices:
-            num = self.vertex_to_num[vertex]
-            self.edges[num] = frozenset(map(lambda v: self.vertex_to_num[v],
-                                            edge_fn(vertex)))
+            num = self._vertex_to_num[vertex]
+            self._edges[num] = frozenset(map(lambda v: self._vertex_to_num[v],
+                                             edge_fn(vertex)))
 
     def __iter__(self):
-        return iter(range(0, self.num_vertices))
+        return iter(range(0, self._num_vertices))
 
     def __getitem__(self, num):
-        if num not in self.edges:
+        if num not in self._edges:
             raise ValueError('Vertex not found!')
-        return self.edges[num]
+        return self._edges[num]
 
     def __len__(self):
-        return self.num_vertices
+        return self._num_vertices
 
     def get_vertex_for_number(self, num):
-        if num not in self.num_to_vertex:
+        if num not in self._num_to_vertex:
             raise ValueError('Vertex not found!')
-        return self.num_to_vertex[num]
+        return self._num_to_vertex[num]
 
     def get_number_for_vertex(self, vertex):
-        if vertex not in self.vertex_to_num:
+        if vertex not in self._vertex_to_num:
             raise ValueError('Vertex not found!')
-        return self.vertex_to_num[vertex]
+        return self._vertex_to_num[vertex]
 
 
 class InstructionDAGIntGraph(SimpleIntGraph):
@@ -77,31 +81,31 @@ class InstructionDAGIntGraph(SimpleIntGraph):
     """
 
     def __init__(self, dag):
-        self.id_to_inst = dict((inst.id, inst) for inst in dag)
-        self.ids = self.id_to_inst.keys()
+        self._id_to_inst = dict((inst.id, inst) for inst in dag)
+        self._ids = self._id_to_inst.keys()
 
         def edge_func(vertex):
-            inst = self.id_to_inst[vertex]
+            inst = self._id_to_inst[vertex]
             deps = set(inst.depends_on)
             if isinstance(inst, If):
                 deps |= set(inst.then_depends_on)
                 deps |= set(inst.else_depends_on)
             return deps
 
-        super(InstructionDAGIntGraph, self).__init__(self.ids, edge_func)
+        super(InstructionDAGIntGraph, self).__init__(self._ids, edge_func)
 
     def get_unconditional_edges(self, vertex):
         """Return the set of vertices that are adjacent to this vertex by an
         unconditional dependency.
         """
-        inst = self.id_to_inst[self.get_id_for_number(vertex)]
+        inst = self._id_to_inst[self.get_id_for_number(vertex)]
         return frozenset(map(self.get_number_for_id, inst.depends_on))
 
     def get_conditional_edges(self, vertex):
         """Return the set of vertices that are adjacent to this vertex by a
         conditional dependency (i.e., a branch of an If statement).
         """
-        inst = self.id_to_inst[self.get_id_for_number(vertex)]
+        inst = self._id_to_inst[self.get_id_for_number(vertex)]
         deps = []
         if isinstance(inst, If):
             deps += inst.then_depends_on
@@ -112,7 +116,7 @@ class InstructionDAGIntGraph(SimpleIntGraph):
         return self.get_number_for_id(vertex.id)
 
     def get_vertex_for_number(self, num):
-        return self.id_to_inst[self.get_id_for_number(num)]
+        return self._id_to_inst[self.get_id_for_number(num)]
 
     def get_id_for_number(self, num):
         return super(InstructionDAGIntGraph, self).get_vertex_for_number(num)

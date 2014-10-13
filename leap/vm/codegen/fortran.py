@@ -1,6 +1,6 @@
 """Fortran code generator"""
 
-__copyright__ = "Copyright (C) 2014 Matt Wala"
+__copyright__ = "Copyright (C) 2014 Matt Wala, Andreas Kloeckner"
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -24,13 +24,16 @@ THE SOFTWARE.
 
 from .expressions import FortranExpressionMapper
 from .codegen_base import StructuredCodeGenerator
-from pytools.py_codegen import PythonCodeGenerator as PythonEmitter
-from pytools.py_codegen import PythonFunctionGenerator as PythonFunctionEmitter
-from pytools.py_codegen import Indentation
 from leap.vm.utils import is_state_variable, get_unique_name
-from .utils import wrap_line as wrap_line_base
+from pytools.py_codegen import (
+        # It's the same code. So sue me.
+        PythonCodeGenerator as FortranEmitter)
+from .utils import wrap_line_base
 from functools import partial
 import re  # noqa
+import six
+
+from pytools import Record
 
 
 def pad_fortran(line, width):
@@ -41,8 +44,10 @@ def pad_fortran(line, width):
 wrap_line = partial(wrap_line_base, pad_fortran)
 
 
+# {{{ name manager
+
 class FortranNameManager(object):
-    """Maps names that appear in intermediate code to Python identifiers.
+    """Maps names that appear in intermediate code to Fortran identifiers.
     """
 
     def __init__(self):
@@ -97,15 +102,110 @@ class FortranNameManager(object):
         else:
             return self.name_local(name)
 
+# }}}
+
+
+# {{{ custom emitters
+
+class FortranBlockEmitter(FortranEmitter):
+    def __init__(self, what):
+        super(FortranBlockEmitter, self).__init__()
+        self.what = what
+
+    def __enter__(self):
+        self.indent()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.dedent()
+        self('end {what}'.format(what=self.what))
+        self('')
+
+    def incorporate(self, sub_generator):
+        for line in sub_generator.code:
+            self(line)
+
+
+class FortranModuleEmitter(FortranBlockEmitter):
+    def __init__(self, module_name):
+        super(FortranModuleEmitter, self).__init__('module')
+        self.module_name = module_name
+        self('module {module_name}'.format(module_name=module_name))
+
+
+class FortranSubblockEmitter(FortranBlockEmitter):
+    def __init__(self, parent_emitter, what):
+        super(FortranSubblockEmitter, self).__init__(what)
+        self.parent_emitter = parent_emitter
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        super(FortranSubblockEmitter, self).__exit__(
+                exc_type, exc_val, exc_tb)
+
+        self.parent_emitter.incorporate(self)
+
+
+class FortranIfEmitter(FortranSubblockEmitter):
+    def __init__(self, parent_emitter, expr):
+        super(FortranIfEmitter, self).__init__(parent_emitter, "if")
+        self("if ({expr}) then".format(expr=expr))
+
+    def emit_else(self):
+        self.dedent()
+        self('else')
+        self.indent()
+
+
+class FortranDoEmitter(FortranSubblockEmitter):
+    def __init__(self, parent_emitter, expr):
+        super(FortranDoEmitter, self).__init__(parent_emitter, "do")
+        self("do while ({expr})".format(expr=expr))
+
+
+class FortranSubroutineEmitter(FortranSubblockEmitter):
+    def __init__(self, parent_emitter, name, args):
+        super(FortranSubroutineEmitter, self).__init__(
+                parent_emitter, 'subroutine')
+        self.name = name
+
+        self('subroutine %s(%s)' % (name, ", ".join(args)))
+
+
+class FortranTypeEmitter(FortranSubblockEmitter):
+    def __init__(self, parent_emitter, type_name):
+        super(FortranTypeEmitter, self).__init__(parent_emitter, 'type')
+        self('type {type_name}'.format(type_name=type_name))
+
+# }}}
+
+
+# {{{ code generator
+
+class _FunctionDescriptor(Record):
+    """
+    .. attribute:: name
+    .. attribute:: function
+    .. attribute:: control_tree
+    """
+
 
 class FortranCodeGenerator(StructuredCodeGenerator):
 
-    def __init__(self, class_name, optimize=True, suppress_warnings=False):
-        super(FortranCodeGenerator, self).__init__(
-                class_name, optimize, suppress_warnings)
+    def __init__(self, module_name, time_kind="8"):
+        self.module_name = module_name
+        self.time_kind = time_kind
 
         self.name_manager = FortranNameManager()
         self.expr_mapper = FortranExpressionMapper(self.name_manager)
+
+        self.module_emitter = FortranModuleEmitter(module_name)
+        self.module_emitter.__enter__()
+
+        self.emitters = [self.module_emitter]
+
+    @property
+    def emitter(self):
+        return self.emitters[-1]
 
     def expr(self, expr):
         return self.expr_mapper(expr)
@@ -114,130 +214,212 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         return self.name_manager.name_rhs(rhs)
 
     def emit(self, line):
-        level = self.class_emitter.level + self.emitter.level
+        level = sum(em.level for em in self.emitters)
         for wrapped_line in wrap_line(line, level):
             self.emitter(wrapped_line)
 
-    def begin_emit(self):
-        pass
+    def __call__(self, dag, optimize=True):
+        from .analysis import verify_code
+        verify_code(dag)
+
+        from .codegen_base import NewTimeIntegratorCode
+        dag = NewTimeIntegratorCode.from_old(dag)
+
+        # {{{ produce function descriptors
+
+        from .dag2ir import InstructionDAGExtractor, ControlFlowGraphAssembler
+        from .optimization import Optimizer
+        from .ir2structured_ir import StructuralExtractor
+
+        fdescrs = []
+
+        dag_extractor = InstructionDAGExtractor()
+        assembler = ControlFlowGraphAssembler()
+        optimizer = Optimizer()
+        extract_structure = StructuralExtractor()
+
+        for stage_name, dependencies in six.iteritems(dag.stages):
+            code = dag_extractor(dag.instructions, dependencies)
+            function = assembler(stage_name, code, dependencies)
+            if optimize:
+                function = optimizer(function)
+            control_tree = extract_structure(function)
+
+            fdescrs.append(
+                    _FunctionDescriptor(
+                        name=stage_name,
+                        function=function,
+                        control_tree=control_tree))
+
+        # }}}
+
+        from leap.vm.codegen.data import SymbolKindFinder
+
+        sym_kind_table = SymbolKindFinder()([
+            fd.function for fd in fdescrs])
+
+        1/0
+
+
+
+
+
+
+        self.begin_emit(dag)
+        for stage, dependencies in dag.stages.iteritems():
+            code = dag_extractor(dag.instructions, dependencies)
+            function = assembler(code, dependencies)
+            if self.optimize:
+                function = optimizer(function)
+            control_tree = extract_structure(function)
+            self.lower_function(stage, control_tree)
+
+        self.finish_emit(dag)
+
+        return self.get_code()
+
+    def lower_function(self, function_name, control_tree):
+        self.emit_def_begin(function_name)
+        self.lower_node(control_tree)
+        self.emit_def_end()
+
+    def begin_emit(self, dag):
+        for i, stage in enumerate(dag.stages):
+            self.emit("parameter (stage_{stage_name} = {i})".format(
+                stage_name=stage, i=i))
+
+        self.emit('')
+
+        with FortranTypeEmitter(
+                self.emitter,
+                'stepper_state') as emit:
+            emit("integer stage")
+            emit("real kind({time_kind}) t".format(time_kind=self.time_kind))
+            emit("real kind({time_kind}) dt".format(time_kind=self.time_kind))
 
     def emit_constructor(self):
-        """Emit the constructor."""
+        with FortranSubroutineEmitter(
+                self.emitter,
+                'initialize', ('self', 'rhs_map')) as emit:
+            rhs_map = self.name_manager.rhs_map
 
-        emit = PythonFunctionEmitter('__init__', ('self', 'rhs_map'))
-        # Perform necessary imports.
-        emit('')
-        emit('self.numpy = numpy')
-        emit('from leap.vm.exec_numpy import StateComputed, StepCompleted')
-        emit('self.StateComputed = StateComputed')
-        emit('self.StepCompleted = StepCompleted')
-        # Save all the rhs components.
-        rhs_map = self.name_manager.rhs_map
-        for rhs_id, rhs in rhs_map.iteritems():
-            emit('{rhs} = rhs_map["{rhs_id}"]'.format(rhs=rhs, rhs_id=rhs_id))
-        emit('return')
-        self.class_emitter.incorporate(emit)
+            for rhs_id, rhs in rhs_map.iteritems():
+                emit('{rhs} = rhs_map["{rhs_id}"]'.format(rhs=rhs, rhs_id=rhs_id))
+            emit('return')
 
     def emit_set_up(self):
-        """Emit the set_up() method."""
-        emit = PythonFunctionEmitter('set_up',
-                                     ('self', 't_start', 'dt_start', 'state'))
-        emit('self.t = t_start')
-        emit('self.dt = dt_start')
-        # Save all the state components.
-        global_map = self.name_manager.global_map
-        for component_id, component in global_map.iteritems():
-            if not component_id.startswith('<state>'):
-                continue
-            component_id = component_id[7:]
-            emit('{component} = state["{component_id}"]'.format(
-                component=component, component_id=component_id))
-        self.class_emitter.incorporate(emit)
+        with FortranSubroutineEmitter(
+                self.emitter,
+                'set_up',
+                ('self', 't_start', 'dt_start', 'state')) as emit:
+            emit('self.t = t_start')
+            emit('self.dt = dt_start')
+            # Save all the state components.
+            global_map = self.name_manager.global_map
+            for component_id, component in global_map.iteritems():
+                if not component_id.startswith('<state>'):
+                    continue
+                component_id = component_id[7:]
+                emit('{component} = state["{component_id}"]'.format(
+                    component=component, component_id=component_id))
 
     def emit_run(self):
         """Emit the run() method."""
-        emit = PythonFunctionEmitter('run', ('self', '**kwargs'))
-        emit('t_end = kwargs["t_end"]')
-        emit('last_step = False')
-        # STAGE_HACK: This implementation of staging support should be replaced
-        # so that the stages are not hard-coded.
-        emit('next_stages = { "initialization": "primary", ' +
-             '"primary": "primary" }')
-        emit('current_stage = "initialization"')
-        emit('while True:')
-        with Indentation(emit):
-            emit('if self.t + self.dt >= t_end:')
-            with Indentation(emit):
-                emit('assert self.t <= t_end')
-                emit('self.dt = t_end - self.t')
-                emit('last_step = True')
-            emit('stage_function = getattr(self, "stage_" + current_stage)')
-            emit('result = stage_function()')
-            emit('if result:')
-            with Indentation(emit):
-                emit('result = dict(result)')
-                emit('t = result["time"]')
-                emit('time_id = result["time_id"]')
-                emit('component_id = result["component_id"]')
-                emit('state_component = result["expression"]')
-                emit('yield self.StateComputed(t=t, time_id=time_id, \\')
-                emit('    component_id=component_id, ' +
-                     'state_component=state_component)')
-                emit('if last_step:')
-                with Indentation(emit):
-                    emit('yield self.StepCompleted(t=self.t)')
-                    emit('break')
-            emit('current_stage = next_stages[current_stage]')
-        self.class_emitter.incorporate(emit)
+        with FortranSubroutineEmitter(
+                self.emitter,
+                'run', ('self', '**kwargs')) as emit:
+            emit('t_end = kwargs["t_end"]')
+            emit('last_step = False')
+            # STAGE_HACK: This implementation of staging support should be replaced
+            # so that the stages are not hard-coded.
+            emit('next_stages = { "initialization": "primary", ' +
+                 '"primary": "primary" }')
+            emit('current_stage = "initialization"')
+
+            with FortranDoEmitter(emit, ".true.") as d_emit:
+                with FortranIfEmitter(
+                        d_emit, 'self.t + self.dt >= t_end') as emit_over:
+                    emit_over('assert self.t <= t_end')
+                    emit_over('self.dt = t_end - self.t')
+                    emit_over('last_step = True')
+
+                d_emit('stage_function = getattr(self, "stage_" + current_stage)')
+                emit('result = stage_function()')
+
+                with FortranIfEmitter(d_emit, 'result') as emit_res:
+                    emit_res('result = dict(result)')
+                    emit_res('t = result["time"]')
+                    emit_res('time_id = result["time_id"]')
+                    emit_res('component_id = result["component_id"]')
+                    emit_res('state_component = result["expression"]')
+                    emit_res('yield self.StateComputed(t=t, time_id=time_id, \\')
+                    emit_res('    component_id=component_id, ' +
+                         'state_component=state_component)')
+
+                    with FortranIfEmitter(emit_res, 'last_step') as emit_ls:
+                        emit_ls('yield self.StepCompleted(t=self.t)')
+                        emit_ls('exit')
+                d_emit('current_stage = next_stages[current_stage]')
 
     def emit_initialize(self):
-        # This method is not used by the class, but is here for compatibility
-        # with the NumpyInterpreter interface.
-        emit = PythonFunctionEmitter('initialize', ('self',))
-        emit('pass')
-        self.class_emitter.incorporate(emit)
+        pass
 
-    def finish_emit(self):
+    def finish_emit(self, dag):
         self.emit_constructor()
         self.emit_set_up()
         self.emit_initialize()
         self.emit_run()
 
+        self.module_emitter.__exit__(None, None, None)
+
     def get_code(self):
-        return self.class_emitter.get()
+        return self.module_emitter.get()
+
+    # {{{ called by superclass
 
     def emit_def_begin(self, name):
         # The current function is handled by self.emit
-        self.emitter = PythonFunctionEmitter('stage_' + name, ('self',))
+        self.emitters.append(FortranSubroutineEmitter(
+                self.emitter,
+                'stage_' + name, ('self',)))
+        self.emitter.__enter__()
 
     def emit_def_end(self):
-        self.class_emitter.incorporate(self.emitter)
-        del self.emitter
+        self.emitter.__exit__(None, None, None)
+        self.emitters.pop()
 
     def emit_while_loop_begin(self, expr):
-        self.emit('while {expr}:'.format(expr=self.expr(expr)))
-        self.emitter.indent()
+        self.emitter = FortranDoEmitter(
+                self.emitter,
+                self.expr(expr))
+        self.emitter.__enter__()
 
-    def emit_while_loop_end(self):
-        self.emitter.dedent()
+    emit_while_loop_end = emit_def_end
 
     def emit_if_begin(self, expr):
-        self.emit('if {expr}:'.format(expr=self.expr(expr)))
-        self.emitter.indent()
+        self.emitter = FortranIfEmitter(
+                self.emitter,
+                self.expr(expr))
 
-    def emit_if_end(self):
-        self.emitter.dedent()
+    emit_if_end = emit_def_end
 
     def emit_else_begin(self):
-        self.emit('else:')
-        self.emitter.indent()
+        self.emitter.emit_else()
 
-    def emit_else_end(self):
-        self.emitter.dedent()
+    emit_else_end = emit_def_end
 
     def emit_assign_expr(self, name, expr):
-        self.emit('{name} = {expr}'.format(name=self.name_manager[name],
-                                           expr=self.expr(expr)))
+        if expr is not None:
+            self.emit(
+                    "{name} = {expr}"
+                    .format(
+                        name=self.name_manager[name],
+                        expr=self.expr(expr)))
+        else:
+            self.emit(
+                    "! unimplemented: {name} = None"
+                    .format(
+                        name=self.name_manager[name]))
 
     def emit_assign_rhs(self, name, rhs, time, arg):
         kwargs = ', '.join('{name}={expr}'.format(name=name,
@@ -248,3 +430,9 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
     def emit_return(self, expr):
         self.emit('return {expr}'.format(expr=self.expr(expr)))
+
+    # }}}
+
+# }}}
+
+# vim: foldmethod=marker

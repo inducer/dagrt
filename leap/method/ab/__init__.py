@@ -164,7 +164,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         step = var('<p>step')
         fvals = [var('<p>last_rhs_%d' % i) for i in
-                 xrange(self.order - 1, 0, -1)]
+                 range(self.order - 1, 0, -1)]
         state = var('<state>' + component_id)
         t = var('<t>')
         dt = var('<dt>')
@@ -203,7 +203,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         step = var('<p>step')
         fvals = [var('<p>last_rhs_%d' % i) for i in
-                 xrange(self.order - 1, 0, -1)]
+                 range(self.order - 1, 0, -1)]
         state = var('<state>' + component_id)
         t = var('<t>')
         dt = var('<dt>')
@@ -240,7 +240,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                       t=t, rhs_arguments=(((component_id, state),),),
                       id='compute_curr_rhs'),
             AssignExpression(state.name, state + dt *
-                (sum(self.coeffs[i] * fvals[i] for i in xrange(0, self.order-1))
+                (sum(self.coeffs[i] * fvals[i] for i in range(0, self.order-1))
                  + curr_rhs * self.coeffs[-1]), id='ab_update_state',
                 depends_on=['compute_curr_rhs'])
             )

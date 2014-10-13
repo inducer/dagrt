@@ -29,6 +29,9 @@ from pytools import RecordWithoutPickling, memoize_method
 from leap.vm.utils import get_variables
 
 import logging
+import six
+import six.moves
+
 logger = logging.getLogger(__name__)
 
 # {{{ instructions
@@ -63,7 +66,7 @@ following special variable names are supported:
     (that survives from one step to the next)
 
 ``<state>NAME``
-    State identifier under user control
+    State identifier under user (=scheme writer) control
 
     This variable contains persistent state.
     (that survives from one step to the next)
@@ -100,7 +103,7 @@ class Instruction(RecordWithoutPickling):
     def __init__(self, **kwargs):
         id = kwargs.pop("id", None)
         if id is not None:
-            id = intern(id)
+            id = six.moves.intern(id)
         depends_on = frozenset(kwargs.pop("depends_on", []))
         RecordWithoutPickling.__init__(self,
                 id=id,
@@ -170,7 +173,7 @@ class AssignRHS(Instruction):
 
         return "\n".join(lines)
 
-    exec_method = intern("exec_AssignRHS")
+    exec_method = six.moves.intern("exec_AssignRHS")
 
 
 class AssignSolvedRHS(Instruction):
@@ -187,22 +190,24 @@ class AssignSolvedRHS(Instruction):
 
         A string, the name of the variable being assigned to.
 
-    .. attribute:: component_id
-
-        Identifier of the right hand side to be evaluated. Typically a number
-        or a string.
-
-    .. attribute:: base
-    .. attribute:: scale
-
+    .. attribute:: component_ids
     .. attribute:: t
+    .. attribute:: states
+    .. attribute:: solve_component
+    .. attribute:: lhs
 
-        A :mod:`pymbolic` expression for the time at which the right hand side
-        is to be evaluated. Time is implicitly the first argument to each
-        expression.
+        A list of expressions involving
+
+    .. attribute:: rhs
+    .. attribute:: solver_id
+
+        An identifier for the solver that is to be used to solve the
+        linear system. This identifier is intended to match information
+        about solvers which becomes available at the execution or
+        code generation stage.
     """
 
-    exec_method = intern("exec_AssignSolvedRHS")
+    exec_method = six.moves.intern("exec_AssignSolvedRHS")
 
     def get_assignees(self):
         return frozenset([self.assignee])
@@ -324,7 +329,7 @@ class ReturnState(Instruction):
                 self.time_id,
                 self.component_id)
 
-    exec_method = intern("exec_ReturnState")
+    exec_method = six.moves.intern("exec_ReturnState")
 
 
 class Raise(Instruction):
@@ -360,7 +365,7 @@ class Raise(Instruction):
 
         return result
 
-    exec_method = "exec_Raise"
+    exec_method = six.moves.intern("exec_Raise")
 
 
 class FailStep(Instruction):
@@ -376,7 +381,7 @@ class FailStep(Instruction):
     def __str__(self):
         return "FailStep"
 
-    exec_method = "exec_FailStep"
+    exec_method = six.moves.intern("exec_FailStep")
 
 
 class If(Instruction):
@@ -402,7 +407,7 @@ class If(Instruction):
     def __str__(self):
         return "If %s" % self.condition
 
-    exec_method = "exec_If"
+    exec_method = six.moves.intern("exec_If")
 
 # }}}
 
@@ -601,7 +606,7 @@ class CodeBuilder(object):
                 var_to_writers.setdefault(wvar, []).append(insn)
 
         # toss out variables written more than once
-        for wvar in list(var_to_writers.iterkeys()):
+        for wvar in list(six.iterkeys(var_to_writers)):
             if len(var_to_writers[wvar]) > 1:
                 del var_to_writers[wvar]
 

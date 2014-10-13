@@ -31,7 +31,6 @@ import numpy as np
 from leap.vm.language import AssignExpression, AssignNorm, AssignRHS, If, \
     ReturnState
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
-from leap.vm.exec_numpy import StateComputed, StepCompleted
 from leap.vm.codegen import PythonCodeGenerator
 from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
 from pymbolic import var
@@ -56,9 +55,9 @@ def test_basic_codegen():
     method.initialize()
     hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
-    assert isinstance(hist[0], StateComputed)
+    assert isinstance(hist[0], method.StateComputed)
     assert hist[0].state_component == 0
-    assert isinstance(hist[1], StepCompleted)
+    assert isinstance(hist[1], method.StepCompleted)
 
 
 def test_basic_conditional_codegen():
@@ -83,9 +82,9 @@ def test_basic_conditional_codegen():
     method.initialize()
     hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
-    assert isinstance(hist[0], StateComputed)
+    assert isinstance(hist[0], method.StateComputed)
     assert hist[0].state_component == 1
-    assert isinstance(hist[1], StepCompleted)
+    assert isinstance(hist[1], method.StepCompleted)
 
 
 def test_basic_assign_norm_codegen():
@@ -110,9 +109,9 @@ def test_basic_assign_norm_codegen():
     method.initialize()
     hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
-    assert isinstance(hist[0], StateComputed)
+    assert isinstance(hist[0], method.StateComputed)
     assert np.isclose(hist[0].state_component, 5.0)
-    assert isinstance(hist[1], StepCompleted)
+    assert isinstance(hist[1], method.StepCompleted)
 
 
 def test_basic_assign_rhs_codegen():
@@ -147,9 +146,9 @@ def test_basic_assign_rhs_codegen():
     method.initialize()
     hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
-    assert isinstance(hist[0], StateComputed)
+    assert isinstance(hist[0], method.StateComputed)
     assert hist[0].state_component == 12
-    assert isinstance(hist[1], StepCompleted)
+    assert isinstance(hist[1], method.StepCompleted)
 
 
 def test_complex_dependency_codegen():
@@ -178,9 +177,9 @@ def test_complex_dependency_codegen():
     method.initialize()
     hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
-    assert isinstance(hist[0], StateComputed)
+    assert isinstance(hist[0], method.StateComputed)
     assert hist[0].state_component == 1
-    assert isinstance(hist[1], StepCompleted)
+    assert isinstance(hist[1], method.StepCompleted)
 
 
 @pytest.mark.parametrize(("stepper", "expected_order"), [
@@ -227,7 +226,7 @@ def test_rk_codegen(stepper, expected_order):
         values = []
 
         for event in method.run(t_end=final_t):
-            if isinstance(event, StateComputed):
+            if isinstance(event, method.StateComputed):
                 assert event.component_id == component_id
                 values.append(event.state_component[0])
                 times.append(event.t)
@@ -292,7 +291,7 @@ def test_multirate_codegen():
         times = []
         values = []
         for event in method.run(t_end=final_t):
-            if isinstance(event, StateComputed):
+            if isinstance(event, method.StateComputed):
                 values.append(event.state_component)
                 times.append(event.t)
 

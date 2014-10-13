@@ -28,11 +28,14 @@ from leap.vm.language import Instruction, AssignExpression, AssignNorm, \
 from leap.vm.utils import TODO
 from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import get_unique_name, is_state_variable
-from .ir import SymbolTable, BasicBlock, Function
+import leap.vm.codegen.ir as ir
 from pymbolic import var
 from pytools import one
 import copy
+import six
 
+
+# {{{ dummy dag nodes
 
 class Entry(Instruction):
     """Dummy entry point for the instruction DAG."""
@@ -69,6 +72,10 @@ class Exit(Instruction):
 
     exec_method = "exec_Exit"
 
+# }}}
+
+
+# {{{ dummy node adder
 
 class InstructionDAGEntryExitAugmenter(object):
     """Augments an instruction DAG with entry and exit instructions."""
@@ -95,6 +102,10 @@ class InstructionDAGEntryExitAugmenter(object):
         augmented_instructions.add(entry_inst)
         return (augmented_instructions, entry_inst, exit_inst)
 
+# }}}
+
+
+# {{{ extractor
 
 class InstructionDAGExtractor(object):
     """Returns only the portion of the DAG necessary for satisfying the
@@ -112,6 +123,10 @@ class InstructionDAGExtractor(object):
                     stack.append(vertex)
         return set(map(graph.get_vertex_for_number, reachable))
 
+# }}}
+
+
+# {{{ partitioner
 
 class InstructionDAGPartitioner(object):
     """Partition a list of instructions into maximal straight line
@@ -122,24 +137,24 @@ class InstructionDAGPartitioner(object):
 
         # Prune as many unconditional edges as we can while maintaining all
         # dependencies.
-        tr_graph = self.unconditional_transitive_reduction(inst_graph)
+        tr_graph = self._unconditional_transitive_reduction(inst_graph)
 
         # Construct maximal length straight line sequences of instructions that
         # respect all dependencies.
-        num_block_graph, num_to_block = self.maximal_blocks(tr_graph,
-                                                            inst_graph)
+        num_block_graph, num_to_block = self._maximal_blocks(tr_graph,
+                                                             inst_graph)
 
         # Convert the constructed sequences into lists of instruction ids.
         id_for_num = inst_graph.get_id_for_number
         to_id = lambda block: tuple(map(id_for_num, block))
         block_graph = dict([to_id(bl), map(to_id, bls)] for (bl, bls) in
-                           num_block_graph.iteritems())
+                           six.iteritems(num_block_graph))
         inst_id_to_block = dict([id_for_num(i), to_id(bl)] for (i, bl) in
-                                num_to_block.iteritems())
+                                six.iteritems(num_to_block))
 
         return (block_graph, inst_id_to_block)
 
-    def topological_sort(self, dag):
+    def _topological_sort(self, dag):
         """Return a topological sort of the input DAG."""
         visited = set()
         visiting = set()
@@ -159,14 +174,14 @@ class InstructionDAGPartitioner(object):
                 stack.pop()
         return sort
 
-    def unconditional_transitive_reduction(self, dag):
+    def _unconditional_transitive_reduction(self, dag):
         """Return a transitive reduction of the unconditional portion of the
         input instruction DAG. Conditional edges are kept.
         """
         # Compute u -> v longest unconditional paths in the DAG.
         longest_path = dict(((u, v), 0 if u == v else -1) for u in dag
                             for v in dag)
-        topo_sort = self.topological_sort(dag)
+        topo_sort = self._topological_sort(dag)
         topo_sort.reverse()
         for i, vertex in enumerate(topo_sort):
             for intermediate_vertex in topo_sort[i:]:
@@ -193,19 +208,19 @@ class InstructionDAGPartitioner(object):
 
         return reduction
 
-    def maximal_blocks(self, dag, original_dag):
+    def _maximal_blocks(self, dag, original_dag):
         """Return a partition of the DAG into maximal blocks of straight-line
         pieces.
         """
         # Compute the inverse of the DAG.
         dag_inv = dict((u, set()) for u in dag)
-        for vertex, successors in dag.iteritems():
+        for vertex, successors in six.iteritems(dag):
             for successor in successors:
                 dag_inv[successor].add(vertex)
 
         # Traverse the DAG extracting maximal straight line sequences into
         # blocks.
-        topo_sort = self.topological_sort(dag)
+        topo_sort = self._topological_sort(dag)
         visited = set()
         blocks = set()
         inst_to_block = {}
@@ -238,65 +253,67 @@ class InstructionDAGPartitioner(object):
                     if i in original_dag.get_unconditional_edges(block[0]))
         return (block_graph, inst_to_block)
 
+# }}}
+
+
+# {{{ flag tracker
 
 class FlagTracker(object):
     """Keeps track of the values of a set of boolean flags."""
 
-    def __init__(self, flags):
+    def __init__(self, flags, must_be_true=frozenset(),
+                 must_be_false=frozenset()):
         """Create a flag analysis object that keeps track of the given set of
         flags."""
-        self.all_flags = set(flags)
-        self.must_be_true = set()
-        self.must_be_false = set()
-
-    def clone(self):
-        """Return a copy of the object."""
-        return self & self
+        assert must_be_true <= flags
+        assert must_be_false <= flags
+        self._all_flags = frozenset(flags)
+        self._must_be_true = frozenset(must_be_true)
+        self._must_be_false = frozenset(must_be_false)
 
     def set_true(self, flag):
         """Return a new flag analysis object with the given flag set to true.
         """
-        assert flag in self.all_flags
-        flag_tracker = self.clone()
-        flag_tracker.must_be_true.add(flag)
-        flag_tracker.must_be_false.discard(flag)
-        return flag_tracker
+        return FlagTracker(self._all_flags,
+                           self._must_be_true | {flag},
+                           self._must_be_false - {flag})
 
     def set_false(self, flag):
         """Return a new flag analysis object with the given flag set to false.
         """
-        assert flag in self.all_flags
-        flag_tracker = self.clone()
-        flag_tracker.must_be_false.add(flag)
-        flag_tracker.must_be_true.discard(flag)
-        return flag_tracker
+        return FlagTracker(self._all_flags,
+                           self._must_be_true - {flag},
+                           self._must_be_false | {flag})
 
     def is_definitely_true(self, flag):
         """Determine if the flag must be set to true."""
-        assert flag in self.all_flags
-        return flag in self.must_be_true
+        assert flag in self._all_flags
+        return flag in self._must_be_true
 
     def is_definitely_false(self, flag):
         """Determine if the flag must be set to false."""
-        assert flag in self.all_flags
-        return flag in self.must_be_false
+        assert flag in self._all_flags
+        return flag in self._must_be_false
 
     def __and__(self, other):
         """Return a new flag analysis that represents the conjunction of the
         inputs.
         """
         assert isinstance(other, FlagTracker)
-        assert self.all_flags == other.all_flags
-        flag_tracker = FlagTracker(self.all_flags)
-        flag_tracker.must_be_true = self.must_be_true & other.must_be_true
-        flag_tracker.must_be_false = self.must_be_false & other.must_be_false
-        return flag_tracker
+        assert self._all_flags == other._all_flags
+        return FlagTracker(self._all_flags,
+                           self._must_be_true & other._must_be_true,
+                           self._must_be_false & other._must_be_false)
 
+# }}}
+
+
+# {{{ CFG assembler
 
 class ControlFlowGraphAssembler(object):
     """Constructs a control flow graph from an instruction DAG."""
 
-    def __call__(self, instructions, instructions_dep_on):
+    def __call__(self, name, instructions, instructions_dep_on):
         # Add Entry and Exit instructions to the DAG.
         augmenter = InstructionDAGEntryExitAugmenter()
         aug_instructions, ent, ex = \
@@ -307,96 +324,96 @@ class ControlFlowGraphAssembler(object):
         block_graph, inst_id_to_block = partitioner(aug_instructions)
 
         # Save the block graph.
-        self.block_graph = block_graph
-        self.inst_id_to_inst = dict([i.id, i] for i in aug_instructions)
-        self.inst_id_to_block = inst_id_to_block
+        self._block_graph = block_graph
+        self._inst_id_to_inst = dict([i.id, i] for i in aug_instructions)
+        self._inst_id_to_block = inst_id_to_block
 
         # Set up the symbol and flag tables.
-        self.initialize_symbol_table(aug_instructions, block_graph)
-        self.initialize_flags(block_graph)
+        self._initialize_symbol_table(aug_instructions, block_graph)
+        self._initialize_flags(block_graph)
+
+        # Create the function object to associate with each basic block.
+        self._function = ir.Function(name, self._symbol_table)
 
         # Initialize a new variable to hold the return value.
-        self.return_val = self.symbol_table.get_fresh_variable_name('retval')
-        self.symbol_table.add_variable(self.return_val, 'is_return_val')
+        self._return_val = self._symbol_table.get_fresh_variable_name('retval')
+        self._symbol_table.add_variable(self._return_val, is_return_value=True)
 
         # Find the exit block and create a new basic block out of it.
         exit_block = inst_id_to_block[ex.id]
 
         # Create the initial basic block.
-        self.basic_block_count = 0
-        entry_bb = self.get_entry_block()
+        self._basic_block_count = 0
+        entry_bb = self._get_entry_block()
 
         # Set up the initial flag analysis.
-        flag_names = set(self.flags.itervalues())
-        flag_tracker = FlagTracker(flag_names)
-        flag_tracker.must_be_false = set(flag_names)
+        flag_names = set(six.itervalues(self._flags))
+        flag_tracker = FlagTracker(flag_names, must_be_false=flag_names)
 
         # Create the control flow graph.
-        end_bb, flag_tracker = self.process_block(exit_block, entry_bb,
-                                                  flag_tracker)
+        end_bb, flag_tracker = self._process_block(exit_block, entry_bb,
+                                                   flag_tracker)
 
         if not end_bb.terminated:
             end_bb.add_unreachable()
 
-        return Function(entry_bb)
+        self._function.assign_entry_block(entry_bb)
+        return self._function
 
-    def new_basic_block(self):
+    def _new_basic_block(self):
         """Create a new, empty basic block with a unique number."""
-        number = self.basic_block_count
-        self.basic_block_count += 1
-        return BasicBlock(number, self.symbol_table)
+        number = self._basic_block_count
+        self._basic_block_count += 1
+        return ir.BasicBlock(number, self._function)
 
-    def initialize_flags(self, block_graph):
+    def _initialize_flags(self, block_graph):
         """Create the flags for the blocks."""
-        self.flags = {}
+        self._flags = {}
         block_count = 0
-        symbol_table = self.symbol_table
+        symbol_table = self._symbol_table
+
         # Create a flag for each block and insert into the symbol table.
         for block in block_graph:
             block_id = block_count
             block_count += 1
             flag = symbol_table.get_fresh_variable_name('flag_' +
                                                         str(block_id))
-            self.flags[block] = flag
-            symbol_table.add_variable(flag, 'is_flag')
+            self._flags[block] = flag
+            symbol_table.add_variable(flag, is_flag=True)
 
-    def initialize_symbol_table(self, aug_instructions, block_graph):
+    def _initialize_symbol_table(self, aug_instructions, block_graph):
         """Create a new symbol table and add all variables that have been
         used in the instruction list to the symbol table."""
 
-        symbol_table = SymbolTable()
+        symbol_table = ir.SymbolTable()
 
         # Get a list of all used variable names and right hand sides.
         var_names = set()
         rhs_names = set()
         for inst in aug_instructions:
-            var_names |= set(inst.get_assignees())
+            var_names |= inst.get_assignees()
             var_names |= set(inst.get_read_variables())
-            if isinstance(inst, AssignRHS):
-                rhs_names.add(inst.component_id)
 
-        # Create a symbol table entry for each variable.
         for var_name in var_names:
-            symbol_table.add_variable(var_name)
-            if is_state_variable(var_name):
-                symbol_table[var_name].is_global = True
+            symbol_table.add_variable(
+                    var_name, is_global=is_state_variable(var_name))
 
         # Record the RHSs.
         symbol_table.rhs_names = rhs_names
 
-        self.symbol_table = symbol_table
+        self._symbol_table = symbol_table
 
-    def get_entry_block(self):
+    def _get_entry_block(self):
         """Create the entry block of the control flow graph."""
-        start_bb = self.new_basic_block()
+        start_bb = self._new_basic_block()
         # Initialize the flag variables.
-        for flag in self.flags.itervalues():
+        for flag in six.itervalues(self._flags):
             start_bb.add_assignment((flag, False))
         # Initialize the return value.
-        start_bb.add_assignment((self.return_val, None))
+        start_bb.add_assignment((self._return_val, None))
         return start_bb
 
-    def process_block_sequence(self, block_sequence, top_bb, flag_tracker):
+    def _process_block_sequence(self, block_sequence, top_bb, flag_tracker):
         """Produce a control flow subgraph that corresponds to a sequence of
         instruction blocks.
         """
@@ -406,12 +423,12 @@ class ControlFlowGraphAssembler(object):
 
         main_bb = top_bb
         for block in block_sequence:
-            main_bb, flag_tracker = self.process_block(block, main_bb,
+            main_bb, flag_tracker = self._process_block(block, main_bb,
                                                         flag_tracker)
 
         return (main_bb, flag_tracker)
 
-    def process_block(self, inst_block, top_bb, flag_tracker):
+    def _process_block(self, inst_block, top_bb, flag_tracker):
         """Produce the control flow subgraph corresponding to a block of
         instructions.
 
@@ -421,10 +438,10 @@ class ControlFlowGraphAssembler(object):
         """
 
         get_block_set = lambda inst_set: \
-            map(self.inst_id_to_block.__getitem__, inst_set)
+            map(self._inst_id_to_block.__getitem__, inst_set)
 
         # Check the flag analysis to see if we need to compute the block.
-        flag = self.flags[inst_block]
+        flag = self._flags[inst_block]
 
         if flag_tracker.is_definitely_true(flag):
             return (top_bb, flag_tracker)
@@ -432,14 +449,14 @@ class ControlFlowGraphAssembler(object):
         needs_flag = not flag_tracker.is_definitely_false(flag)
 
         # Process all dependencies.
-        dependencies = self.block_graph[inst_block]
+        dependencies = self._block_graph[inst_block]
         main_bb, flag_tracker = \
-            self.process_block_sequence(dependencies, top_bb, flag_tracker)
+            self._process_block_sequence(dependencies, top_bb, flag_tracker)
 
         if needs_flag:
             # Add code to check and set the flag for the block.
-            new_main_bb = self.new_basic_block()
-            merge_bb = self.new_basic_block()
+            new_main_bb = self._new_basic_block()
+            merge_bb = self._new_basic_block()
             # Add a jump to the appropriate block from the top block
             from pymbolic.primitives import LogicalNot
             main_bb.add_branch(LogicalNot(var(flag)), new_main_bb, merge_bb)
@@ -447,13 +464,13 @@ class ControlFlowGraphAssembler(object):
             main_bb = new_main_bb
 
         for instruction_id in inst_block:
-            instruction = self.inst_id_to_inst[instruction_id]
+            instruction = self._inst_id_to_inst[instruction_id]
 
             if isinstance(instruction, Entry):
                 continue
 
             elif isinstance(instruction, Exit):
-                main_bb.add_return(var(self.return_val))
+                main_bb.add_return(var(self._return_val))
                 break
 
             elif isinstance(instruction, If):
@@ -462,14 +479,14 @@ class ControlFlowGraphAssembler(object):
                 else_blocks = get_block_set(instruction.else_depends_on)
 
                 # Create basic blocks for then, else, and merge point.
-                then_bb = self.new_basic_block()
-                else_bb = self.new_basic_block()
-                then_else_merge_bb = self.new_basic_block()
+                then_bb = self._new_basic_block()
+                else_bb = self._new_basic_block()
+                then_else_merge_bb = self._new_basic_block()
 
                 # Emit basic blocks for then and else components.
-                end_then_bb, then_flag_tracker = self.process_block_sequence(
+                end_then_bb, then_flag_tracker = self._process_block_sequence(
                     then_blocks, then_bb, flag_tracker)
-                end_else_bb, else_flag_tracker = self.process_block_sequence(
+                end_else_bb, else_flag_tracker = self._process_block_sequence(
                     else_blocks, else_bb, flag_tracker)
 
                 # Emit branch to then and else blocks.
@@ -488,7 +505,7 @@ class ControlFlowGraphAssembler(object):
                                 ('time_id', instruction.time_id),
                                 ('component_id', instruction.component_id),
                                 ('expression', instruction.expression))
-                main_bb.add_assignment((self.return_val, return_value))
+                main_bb.add_assignment((self._return_val, return_value))
 
             elif isinstance(instruction, AssignExpression) or \
                     isinstance(instruction, AssignRHS) or \
@@ -511,3 +528,7 @@ class ControlFlowGraphAssembler(object):
 
         flag_tracker = flag_tracker.set_true(flag)
         return (main_bb, flag_tracker)
+
+# }}}
+
+# vim: foldmethod=marker
