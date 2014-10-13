@@ -36,21 +36,20 @@ class Inst(RecordWithoutPickling):
     """Base class for instructions in the control flow graph.
 
     .. attribute:: block
-        The containing :class:`BasicBlock` (may be `None`)
+        The containing BasicBlock (may be None)
+
+    .. attribute:: terminal
+        A boolean valued class attribute. Indicates if the instances of the
+        instruction class function as the terminating instruction of a basic
+        block.
     """
+
+    terminal = False
 
     def __init__(self, **kwargs):
         if 'block' not in kwargs:
             kwargs['block'] = None
         super(Inst, self).__init__(**kwargs)
-
-    @property
-    def terminal(self):
-        """
-        :return: True if the instruction class terminates basic blocks, and
-           False otherwise
-        """
-        return isinstance(self, TerminatorInst)
 
     def set_block(self, block):
         self.block = block
@@ -71,7 +70,7 @@ class Inst(RecordWithoutPickling):
 
 class TerminatorInst(Inst):
     """Base class for instructions that terminate a basic block."""
-    pass
+    terminal = True
 
 
 class BranchInst(TerminatorInst):
@@ -82,7 +81,7 @@ class BranchInst(TerminatorInst):
 
     .. attribute:: on_true
     .. attribute:: on_false
-        The :class:`BasicBlock`s that are destinations of the branch
+        The BasicBlocks that are destinations of the branch
     """
 
     def __init__(self, condition, on_true, on_false, block=None):
@@ -115,11 +114,11 @@ class AssignInst(Inst):
             - a (`var`, `expr`) tuple, where `var` is a string and `expr` is a
                 pymbolic expression.
             - One of the following :class:`leap.vm.language.Instruction` types:
-                - :class:`AssignExpression`
-                - :class:`AssignRHS`
-                - :class:`AssignSolvedRHS`
-                - :class:`AssignDotProduct`
-                - :class:`AssignNorm`
+                - AssignExpression
+                - AssignRHS
+                - AssignSolvedRHS
+                - AssignDotProduct
+                - AssignNorm
     """
 
     def __init__(self, assignment, block=None):
@@ -176,7 +175,7 @@ class JumpInst(TerminatorInst):
     """Jumps to another basic block.
 
     .. attribute:: dest
-        The :class:`BasicBlock` that is the destination of the jump
+        The BasicBlock that is the destination of the jump
     """
 
     def __init__(self, dest, block=None):
@@ -246,7 +245,7 @@ class BasicBlock(object):
     """A maximal straight-line sequence of instructions.
 
     .. attribute:: code
-        A list of :class:`Insts` in the basic block
+        A list of Insts in the basic block
 
     .. attribute:: number
         The basic block number
@@ -256,7 +255,7 @@ class BasicBlock(object):
         The sets of predecessor and successor blocks
 
     .. attribute:: terminated
-        A boolean indicating if the code ends in a :class:`TerminatorInst`
+        A boolean indicating if the code ends in a TerminatorInst
     """
 
     def __init__(self, number, function):
@@ -371,10 +370,10 @@ class Function(object):
         The name of the function
 
     .. attribute:: entry_block
-        The :class:`BasicBlock` that is the entry of the flow graph
+        The BasicBlock that is the entry of the flow graph
 
     .. attribute:: symbol_table
-        The associated :class:`SymbolTable`
+        The associated SymbolTable
     """
 
     def __init__(self, name, symbol_table):
@@ -541,12 +540,12 @@ class SymbolTable(object):
     """Holds information regarding the variables in a code fragment.
 
     .. attribute:: variables
-        A map from variable names to :class:`SymbolTableEntry`s
+        A map from variable name to SymbolTableEntry
     """
 
     def __init__(self):
         self.variables = {}
-        self.named_variables = set()
+        self._named_variables = set()
 
     def register_instruction(self, inst):
         variables = inst.get_defined_variables() | inst.get_used_variables()
@@ -576,11 +575,11 @@ class SymbolTable(object):
 
     def add_variable(self, var, **kwargs):
         self.variables[var] = SymbolTableEntry(**kwargs)
-        self.named_variables.add(var)
+        self._named_variables.add(var)
 
     def get_fresh_variable_name(self, prefix):
-        name = get_unique_name(prefix, self.named_variables)
-        self.named_variables.add(name)
+        name = get_unique_name(prefix, self._named_variables)
+        self._named_variables.add(name)
         return name
 
 # }}}
