@@ -29,7 +29,7 @@ from pytools.py_codegen import (
         PythonFunctionGenerator as PythonFunctionEmitter,
         Indentation)
 from leap.vm.utils import is_state_variable, get_unique_name
-from leap.vm.codegen.utils import wrap_line_base
+from leap.vm.codegen.utils import wrap_line_base, exec_in_new_namespace
 from functools import partial
 import six
 
@@ -151,12 +151,6 @@ class PythonNameManager(object):
             return self.name_global(name)
         else:
             return self.name_local(name)
-
-
-def exec_in_new_namespace(code):
-    namespace = {}
-    exec(code, globals(), namespace)
-    return namespace
 
 
 class PythonCodeGenerator(StructuredCodeGenerator):
