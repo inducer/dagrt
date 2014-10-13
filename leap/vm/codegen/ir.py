@@ -33,13 +33,24 @@ from cgi import escape
 # {{{ dag instructions
 
 class Inst(RecordWithoutPickling):
-    """Base class for instructions in the ControlFlowGraph."""
+    """Base class for instructions in the control flow graph.
+
+    .. attribute:: block
+        The containing :class:`BasicBlock` (may be `None`)
+    """
 
     def __init__(self, **kwargs):
         if 'block' not in kwargs:
             kwargs['block'] = None
-        assert 'terminal' in kwargs
         super(Inst, self).__init__(**kwargs)
+
+    @property
+    def terminal(self):
+        """
+        :return: True if the instruction class terminates basic blocks, and
+           False otherwise
+        """
+        return isinstance(self, TerminatorInst)
 
     def set_block(self, block):
         self.block = block
@@ -58,13 +69,25 @@ class Inst(RecordWithoutPickling):
         raise NotImplementedError()
 
 
-class BranchInst(Inst):
-    """A conditional branch."""
+class TerminatorInst(Inst):
+    """Base class for instructions that terminate a basic block."""
+    pass
+
+
+class BranchInst(TerminatorInst):
+    """A conditional branch.
+
+    .. attribute:: condition
+        A pymbolic expression for the condition
+
+    .. attribute:: on_true
+    .. attribute:: on_false
+        The :class:`BasicBlock`s that are destinations of the branch
+    """
 
     def __init__(self, condition, on_true, on_false, block=None):
         super(BranchInst, self).__init__(condition=condition, on_true=on_true,
-                                         on_false=on_false, block=block,
-                                         terminal=True)
+                                         on_false=on_false, block=block)
 
     def get_defined_variables(self):
         return frozenset()
@@ -84,20 +107,23 @@ class BranchInst(Inst):
 
 
 class AssignInst(Inst):
-    """Assigns a value."""
+    """Assigns a value.
+
+    .. attribute:: assignment
+
+        The assignment expression may be in these forms:
+            - a (`var`, `expr`) tuple, where `var` is a string and `expr` is a
+                pymbolic expression.
+            - One of the following :class:`leap.vm.language.Instruction` types:
+                - :class:`AssignExpression`
+                - :class:`AssignRHS`
+                - :class:`AssignSolvedRHS`
+                - :class:`AssignDotProduct`
+                - :class:`AssignNorm`
+    """
 
     def __init__(self, assignment, block=None):
-        """
-        The inner assignment may be in these forms:
-
-            - a (var, expr) tuple, where var is a string and expr is a
-                pymbolic expression.
-
-            - One of the following instruction types: AssignExpression,
-                AssignRHS, AssignSolvedRHS, AssignDotProduct, AssignNorm
-        """
-        super(AssignInst, self).__init__(assignment=assignment, block=block,
-                                         terminal=False)
+        super(AssignInst, self).__init__(assignment=assignment, block=block)
 
     @memoize_method
     def get_defined_variables(self):
@@ -146,11 +172,15 @@ class AssignInst(Inst):
         raise TODO('Implement string representation for all assignment types')
 
 
-class JumpInst(Inst):
-    """Jumps to another basic block."""
+class JumpInst(TerminatorInst):
+    """Jumps to another basic block.
+
+    .. attribute:: dest
+        The :class:`BasicBlock` that is the destination of the jump
+    """
 
     def __init__(self, dest, block=None):
-        super(JumpInst, self).__init__(dest=dest, block=block, terminal=True)
+        super(JumpInst, self).__init__(dest=dest, block=block)
 
     def get_defined_variables(self):
         return frozenset()
@@ -165,12 +195,15 @@ class JumpInst(Inst):
         return 'goto block ' + str(self.dest.number)
 
 
-class ReturnInst(Inst):
-    """Returns from the function."""
+class ReturnInst(TerminatorInst):
+    """Returns from the function.
+
+    .. attribute:: expression
+        A pymbolic expression for the return value
+    """
 
     def __init__(self, expression, block=None):
-        super(ReturnInst, self).__init__(expression=expression, block=block,
-                                         terminal=True)
+        super(ReturnInst, self).__init__(expression=expression, block=block)
 
     def get_defined_variables(self):
         return frozenset()
@@ -186,11 +219,11 @@ class ReturnInst(Inst):
         return 'return ' + string_mapper(self.expression)
 
 
-class UnreachableInst(Inst):
+class UnreachableInst(TerminatorInst):
     """Indicates an unreachable point in the code."""
 
     def __init__(self, block=None):
-        super(UnreachableInst, self).__init__(block=block, terminal=True)
+        super(UnreachableInst, self).__init__(block=block)
 
     def get_defined_variables(self):
         return frozenset()
@@ -210,7 +243,21 @@ class UnreachableInst(Inst):
 # {{{ basic block
 
 class BasicBlock(object):
-    """A maximal straight-line sequence of instructions."""
+    """A maximal straight-line sequence of instructions.
+
+    .. attribute:: code
+        A list of :class:`Insts` in the basic block
+
+    .. attribute:: number
+        The basic block number
+
+    .. attribute:: predecessors
+    .. attribute:: successors
+        The sets of predecessor and successor blocks
+
+    .. attribute:: terminated
+        A boolean indicating if the code ends in a :class:`TerminatorInst`
+    """
 
     def __init__(self, number, function):
         self.code = []
@@ -318,7 +365,17 @@ class BasicBlock(object):
 # {{{ function
 
 class Function(object):
-    """A control flow graph of BasicBlocks."""
+    """A control flow graph of BasicBlocks.
+
+    .. attribute:: name
+        The name of the function
+
+    .. attribute:: entry_block
+        The :class:`BasicBlock` that is the entry of the flow graph
+
+    .. attribute:: symbol_table
+        The associated :class:`SymbolTable`
+    """
 
     def __init__(self, name, symbol_table):
         self.name = name
@@ -481,7 +538,11 @@ class SymbolTableEntry(RecordWithoutPickling):
 
 
 class SymbolTable(object):
-    """Holds information regarding the variables in a code fragment."""
+    """Holds information regarding the variables in a code fragment.
+
+    .. attribute:: variables
+        A map from variable names to :class:`SymbolTableEntry`s
+    """
 
     def __init__(self):
         self.variables = {}
