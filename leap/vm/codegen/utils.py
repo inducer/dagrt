@@ -65,4 +65,3 @@ def exec_in_new_namespace(code):
     namespace = {}
     exec(code, globals(), namespace)
     return namespace
-
