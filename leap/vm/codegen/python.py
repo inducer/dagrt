@@ -76,7 +76,6 @@ class PythonClassEmitter(PythonEmitter):
 
     def __init__(self, class_name, superclass='object'):
         super(PythonClassEmitter, self).__init__()
-        self.class_name = class_name
         self('class {cls}({superclass}):'.format(cls=class_name,
                                                  superclass=superclass))
         self.indent()
