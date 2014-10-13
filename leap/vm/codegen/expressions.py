@@ -38,7 +38,7 @@ class FortranExpressionMapper(StringifyMapper):
         numpy is the name of the numpy module.
         """
         super(FortranExpressionMapper, self).__init__(repr)
-        self.variable_names = variable_names
+        self._variable_names = variable_names
 
     def map_foreign(self, expr, *args):
         if expr is None:
@@ -49,7 +49,7 @@ class FortranExpressionMapper(StringifyMapper):
             return super(FortranExpressionMapper, self).map_foreign(expr, *args)
 
     def map_variable(self, expr, enclosing_prec):
-        return self.variable_names[expr.name]
+        return self._variable_names[expr.name]
 
     def map_numpy_array(self, expr, *args):
         if len(expr.shape) > 1:
@@ -57,7 +57,7 @@ class FortranExpressionMapper(StringifyMapper):
                              'not supported')
         elements = [self.rec(element, *args) for element in expr]
         return '{numpy}.array([{elements}],dtype=\'object\')'.format(
-            numpy=self.numpy, elements=', '.join(elements))
+            numpy=self._numpy, elements=', '.join(elements))
 
 # }}}
 
@@ -74,8 +74,8 @@ class PythonExpressionMapper(StringifyMapper):
         numpy is the name of the numpy module.
         """
         super(PythonExpressionMapper, self).__init__(repr)
-        self.variable_names = variable_names
-        self.numpy = numpy
+        self._variable_names = variable_names
+        self._numpy = numpy
 
     def map_foreign(self, expr, *args):
         if expr is None:
@@ -86,7 +86,7 @@ class PythonExpressionMapper(StringifyMapper):
             return super(PythonExpressionMapper, self).map_foreign(expr, *args)
 
     def map_variable(self, expr, enclosing_prec):
-        return self.variable_names[expr.name]
+        return self._variable_names[expr.name]
 
     def map_numpy_array(self, expr, *args):
         if len(expr.shape) > 1:
@@ -94,7 +94,7 @@ class PythonExpressionMapper(StringifyMapper):
                              'not supported')
         elements = [self.rec(element, *args) for element in expr]
         return '{numpy}.array([{elements}],dtype=\'object\')'.format(
-            numpy=self.numpy, elements=', '.join(elements))
+            numpy=self._numpy, elements=', '.join(elements))
 
 string_mapper = PythonExpressionMapper(DictionaryWithDefault(lambda x: x))
 
