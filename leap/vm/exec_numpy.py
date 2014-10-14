@@ -25,6 +25,7 @@ THE SOFTWARE.
 from collections import namedtuple
 import numpy as np
 import numpy.linalg as la
+import scipy.optimize
 
 from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
 from pymbolic.mapper.differentiator import DifferentiationMapper as \
@@ -38,16 +39,31 @@ class FailStepException(Exception):
 
 
 class EvaluationMapper(EvaluationMapperBase):
+
     def __init__(self, context, functions):
         """
         :arg context: a mapping from variable names to values
+        :arg functions: a mapping from function names to functions
         """
         EvaluationMapperBase.__init__(self, context)
         self.functions = functions
 
+    def handle_call(self, function_name, parameters, kw_parameters):
+        if function_name in self.functions:
+            function = self.functions[function_name]
+        else:
+            raise ValueError("Call to unknown function: " + str(function_name))
+        evaluated_parameters = (self.rec(param) for param in parameters)
+        evaluated_kw_parameters = {param_id: self.rec(param)
+             for param_id, param in six.iteritems(kw_parameters)}
+        return function(*evaluated_parameters, **evaluated_kw_parameters)
+
     def map_call(self, expr):
-        func = self.functions[expr.function.name]
-        return func(*[self.rec(par) for par in expr.parameters])
+        return self.handle_call(expr.function.name, expr.parameters, {})
+
+    def map_call_with_kwargs(self, expr):
+        return self.handle_call(expr.function.name, expr.parameters,
+                                expr.kw_parameters)
 
 
 class DifferentiationMapperWithContext(DifferentiationMapperBase):
@@ -113,16 +129,14 @@ class NumpyInterpreter(object):
         from leap.vm.language import ExecutionController
         self.exec_controller = ExecutionController(code)
         self.state = {}
-        self.functions = {
-                "len": len,
-                "isnan": np.isnan,
-                }
+        builtins = {"len": len, "isnan": np.isnan}
 
+        assert not set(builtins.keys()) & set(rhs_map.keys())
+
+        self.functions = dict(builtins, **rhs_map)
         self.rhs_map = rhs_map
 
         self.eval_mapper = EvaluationMapper(self.state, self.functions)
-
-        self.solver = solver
 
     def set_up(self, t_start, dt_start, state):
         """
@@ -202,16 +216,36 @@ class NumpyInterpreter(object):
                     for name, expr in args))
 
     def exec_AssignSolvedRHS(self, insn):
-        if self.solver == 'linear':
-            assignee = insn.assignee
-            eval_scale = self.eval_mapper(insn.scale)
-            eval_base = self.eval_mapper(insn.base)
-            eval_alpha = self.rhs_map[insn.component_id](0.0, 1.0)
-            self.state[assignee] = \
-                (eval_base / (1.0 - eval_scale * eval_alpha))
-            return
+        assert len(insn.lhs) == len(insn.rhs)
+        assert len(insn.lhs) == 1
 
-        raise ValueError("Unknown solver type!")
+        class FunctionWithContext(object):
+
+            def __init__(self, expression, arg_name, context, functions):
+                self.eval_mapper = EvaluationMapper(self, functions)
+                self.expression = expression
+                self.arg_name = arg_name
+                self.context = context
+
+            def __call__(self, arg):
+                self.value = arg
+                return self.eval_mapper(self.expression)
+
+            def __getitem__(self, name):
+                if name == self.arg_name:
+                    return self.value
+                else:
+                    return self.context[name]
+
+        func = FunctionWithContext(insn.lhs[0] - insn.rhs[0],
+                                   insn.solve_component.name, self.state,
+                                   self.functions)
+
+        if insn.solver_id == 'newton':
+            guess_value = self.eval_mapper(insn.guess)
+            self.state[insn.assignee] = scipy.optimize.newton(func, guess_value)
+        else:
+            raise ValueError('Unknown solver id: ' + str(insn.solver_id))
 
     def exec_ReturnState(self, insn):
         return self.StateComputed(

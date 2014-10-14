@@ -28,6 +28,7 @@ from leap.method import Method
 from leap.vm.language import (AssignExpression, AssignSolvedRHS, ReturnState,
                               TimeIntegratorCode, CodeBuilder)
 from pymbolic import var
+from pymbolic.primitives import CallWithKwargs
 
 
 class ImplicitEulerMethod(Method):
@@ -57,10 +58,21 @@ class ImplicitEulerMethod(Method):
         cbuild.add_and_get_ids(
             AssignSolvedRHS(
                 assignee=self._state.name,
-                component_id=self._component_id,
+                solve_component=var('next_state'),
                 t=self._t + self._dt,
-                base=self._state,
-                scale=self._dt,
+                lhs=[
+                    var('next_state') - self._state -
+                    self._dt * CallWithKwargs(
+                        function=var(self._component_id),
+                        parameters=(),
+                        kw_parameters={
+                            't': self._t + self._dt,
+                            self._component_id: var('next_state')
+                        })
+                    ],
+                rhs=[0],
+                guess=self._state,
+                solver_id='newton',
                 id='step'),
             ReturnState(
                 time_id='final',

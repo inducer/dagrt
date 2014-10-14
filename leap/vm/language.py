@@ -26,7 +26,7 @@ THE SOFTWARE.
 """
 
 from pytools import RecordWithoutPickling, memoize_method
-from leap.vm.utils import get_variables
+from leap.vm.utils import get_variables, TODO
 
 import logging
 import six
@@ -183,9 +183,6 @@ class AssignSolvedRHS(Instruction):
 
     # FIXME This needs some thought.
     """
-
-    Find a value y that satifies y = base + scale * component_id(t, y).
-
     .. attribute:: assignee
 
         A string, the name of the variable being assigned to.
@@ -194,6 +191,7 @@ class AssignSolvedRHS(Instruction):
     .. attribute:: t
     .. attribute:: states
     .. attribute:: solve_component
+    .. attribute:: initial_guess
     .. attribute:: lhs
 
         A list of expressions involving
@@ -205,6 +203,8 @@ class AssignSolvedRHS(Instruction):
         linear system. This identifier is intended to match information
         about solvers which becomes available at the execution or
         code generation stage.
+
+    .. attribute:: guess
     """
 
     exec_method = six.moves.intern("exec_AssignSolvedRHS")
@@ -213,20 +213,14 @@ class AssignSolvedRHS(Instruction):
         return frozenset([self.assignee])
 
     def get_read_variables(self):
-        return get_variables(self.t) | get_variables(self.base) | \
-            get_variables(self.scale)
+        raise TODO()
 
     def __str__(self):
         lines = ["at time: %s" % self.t]
-
-        lines.append("{assignee} <- {component_id} such that "
-                     "{component_id} = {base} + {scale} * rhs:{component_id} "
-                     "(t={t}, {component_id})".format(assignee=self.assignee,
-                                                 component_id=self.component_id,
-                                                      base=self.base,
-                                                      scale=self.scale,
-                                                      t=self.t))
-
+        lines.append('{assignee} <- {solve_component} such that'.format(
+                assignee=self.assignee, solve_component=self.solve_component))
+        for lhs_line, rhs_line in zip(self.lhs, self.rhs):
+            lines.append('\t{lhs}={rhs}'.format(lhs=lhs_line, rhs=rhs_line))
         return "\n".join(lines)
 
 
