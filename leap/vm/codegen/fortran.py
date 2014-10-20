@@ -231,13 +231,13 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         for wrapped_line in wrap_line(line, level):
             self.emitter(wrapped_line)
 
-    def __call__(self, dag, optimize=True):
+    def __call__(self, dag, rhs_id_to_component_id, optimize=True):
         from .analysis import (
                 verify_code,
                 collect_rhs_names_from_dag)
         verify_code(dag)
 
-        function_names = collect_rhs_names_from_dag(dag)
+        rhs_names = collect_rhs_names_from_dag(dag)
 
         from .codegen_base import NewTimeIntegratorCode
         dag = NewTimeIntegratorCode.from_old(dag)
@@ -275,24 +275,14 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         sym_kind_table = SymbolKindFinder(self.rhs_id_to_component_id)([
             fd.function for fd in fdescrs])
 
-        print function_names
-        print sym_kind_table
-
-        1/0
-
-
-
-
-
-
         self.begin_emit(dag)
-        for stage, dependencies in dag.stages.iteritems():
+        for fdescr in fdescrs:
             code = dag_extractor(dag.instructions, dependencies)
-            function = assembler(code, dependencies)
+            function = assembler(stage_name, code, dependencies)
             if self.optimize:
                 function = optimizer(function)
             control_tree = extract_structure(function)
-            self.lower_function(stage, control_tree)
+            self.lower_function(stage_name, control_tree)
 
         self.finish_emit(dag)
 

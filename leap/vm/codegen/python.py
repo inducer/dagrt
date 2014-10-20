@@ -32,6 +32,7 @@ from leap.vm.utils import is_state_variable, get_unique_name
 from leap.vm.codegen.utils import wrap_line_base, exec_in_new_namespace
 from functools import partial
 import six
+import pymbolic.primitives as prim
 
 
 def pad_python(line, width):
@@ -68,6 +69,10 @@ class StepFailed(namedtuple("StepFailed", ["t"])):
 
         Floating point number.
     """
+
+class _function_symbol_container(object):
+    pass
+
 '''
 
 
@@ -95,12 +100,13 @@ class PythonNameManager(object):
     def __init__(self):
         self._local_map = {}
         self._global_map = {}
-        self._rhs_map = {}
+        self.function_map = {}
         import string
         self._ident_chars = set('_' + string.ascii_letters + string.digits)
 
     def _filter_name(self, var):
-        return ''.join(map(lambda c: c if c in self._ident_chars else '', var))
+        # FIXME: Should also filter Python identifiers
+        return ''.join(c if c in self._ident_chars else '' for c in var)
 
     def name_global(self, var):
         """Return the identifier for a global variable."""
@@ -125,23 +131,22 @@ class PythonNameManager(object):
         base = 'local_' + self._filter_name(var)
         return get_unique_name(base, self._local_map)
 
-    def name_rhs(self, var):
-        """Return the identifier for an RHS."""
+    def name_function(self, var):
+        """Return the identifier for a function."""
         try:
-            return self._rhs_map[var]
+            return self.function_map[var]
         except KeyError:
-            base = 'self.rhs_' + self._filter_name(var)
-            named_rhs = get_unique_name(base, self._rhs_map)
-            self._rhs_map[var] = named_rhs
-            return named_rhs
+            if not isinstance(var, prim.Variable):
+                raise ValueError("cannot manage names for builtin function symbols")
+
+            base = self._filter_name(var.name)
+            named_func = get_unique_name(base, self.function_map)
+            self.function_map[var] = named_func
+            return named_func
 
     def get_global_ids(self):
         """Return an iterator to the recognized global variable ids."""
         return six.iterkeys(self._global_map)
-
-    def get_rhs_ids(self):
-        """Return an iterator to the recognized RHS ids."""
-        return six.iterkeys(self._rhs_map)
 
     def __getitem__(self, name):
         """Provide an interface to PythonExpressionMapper to look up
@@ -163,7 +168,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         self._name_manager = PythonNameManager()
 
         self._expr_mapper = PythonExpressionMapper(self._name_manager,
-                                                   numpy='self.numpy')
+                                                   numpy='self._numpy')
 
     def __call__(self, dag, optimize=True):
         from .analysis import verify_code
@@ -208,9 +213,6 @@ class PythonCodeGenerator(StructuredCodeGenerator):
     def _expr(self, expr):
         return self._expr_mapper(expr)
 
-    def _rhs(self, rhs):
-        return self._name_manager.name_rhs(rhs)
-
     def _emit(self, line):
         level = self._class_emitter.level + self._emitter.level
         for wrapped_line in wrap_line(line, level):
@@ -228,15 +230,21 @@ class PythonCodeGenerator(StructuredCodeGenerator):
 
     def _emit_constructor(self):
         """Emit the constructor."""
-        emit = PythonFunctionEmitter('__init__', ('self', 'rhs_map'))
+        emit = PythonFunctionEmitter('__init__', ('self', 'function_map'))
         # Perform necessary imports.
         emit('import numpy')
-        emit('self.numpy = numpy')
-        # Save all the rhs components.
-        for rhs_id in self._name_manager.get_rhs_ids():
-            rhs = self._name_manager.name_rhs(rhs_id)
-            emit('{rhs} = rhs_map["{rhs_id}"]'.format(rhs=rhs, rhs_id=rhs_id))
+        emit('self._numpy = numpy')
+
+        # Make function symbols available
+        emit('self._functions = self._function_symbol_container()')
+        for function_id, py_function_id in six.iteritems(
+                self._name_manager.function_map):
+            emit('self._functions.{py_function_id} = function_map["{function_id}"]'
+                    .format(
+                        py_function_id=py_function_id,
+                        function_id=function_id))
         emit('return')
+        emit("")
         self._class_emitter.incorporate(emit)
 
     def _emit_set_up(self):
@@ -253,6 +261,8 @@ class PythonCodeGenerator(StructuredCodeGenerator):
             component_id = component_id[7:]
             emit('{component} = state["{component_id}"]'.format(
                 component=component, component_id=component_id))
+
+        emit("")
         self._class_emitter.incorporate(emit)
 
     def _emit_run(self):
@@ -288,6 +298,8 @@ class PythonCodeGenerator(StructuredCodeGenerator):
                     emit('yield self.StepCompleted(t=self.t)')
                     emit('break')
             emit('current_stage = next_stages[current_stage]')
+
+        emit("")
         self._class_emitter.incorporate(emit)
 
     def _emit_initialize(self):
@@ -295,6 +307,8 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         # with the NumpyInterpreter interface.
         emit = PythonFunctionEmitter('initialize', ('self',))
         emit('pass')
+
+        emit("")
         self._class_emitter.incorporate(emit)
 
     def finish_emit(self, dag):
@@ -310,6 +324,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         self._emitter = PythonFunctionEmitter('stage_' + name, ('self',))
 
     def emit_def_end(self):
+        self._emit("")
         self._class_emitter.incorporate(self._emitter)
         del self._emitter
 

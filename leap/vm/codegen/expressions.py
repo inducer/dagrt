@@ -106,16 +106,28 @@ class PythonExpressionMapper(StringifyMapper):
                    expr=self.rec(expr.expression, PREC_NONE),
                    ord=p_str)
 
-    def map_rhs_evaluation(self, expr, enclosing_prec):
-        kwargs_str = ', '.join(
+    def map_generic_call(self, symbol, args, kwargs):
+        args_strs = [
+                self.rec(val, PREC_NONE)
+                for val in args
+                ] + [
                 '{name}={expr}'.format(
                     name=name,
                     expr=self.rec(val, PREC_NONE))
-                for name, val in expr.arguments)
-        return '{rhs}(t={t}, {kwargs})'.format(
-                rhs=self._name_manager.name_rhs(expr.rhs_id),
-                t=self.rec(expr.t, PREC_NONE),
-                kwargs=kwargs_str)
+                for name, val in kwargs]
+
+        return 'self._functions.{rhs}({args})'.format(
+                rhs=self._name_manager.name_function(symbol),
+                args=", ".join(args_strs))
+
+    def map_call(self, expr, enclosing_prec):
+        return self.map_generic_call(
+                expr.function, expr.parameters, {})
+
+    def map_call_with_kwargs(self, expr, enclosing_prec):
+        return self.map_generic_call(
+                expr.function, expr.parameters,
+                expr.kw_parameters.items())
 
 
 string_mapper = PythonExpressionMapper(DictionaryWithDefault(lambda x: x))

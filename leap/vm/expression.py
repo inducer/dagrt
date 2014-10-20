@@ -38,7 +38,6 @@ from pymbolic.mapper.differentiator import DifferentiationMapper as \
 from pymbolic.mapper.dependency import DependencyMapper as DependencyMapperBase
 
 from pymbolic.mapper.stringifier import (
-        PREC_NONE,
         StringifyMapper as StringifyMapperBase)
 
 import logging
@@ -57,71 +56,24 @@ class LeapExpression(Expression):
         return StringifyMapper
 
 
-class RHSEvaluation(LeapExpression):
-    """
-    .. attribute:: rhs_id
-
-        Identifier of the right hand side to be evaluated. Typically a number
-        or a string.
-
-    .. attribute:: t
-
-        A :mod:`pymbolic` expression for the time at which the right hand side
-        is to be evaluated. Time is implicitly the first argument to each
-        expression.
-
-    .. attribute:: arguments
-
-        A tuple of tuples. The outer tuple is the vectorization list, where each
-        entry corresponds to one of the entries of :attr:`assignees`. The inner
-        lists corresponds to arguments being passed to the right-hand side
-        (identified by :attr:`component_id`) being invoked. These are tuples
-        ``(arg_name, expression)``, where *expression* is a :mod:`pymbolic`
-        expression.
-    """
-    def __init__(self, rhs_id, t, arguments):
-        self.rhs_id = rhs_id
-        self.t = t
-        self.arguments = arguments
-
-    def __getinitargs__(self):
-        return (self.t, self.arguments)
-
-    mapper_method = six.moves.intern("map_rhs_evaluation")
-
-
 class Norm(LeapExpression):
-    """
-    .. attribute:: argument
+    """Function symbol for norm evaluation.
+
     .. attribute:: p
     """
     def __init__(self, expression, p):
-        self.expression = expression
         self.p = p
 
     def __getinitargs__(self):
         return (self.expression, self.p)
 
-    mapper_method = six.moves.intern("map_norm")
+    mapper_method = six.moves.intern("map_norm_symbol")
 
 
 class DotProduct(LeapExpression):
-    """
-    .. attribute:: argument_1
+    """Function symbol for dot product evaluation."""
 
-        The complex conjugate of this argument is taken before computing the
-        dot product, if applicable.
-
-    .. attribute:: argument_2
-    """
-    def __init__(self, argument_1, argument_2):
-        self.argument_1 = argument_1
-        self.argument_2 = argument_2
-
-    def __getinitargs__(self):
-        return (self.argument_1, self.argument_2)
-
-    mapper_method = six.moves.intern("map_dot_product")
+    mapper_method = six.moves.intern("map_dot_product_symbol")
 
 # }}}
 
@@ -129,42 +81,22 @@ class DotProduct(LeapExpression):
 # {{{ mappers
 
 class StringifyMapper(StringifyMapperBase):
-    def map_rhs_evaluation(self, expr, enclosing_prec):
-        return "rhs:%s(%s)" % (
-                expr.rhs_id,
-                ", ".join(
-                    self.rec(arg, PREC_NONE)
-                    for var, arg in expr.arguments))
+    def map_norm_symbol(self, expr, enclosing_prec):
+        return "norm[%p]" % self.rec(expr.p)
 
-    def map_norm(self, expr, enclosing_prec):
-        return "||%s||_%s" % (
-                self.rec(expr.expression, PREC_NONE),
-                self.rec(expr.p, PREC_NONE))
-
-    def map_dot_product(self, expr, enclosing_prec):
-        return "(%s, %s)" % (
-                self.rec(expr.expression_1, PREC_NONE),
-                self.rec(expr.expression_2, PREC_NONE))
+    def map_dot_product_symbol(self, expr, enclosing_prec):
+        return "dot"
 
 
 class CombineMapper(CombineMapperBase):
-    def map_rhs_evaluation(self, expr):
-        return self.combine(
-                [self.rec(expr.t)]
-                + [self.rec(val) for name, val in expr.arguments])
-
-    def map_norm(self, expr):
-        return self.rec(expr.expression)
-
-    def map_dot_product(self, expr):
-        return self.combine([
-            self.rec(expr.expression_1),
-            self.rec(expr.expression_2),
-            ])
+    pass
 
 
 class DependencyMapper(DependencyMapperBase, CombineMapper):
-    pass
+    def map_norm(self, expr):
+        return frozenset()
+
+    map_dot_product = map_norm
 
 
 class ExtendedDependencyMapper(DependencyMapper):
@@ -183,24 +115,20 @@ variable_mapper = ExtendedDependencyMapper(composite_leaves=False)
 
 
 class EvaluationMapper(EvaluationMapperBase):
-    def __init__(self, context, functions, rhs_map):
+    def __init__(self, context, execution_backend):
         """
         :arg context: a mapping from variable names to values
         """
         EvaluationMapperBase.__init__(self, context)
-        self.functions = functions
-        self.rhs_map = rhs_map
+        self.execution_backend = execution_backend
 
     def map_call(self, expr):
-        func = self.functions[expr.function.name]
-        return func(*[self.rec(par) for par in expr.parameters])
-
-    def map_rhs_evaluation(self, expr):
-        rhs = self.rhs_map[expr.rhs_id]
-        t = self.rec(expr.t)
-        return rhs(t, **dict(
-            (name, self.rec(expr))
-            for name, expr in expr.arguments))
+        func = self.execution_backend.resolve(expr.function)
+        return func(
+                *[self.rec(par) for par in expr.parameters],
+                **dict(
+                    (name, self.rec(par))
+                    for name, par in expr.kw_parameters))
 
     def map_norm(self, expr):
         return la.norm(
@@ -226,7 +154,6 @@ class DifferentiationMapperWithContext(DifferentiationMapperBase):
     def map_variable(self, expr):
         return self.context[expr.name] if expr.name in self.context else \
             DifferentiationMapperBase.map_variable(self, expr)
-
 
 # }}}
 

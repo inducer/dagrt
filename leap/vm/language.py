@@ -136,9 +136,9 @@ def AssignRHS(
         assignees, component_id, t, rhs_arguments,
         id=None, depends_on=frozenset()):
     """
-    .. attribute:: assignees
+    .. attribute:: assignee
 
-        A tuple of strings, the names of the variable being assigned to.
+        A string, the name of the variable being assigned to.
 
     .. attribute:: component_id
 
@@ -151,12 +151,10 @@ def AssignRHS(
         is to be evaluated. Time is implicitly the first argument to each
         expression.
 
-    .. attribute:: rhs_arguments
+    .. attribute:: arguments
 
-        A tuple of tuples. The outer tuple is the vectorization list, where each
-        entry corresponds to one of the entries of :attr:`assignees`. The inner
-        lists corresponds to arguments being passed to the right-hand side
-        (identified by :attr:`component_id`) being invoked. These are tuples
+        A tuple that lists arguments being passed to the right-hand side
+        (identified by :attr:`component_id`) being invoked.  These are tuples
         ``(arg_name, expression)``, where *expression* is a :mod:`pymbolic`
         expression.
 
@@ -168,17 +166,16 @@ def AssignRHS(
         raise ValueError("only one assignee is supported")
 
     from warnings import warn
-    warn("AssignRHS is deprecated. Use the leap.vm.expression.RHSEvaluation node "
-            "with AssignExpression instead",
+    warn("AssignRHS is deprecated. Right-hand sides should be specified "
+            "as expressions, which may (or may not) call functions",
             DeprecationWarning, stacklevel=2)
 
     assignee, = assignees
     arg_list, = rhs_arguments
 
+    from pymbolic import var
     return AssignExpression(
-            assignee, expr.RHSEvaluation(
-                rhs_id=component_id,
-                t=t, arguments=arg_list),
+            assignee, var(component_id)(t=t, **dict(arg_list)),
             id=id, depends_on=depends_on)
 
 
@@ -251,7 +248,7 @@ def AssignNorm(assignee, expression, p=2, id=None, depends_on=frozenset()):
             "with AssignExpression instead",
             DeprecationWarning, stacklevel=2)
     return AssignExpression(
-            assignee, expr.Norm(expression, p),
+            assignee, expr.Norm(p)(expression),
             id=id, depends_on=depends_on)
 
 
@@ -272,7 +269,7 @@ def AssignDotProduct(
             "with AssignExpression instead",
             DeprecationWarning, stacklevel=2)
     return AssignExpression(
-            assignee, expr.DotProduct(expression_1, expression_2),
+            assignee, expr.DotProduct()(expression_1, expression_2),
             id=id, depends_on=depends_on)
 
 # }}}
