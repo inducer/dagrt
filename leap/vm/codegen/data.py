@@ -166,9 +166,21 @@ def unify(kind_a, kind_b):
 
 
 class KindInferenceMapper(Mapper):
-    def __init__(self, global_table, func_table):
+    """
+    .. attribute:: global_table
+
+        The :class:`SymbolKindTable` for the global scope.
+
+    .. attribute:: local_table
+
+        The :class:`SymbolKindTable` for the :class:`leap.vm.ir.Function`
+        currently being processed.
+    """
+
+    def __init__(self, global_table, local_table, rhs_id_to_component_id):
         self.global_table = global_table
-        self.func_table = func_table
+        self.local_table = local_table
+        self.rhs_id_to_component_id = rhs_id_to_component_id
 
     def map_constant(self, expr):
         if isinstance(expr, complex):
@@ -183,7 +195,7 @@ class KindInferenceMapper(Mapper):
             pass
 
         try:
-            return self.func_table[expr.name]
+            return self.local_table[expr.name]
         except KeyError:
             pass
 
@@ -224,12 +236,18 @@ class KindInferenceMapper(Mapper):
                     "is meaningless"
                     % type(self.rec(expr.exponent)).__name__)
 
+    def map_rhs_evaluation(self, expr):
+        return ODEComponent(self.rhs_id_to_component_id(expr.rhs_id))
+
 # }}}
 
 
 # {{{ symbol kind finder
 
 class SymbolKindFinder(object):
+    def __init__(self, rhs_id_to_component_id):
+        self.rhs_id_to_component_id = rhs_id_to_component_id
+
     def __call__(self, functions):
         """Return a :class:`SymbolKindTable`.
         """
@@ -255,29 +273,10 @@ class SymbolKindFinder(object):
             func_name, insn = insn_queue.pop()
 
             if isinstance(insn, ir.AssignInst):
-                if isinstance(insn.assignment, lang.AssignRHS):
-                    for name in insn.assignment.assignees:
-                        made_progress = True
-                        result._set(
-                                func_name, name,
-                                kind=ODEComponent(insn.assignment.component_id))
-
-                elif isinstance(insn.assignment, lang.AssignSolvedRHS):
+                if isinstance(insn.assignment, lang.AssignSolvedRHS):
                     made_progress = True
                     from leap.vm.utils import TODO
                     raise TODO()
-
-                elif isinstance(insn.assignment, lang.AssignDotProduct):
-                    made_progress = True
-                    result._set(
-                            func_name, insn.assignment.assignee,
-                            kind=Scalar(is_real_valued=False))
-
-                elif isinstance(insn.assignment, lang.AssignNorm):
-                    made_progress = True
-                    result._set(
-                            func_name, insn.assignment.assignee,
-                            kind=Scalar(is_real_valued=True))
 
                 elif isinstance(insn.assignment, tuple):
                     # These are function returns or initializations, we're not
@@ -289,7 +288,8 @@ class SymbolKindFinder(object):
                 elif isinstance(insn.assignment, (tuple, lang.AssignExpression)):
                     kim = KindInferenceMapper(
                             result.global_table,
-                            result.per_function_table.get(func_name, {}))
+                            result.per_function_table.get(func_name, {}),
+                            self.rhs_id_to_component_id)
                     try:
                         kind = kim(insn.assignment.expression)
                     except UnableToInferType:

@@ -338,17 +338,5 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         self._emit('{name} = {expr}'.format(name=self._name_manager[name],
                                            expr=self._expr(expr)))
 
-    def emit_assign_norm(self, name, expr, p):
-        # NOTE: Doesn't handle inf.
-        self._emit('{name} = self.numpy.linalg.norm({expr}, ord={ord})'.format(
-                   name=self._name_manager[name], expr=self._expr(expr), ord=p))
-
-    def emit_assign_rhs(self, name, rhs, time, arg):
-        kwargs = ', '.join('{name}={expr}'.format(name=name,
-            expr=self._expr(val)) for name, val in arg)
-        self._emit('{name} = {rhs}(t={t}, {kwargs})'.format(
-                name=self._name_manager[name], rhs=self._rhs(rhs),
-                t=self._expr(time), kwargs=kwargs))
-
     def emit_return(self, expr):
         self._emit('return {expr}'.format(expr=self._expr(expr)))

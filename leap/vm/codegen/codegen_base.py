@@ -25,7 +25,7 @@ THE SOFTWARE.
 from .structured_ir import SingleNode, IfThenNode, IfThenElseNode, BlockNode, \
     UnstructuredIntervalNode
 from .ir import AssignInst, JumpInst, BranchInst, ReturnInst
-from leap.vm.language import AssignExpression, AssignNorm, AssignRHS
+from leap.vm.language import AssignExpression
 from leap.vm.utils import TODO
 
 from pytools import RecordWithoutPickling
@@ -114,16 +114,6 @@ class StructuredCodeGenerator(object):
             elif isinstance(assignment, AssignExpression):
                 self.emit_assign_expr(assignment.assignee,
                                       assignment.expression)
-            elif isinstance(assignment, AssignNorm):
-                self.emit_assign_norm(assignment.assignee,
-                                      assignment.expression, assignment.p)
-            elif isinstance(assignment, AssignRHS):
-                # Lower each parallel assignment sequentially, for now.
-                rhs = assignment.component_id
-                time = assignment.t
-                args = assignment.rhs_arguments
-                for index, assignee in enumerate(assignment.assignees):
-                    self.emit_assign_rhs(assignee, rhs, time, args[index])
             else:
                 raise TODO('Lower all assignment types')
         elif isinstance(inst, JumpInst):

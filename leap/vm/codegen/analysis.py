@@ -23,8 +23,8 @@ THE SOFTWARE.
 """
 
 from pytools import memoize_method
-from pymbolic.mapper import CombineMapper
-from leap.vm.language import Instruction, If, AssignRHS
+from leap.vm.expression import CombineMapper
+from leap.vm.language import Instruction, If
 from .graphs import InstructionDAGIntGraph
 import six
 
@@ -145,7 +145,7 @@ def verify_code(code):
 
 # {{{ collect rhs names from DAG
 
-class _FunctionNameCollector(CombineMapper):
+class _RHSNameCollector(CombineMapper):
     def combine(self, values):
         import operator
         return reduce(operator.or_, values, set())
@@ -156,17 +156,13 @@ class _FunctionNameCollector(CombineMapper):
     def map_variable(self, expr):
         return set()
 
-    def map_call(self, expr):
-        return (set([expr.function.name])
-                | super(_FunctionNameCollector, self).map_call_with_kwargs(expr))
-
-    def map_call_with_kwargs(self, expr):
-        return (set([expr.function.name])
-                | super(_FunctionNameCollector, self).map_call_with_kwargs(expr))
+    def map_rhs_evaluation(self, expr):
+        return (set([expr.rhs_id])
+                | super(_RHSNameCollector, self).map_rhs_evaluation(expr))
 
 
-def collect_function_names_from_dag(dag):
-    fnc = _FunctionNameCollector()
+def collect_rhs_names_from_dag(dag):
+    fnc = _RHSNameCollector()
 
     result = set()
 
@@ -175,9 +171,6 @@ def collect_function_names_from_dag(dag):
 
     for insn in dag.instructions:
         insn.visit_expressions(visit)
-
-        if isinstance(insn, AssignRHS):
-            result.update(insn.component_id)
 
     return result
 

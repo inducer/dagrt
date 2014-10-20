@@ -25,17 +25,27 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools import RecordWithoutPickling, memoize_method
 from pymbolic.primitives import Expression
+from pymbolic.mapper import (  # noqa
+        IdentityMapper as IdentityMapperBase,
+        CombineMapper as CombineMapperBase,
+        WalkMapper as WalkMapperBase,
+        )
+from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
+from pymbolic.mapper.differentiator import DifferentiationMapper as \
+    DifferentiationMapperBase
+
+from pymbolic.mapper.dependency import DependencyMapper as DependencyMapperBase
 
 from pymbolic.mapper.stringifier import (
+        PREC_NONE,
         StringifyMapper as StringifyMapperBase)
 
-from leap.vm.utils import get_variables
-
 import logging
-import six
 import six.moves
+
+import numpy as np
+import numpy.linalg as la
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +84,10 @@ class RHSEvaluation(LeapExpression):
         self.t = t
         self.arguments = arguments
 
-    mapper_method = "map_rhs_evaluation"
+    def __getinitargs__(self):
+        return (self.t, self.arguments)
+
+    mapper_method = six.moves.intern("map_rhs_evaluation")
 
 
 class Norm(LeapExpression):
@@ -89,7 +102,7 @@ class Norm(LeapExpression):
     def __getinitargs__(self):
         return (self.expression, self.p)
 
-    mapper_method = "map_norm"
+    mapper_method = six.moves.intern("map_norm")
 
 
 class DotProduct(LeapExpression):
@@ -108,7 +121,7 @@ class DotProduct(LeapExpression):
     def __getinitargs__(self):
         return (self.argument_1, self.argument_2)
 
-    mapper_method = "map_dot_product"
+    mapper_method = six.moves.intern("map_dot_product")
 
 # }}}
 
@@ -116,8 +129,103 @@ class DotProduct(LeapExpression):
 # {{{ mappers
 
 class StringifyMapper(StringifyMapperBase):
+    def map_rhs_evaluation(self, expr, enclosing_prec):
+        return "rhs:%s(%s)" % (
+                expr.rhs_id,
+                ", ".join(
+                    self.rec(arg, PREC_NONE)
+                    for var, arg in expr.arguments))
+
+    def map_norm(self, expr, enclosing_prec):
+        return "||%s||_%s" % (
+                self.rec(expr.expression, PREC_NONE),
+                self.rec(expr.p, PREC_NONE))
+
+    def map_dot_product(self, expr, enclosing_prec):
+        return "(%s, %s)" % (
+                self.rec(expr.expression_1, PREC_NONE),
+                self.rec(expr.expression_2, PREC_NONE))
+
+
+class CombineMapper(CombineMapperBase):
+    def map_rhs_evaluation(self, expr):
+        return self.combine(
+                [self.rec(expr.t)]
+                + [self.rec(val) for name, val in expr.arguments])
+
     def map_norm(self, expr):
-        return "||%s||_%s" % (expr.argument, self.p)
+        return self.rec(expr.expression)
+
+    def map_dot_product(self, expr):
+        return self.combine([
+            self.rec(expr.expression_1),
+            self.rec(expr.expression_2),
+            ])
+
+
+class DependencyMapper(DependencyMapperBase, CombineMapper):
+    pass
+
+
+class ExtendedDependencyMapper(DependencyMapper):
+    """Extends DependencyMapper to handle values encountered in leap
+    IR.
+    """
+
+    def map_foreign(self, expr):
+        if expr is None or isinstance(expr, str):
+            return frozenset()
+        else:
+            return super(ExtendedDependencyMapper, self).map_foreign(expr)
+
+
+variable_mapper = ExtendedDependencyMapper(composite_leaves=False)
+
+
+class EvaluationMapper(EvaluationMapperBase):
+    def __init__(self, context, functions, rhs_map):
+        """
+        :arg context: a mapping from variable names to values
+        """
+        EvaluationMapperBase.__init__(self, context)
+        self.functions = functions
+        self.rhs_map = rhs_map
+
+    def map_call(self, expr):
+        func = self.functions[expr.function.name]
+        return func(*[self.rec(par) for par in expr.parameters])
+
+    def map_rhs_evaluation(self, expr):
+        rhs = self.rhs_map[expr.rhs_id]
+        t = self.rec(expr.t)
+        return rhs(t, **dict(
+            (name, self.rec(expr))
+            for name, expr in expr.arguments))
+
+    def map_norm(self, expr):
+        return la.norm(
+                self.rec(expr.expression),
+                self.rec(expr.p))
+
+    def map_dot_product(self, expr):
+        return np.vdot(
+                self.rec(expr.expression_1),
+                self.rec(expr.expression_2))
+
+
+class DifferentiationMapperWithContext(DifferentiationMapperBase):
+
+    def __init__(self, variable, functions, context):
+        DifferentiationMapperBase.__init__(self, variable, None)
+        self.context = context
+        self.functions = functions
+
+    def map_call(self, expr):
+        raise NotImplementedError
+
+    def map_variable(self, expr):
+        return self.context[expr.name] if expr.name in self.context else \
+            DifferentiationMapperBase.map_variable(self, expr)
 
 
 # }}}

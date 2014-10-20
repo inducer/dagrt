@@ -22,47 +22,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from leap.vm.expression import (DifferentiationMapperWithContext, EvaluationMapper)
 from collections import namedtuple
 import numpy as np
-import numpy.linalg as la
-
-from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
-from pymbolic.mapper.differentiator import DifferentiationMapper as \
-    DifferentiationMapperBase
 
 import six
 
 
 class FailStepException(Exception):
     pass
-
-
-class EvaluationMapper(EvaluationMapperBase):
-    def __init__(self, context, functions):
-        """
-        :arg context: a mapping from variable names to values
-        """
-        EvaluationMapperBase.__init__(self, context)
-        self.functions = functions
-
-    def map_call(self, expr):
-        func = self.functions[expr.function.name]
-        return func(*[self.rec(par) for par in expr.parameters])
-
-
-class DifferentiationMapperWithContext(DifferentiationMapperBase):
-
-    def __init__(self, variable, functions, context):
-        DifferentiationMapperBase.__init__(self, variable, None)
-        self.context = context
-        self.functions = functions
-
-    def map_call(self, expr):
-        raise NotImplementedError
-
-    def map_variable(self, expr):
-        return self.context[expr.name] if expr.name in self.context else \
-            DifferentiationMapperBase.map_variable(self, expr)
 
 
 class NumpyInterpreter(object):
@@ -118,9 +86,7 @@ class NumpyInterpreter(object):
                 "isnan": np.isnan,
                 }
 
-        self.rhs_map = rhs_map
-
-        self.eval_mapper = EvaluationMapper(self.state, self.functions)
+        self.eval_mapper = EvaluationMapper(self.state, self.functions, rhs_map)
 
     def set_up(self, t_start, dt_start, state):
         """
@@ -190,15 +156,6 @@ class NumpyInterpreter(object):
 
     # {{{ execution methods
 
-    def exec_AssignRHS(self, insn):
-        rhs = self.rhs_map[insn.component_id]
-        t = self.eval_mapper(insn.t)
-
-        for assignee, args in zip(insn.assignees, insn.rhs_arguments):
-            self.state[assignee] = rhs(t, **dict(
-                    (name, self.eval_mapper(expr))
-                    for name, expr in args))
-
     def exec_ReturnState(self, insn):
         return self.StateComputed(
                     t=self.eval_mapper(insn.time),
@@ -208,16 +165,6 @@ class NumpyInterpreter(object):
 
     def exec_AssignExpression(self, insn):
         self.state[insn.assignee] = self.eval_mapper(insn.expression)
-
-    def exec_AssignNorm(self, insn):
-        self.state[insn.assignee] = la.norm(
-                self.eval_mapper(insn.expression), insn.p)
-
-    def exec_AssignDotProduct(self, insn):
-        self.state[insn.assignee] = np.vdot(
-                self.eval_mapper(insn.expression_1),
-                self.eval_mapper(insn.expression_2)
-                )
 
     def exec_Raise(self, insn):
         raise insn.error_condition(insn.error_message)
@@ -234,12 +181,21 @@ class NumpyInterpreter(object):
     # }}}
 
 
+# {{{ step matrix finder
+
 class StepMatrixFinder(NumpyInterpreter):
-    """Constructs a step matrix on-the-fly while interpreting code."""
+    """Constructs a step matrix on-the-fly while interpreting code.
+
+    Assumes that all right-hand side evaluations occur as part of a
+    separate assignment instruction.
+    """
 
     def __init__(self, code, rhs_map, rhs_deriv_map, variables=None):
         NumpyInterpreter.__init__(self, code, rhs_map)
+
+        self.rhs_map = rhs_map
         self.rhs_deriv_map = rhs_deriv_map
+
         self.diff_states = {}
         if variables is None:
             variables = self.get_state_variables()
@@ -322,34 +278,42 @@ class StepMatrixFinder(NumpyInterpreter):
             if last_step:
                 break
 
-    def exec_AssignRHS(self, insn):
-        rhs = self.rhs_map[insn.component_id]
-        t = self.eval_mapper(insn.t)
+    def _exec_rhs_assignment(self, assignee, rhs_ev):
+        from leap.vm.expression import RHSEvaluation
+        assert isinstance(rhs_ev, RHSEvaluation)
 
-        evaluated = []
+        rhs = self.rhs_map[rhs_ev.rhs_id]
+        t = self.eval_mapper(rhs_ev.t)
 
-        for assignee, args in zip(insn.assignees, insn.rhs_arguments):
-            rhsargs = [(name, self.eval_mapper(expr)) for name, expr in args]
-            evaluated.append(rhsargs)
-            self.state[assignee] = rhs(t, **dict(rhsargs))
+        evaluated_rhsargs = [
+                (name, self.eval_mapper(arg_expr))
+                for name, arg_expr in rhs_ev.arguments]
+        self.state[assignee] = rhs(t, **dict(evaluated_rhsargs))
 
         # Compute derivatives of assignee by chain rule.
-        rhs_deriv = self.rhs_deriv_map[insn.component_id]
+        rhs_deriv = self.rhs_deriv_map[rhs_ev.rhs_id]
 
-        for assignee, args, ev_args in \
-                zip(insn.assignees, insn.rhs_arguments, evaluated):
-            for variable in self.variables:
-                total_deriv = 0
-                for n, arg in enumerate(args):
-                    deriv = self.diff_mappers[variable](arg[1])
-                    eval_deriv = self.eval_mapper(deriv)
-                    total_deriv += rhs_deriv(1 + n, t, **dict(ev_args)) * eval_deriv
-                self.diff_states[variable][assignee] = self.eval_mapper(total_deriv)
+        for variable in self.variables:
+            total_deriv = 0
+            for n, arg in enumerate(rhs_ev.arguments):
+                deriv = self.diff_mappers[variable](arg[1])
+                eval_deriv = self.eval_mapper(deriv)
+                total_deriv += (
+                        rhs_deriv(1 + n, t, **dict(evaluated_rhsargs))
+                        * eval_deriv)
+            self.diff_states[variable][assignee] = self.eval_mapper(total_deriv)
 
     def exec_AssignExpression(self, insn):
-        self.state[insn.assignee] = self.eval_mapper(insn.expression)
-        for variable in self.variables:
-            deriv = self.diff_mappers[variable](insn.expression)
-            self.diff_states[variable][insn.assignee] = self.eval_mapper(deriv)
+        from leap.vm.expression import RHSEvaluation
+
+        if isinstance(insn.expression, RHSEvaluation):
+            self._exec_rhs_assignment(insn.assignee, insn.expression)
+        else:
+            self.state[insn.assignee] = self.eval_mapper(insn.expression)
+            for variable in self.variables:
+                deriv = self.diff_mappers[variable](insn.expression)
+                self.diff_states[variable][insn.assignee] = self.eval_mapper(deriv)
+
+# }}}
 
 # vim: fdm=marker

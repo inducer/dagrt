@@ -255,7 +255,9 @@ def AssignNorm(assignee, expression, p=2, id=None, depends_on=frozenset()):
             id=id, depends_on=depends_on)
 
 
-def AssignDotProduct(assignee, expression_1, expression_2):
+def AssignDotProduct(
+        assignee, expression_1, expression_2,
+        id=None, depends_on=frozenset()):
     """
     .. attribute:: assignee
     .. attribute:: expression_1
