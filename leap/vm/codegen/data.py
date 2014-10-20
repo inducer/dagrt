@@ -60,7 +60,7 @@ class Scalar(SymbolKind):
     """
 
     def __init__(self, is_real_valued):
-        self.is_real_valued = is_real_valued
+        super(Scalar, self).__init__(is_real_valued=is_real_valued)
 
     def __getinitargs__(self):
         return (self.is_real_valued,)
@@ -68,7 +68,7 @@ class Scalar(SymbolKind):
 
 class ODEComponent(SymbolKind):
     def __init__(self, component_id):
-        self.component_id = component_id
+        super(ODEComponent, self).__init__(component_id=component_id)
 
     def __getinitargs__(self):
         return (self.component_id,)
@@ -113,6 +113,17 @@ class SymbolKindTable(object):
                             type(tbl[name]).__name__))
         else:
             tbl[name] = kind
+
+    def __str__(self):
+        def format_table(tbl, indent="  "):
+            return "\n".join(
+                    "%s%s: %s" % (indent, name, kind)
+                    for name, kind in tbl.items())
+
+        return "\n".join(
+                ["global:\n%s" % format_table(self.global_table)] + [
+                    "func '%s':\n%s" % (func_name, format_table(tbl))
+                    for func_name, tbl in self.per_function_table.items()])
 
 
 # {{{ type inference mapper

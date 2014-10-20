@@ -27,6 +27,7 @@ THE SOFTWARE.
 
 from pytools import RecordWithoutPickling, memoize_method
 from leap.vm.utils import get_variables
+from . import expression as expr
 
 import logging
 import six
@@ -122,10 +123,18 @@ class Instruction(RecordWithoutPickling):
         """
         raise NotImplementedError()
 
+    def visit_expressions(self, visitor):
+        """Calls ``visitor(expr)`` for every :class:`pymbolic.primitives.Expression`
+        contained in *self*.
+        """
+        raise NotImplementedError()
+
 
 # {{{ assignments
 
-class AssignRHS(Instruction):
+def AssignRHS(
+        assignees, component_id, t, rhs_arguments,
+        id=None, depends_on=frozenset()):
     """
     .. attribute:: assignees
 
@@ -150,30 +159,27 @@ class AssignRHS(Instruction):
         (identified by :attr:`component_id`) being invoked. These are tuples
         ``(arg_name, expression)``, where *expression* is a :mod:`pymbolic`
         expression.
+
+    :returns: a :class:`AssignExpression` instance
     """
 
-    def get_assignees(self):
-        return frozenset(self.assignees)
+    # It was never used with more than one RHS
+    if len(assignees) != 1:
+        raise ValueError("only one assignee is supported")
 
-    def get_read_variables(self):
-        result = get_variables(self.t)
-        for args in self.rhs_arguments:
-            for var, expr in args:
-                result = result | get_variables(expr)
+    from warnings import warn
+    warn("AssignRHS is deprecated. Use the leap.vm.expression.RHSEvaluation node "
+            "with AssignExpression instead",
+            DeprecationWarning, stacklevel=2)
 
-        return result
+    assignee, = assignees
+    arg_list, = rhs_arguments
 
-    def __str__(self):
-        lines = ["at time: %s" % self.t]
-        for assignee, rhs_args in zip(self.assignees, self.rhs_arguments):
-            lines.append("%s <- rhs:%s(%s)"
-                    % (assignee, self.component_id,
-                        ", ".join(str(arg)
-                            for var, arg in rhs_args)))
-
-        return "\n".join(lines)
-
-    exec_method = six.moves.intern("exec_AssignRHS")
+    return AssignExpression(
+            assignee, expr.RHSEvaluation(
+                rhs_id=component_id,
+                t=t, arguments=arg_list),
+            id=id, depends_on=depends_on)
 
 
 class AssignSolvedRHS(Instruction):
@@ -225,40 +231,31 @@ class AssignExpression(Instruction):
     def get_read_variables(self):
         return get_variables(self.expression)
 
+    def visit_expressions(self, visitor):
+        visitor(self.expression)
+
     def __str__(self):
         return "%s <- %s" % (self.assignee, self.expression)
 
     exec_method = "exec_AssignExpression"
 
 
-class AssignNorm(Instruction):
+def AssignNorm(assignee, expression, p=2, id=None, depends_on=frozenset()):
     """
     .. attribute:: assignee
     .. attribute:: expression
     .. attribute:: p
     """
-
-    def __init__(self, assignee, expression, p=2, id=None, depends_on=frozenset()):
-        Instruction.__init__(self,
-                assignee=assignee,
-                expression=expression,
-                p=p,
-                id=id,
-                depends_on=depends_on)
-
-    def get_assignees(self):
-        return frozenset([self.assignee])
-
-    def get_read_variables(self):
-        return get_variables(self.expression)
-
-    def __str__(self):
-        return "%s <- ||%s||_%s" % (self.assignee, self.expression, self.p)
-
-    exec_method = "exec_AssignNorm"
+    from warnings import warn
+    warn("AssignNorm is deprecated. Use the leap.vm.expression.Norm node "
+            "with AssignExpression instead",
+            DeprecationWarning, stacklevel=2)
+    return AssignExpression(
+            assignee, expr.Norm(expression, p),
+            id=id, depends_on=depends_on)
 
 
-class AssignDotProduct(Instruction):
+def AssignDotProduct(assignee, expression_1, expression_2):
     """
     .. attribute:: assignee
     .. attribute:: expression_1
@@ -268,16 +265,13 @@ class AssignDotProduct(Instruction):
 
     .. attribute:: expression_2
     """
-
-    def get_assignees(self):
-        return frozenset(self.assignees)
-
-    def get_read_variables(self):
-        return (
-                get_variables(self.expression_1)
-                | get_variables(self.expression_2))
-
-    exec_method = "exec_AssignDotProduct"
+    from warnings import warn
+    warn("AssignNorm is deprecated. Use the leap.vm.expression.DotProduct node "
+            "with AssignExpression instead",
+            DeprecationWarning, stacklevel=2)
+    return AssignExpression(
+            assignee, expr.DotProduct(expression_1, expression_2),
+            id=id, depends_on=depends_on)
 
 # }}}
 
@@ -299,6 +293,9 @@ class ReturnState(Instruction):
 
     def get_read_variables(self):
         return get_variables(self.expression)
+
+    def visit_expressions(self, visitor):
+        visitor(self.expression)
 
     def __str__(self):
         return "Ret %s at %s as %s" % (
@@ -334,6 +331,9 @@ class Raise(Instruction):
     def get_read_variables(self):
         return frozenset()
 
+    def visit_expressions(self, visitor):
+        pass
+
     def __str__(self):
         result = "Raise %s" % self.error_condition.__name__
 
@@ -354,6 +354,9 @@ class FailStep(Instruction):
 
     def get_read_variables(self):
         return frozenset()
+
+    def visit_expressions(self, visitor):
+        pass
 
     def __str__(self):
         return "FailStep"
@@ -380,6 +383,9 @@ class If(Instruction):
 
     def get_read_variables(self):
         return get_variables(self.condition)
+
+    def visit_expressions(self, visitor):
+        visitor(self.condition)
 
     def __str__(self):
         return "If %s" % self.condition

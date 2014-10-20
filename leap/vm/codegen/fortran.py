@@ -219,8 +219,12 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             self.emitter(wrapped_line)
 
     def __call__(self, dag, optimize=True):
-        from .analysis import verify_code
+        from .analysis import (
+                verify_code,
+                collect_function_names_from_dag)
         verify_code(dag)
+
+        function_names = collect_function_names_from_dag(dag)
 
         from .codegen_base import NewTimeIntegratorCode
         dag = NewTimeIntegratorCode.from_old(dag)
@@ -257,6 +261,9 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
         sym_kind_table = SymbolKindFinder()([
             fd.function for fd in fdescrs])
+
+        print function_names
+        print sym_kind_table
 
         1/0
 
