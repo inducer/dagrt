@@ -234,10 +234,10 @@ class FortranCodeGenerator(StructuredCodeGenerator):
     def __call__(self, dag, rhs_id_to_component_id, optimize=True):
         from .analysis import (
                 verify_code,
-                collect_rhs_names_from_dag)
+                collect_function_names_from_dag)
         verify_code(dag)
 
-        rhs_names = collect_rhs_names_from_dag(dag)
+        func_names = collect_function_names_from_dag(dag)
 
         from .codegen_base import NewTimeIntegratorCode
         dag = NewTimeIntegratorCode.from_old(dag)

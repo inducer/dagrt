@@ -71,11 +71,10 @@ class NumpyInterpreter(object):
         """
 # }}}
 
-    def __init__(self, code, rhs_map):
+    def __init__(self, code, function_map):
         """
         :arg code: an instance of :class:`leap.vm.TimeIntegratorCode`
-        :arg rhs_map: a mapping from component ids to right-hand-side
-            functions
+        :arg function_map: a mapping from function identifiers to functions
         """
         self.code = code
         from leap.vm.language import ExecutionController
@@ -88,9 +87,9 @@ class NumpyInterpreter(object):
                 }
 
         # Ensure none of the names in the RHS map conflict with the builtins.
-        assert not set(builtins) & set(rhs_map)
+        assert not set(builtins) & set(function_map)
 
-        self.functions = dict(builtins, **rhs_map)
+        self.functions = dict(builtins, **function_map)
 
         self.eval_mapper = EvaluationMapper(self.state, self.functions)
 
@@ -285,7 +284,7 @@ class StepMatrixFinder(NumpyInterpreter):
                 break
 
     def _exec_func_eval_assignment(self, assignee, call):
-        func = self.function_map[call.rhs_id]
+        func = self.function_map[call.function.name]
 
         from pymbolic.primitives import CallWithKwargs
         evaluated_args = [
@@ -295,23 +294,34 @@ class StepMatrixFinder(NumpyInterpreter):
         if isinstance(call, CallWithKwargs):
             evaluated_kwargs = [
                     (name, self.eval_mapper(arg_expr))
-                    for name, arg_expr in call.kw_parameters]
+                    for name, arg_expr in call.kw_parameters.items()]
         else:
             evaluated_kwargs = []
 
         self.state[assignee] = func(*evaluated_args, **dict(evaluated_kwargs))
 
         # Compute derivatives of assignee by chain rule.
-        func_deriv = self.function_deriv_map[call.rhs_id]
+        func_deriv = self.function_deriv_map[call.function.name]
 
         for variable in self.variables:
             total_deriv = 0
-            for n, arg in enumerate(call.arguments):
-                deriv = self.diff_mappers[variable](arg[1])
+
+            for i, arg in enumerate(call.parameters):
+                deriv = self.diff_mappers[variable](arg)
                 eval_deriv = self.eval_mapper(deriv)
                 total_deriv += (
-                        func_deriv(1 + n, *evaluated_args, **dict(evaluated_kwargs))
+                        func_deriv(i, *evaluated_args, **dict(evaluated_kwargs))
                         * eval_deriv)
+
+            if isinstance(call, CallWithKwargs):
+                for arg_name, arg in call.kw_parameters.items():
+                    deriv = self.diff_mappers[variable](arg)
+                    eval_deriv = self.eval_mapper(deriv)
+                    total_deriv += (
+                            func_deriv(arg_name,
+                                *evaluated_args, **dict(evaluated_kwargs))
+                            * eval_deriv)
+
             self.diff_states[variable][assignee] = self.eval_mapper(total_deriv)
 
     def exec_AssignExpression(self, insn):

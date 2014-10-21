@@ -145,7 +145,7 @@ def verify_code(code):
 
 # {{{ collect rhs names from DAG
 
-class _RHSNameCollector(CombineMapper):
+class _FunctionNameCollector(CombineMapper):
     def combine(self, values):
         import operator
         return six.moves.reduce(operator.or_, values, set())
@@ -156,13 +156,17 @@ class _RHSNameCollector(CombineMapper):
     def map_variable(self, expr):
         return set()
 
-    def map_rhs_evaluation(self, expr):
-        return (set([expr.rhs_id])
-                | super(_RHSNameCollector, self).map_rhs_evaluation(expr))
+    def map_call(self, expr):
+        return (set([expr.function])
+                | super(_FunctionNameCollector, self).map_call(expr))
+
+    def map_call_with_kwargs(self, expr):
+        return (set([expr.function])
+                | super(_FunctionNameCollector, self).map_call_with_kwargs(expr))
 
 
-def collect_rhs_names_from_dag(dag):
-    fnc = _RHSNameCollector()
+def collect_function_names_from_dag(dag):
+    fnc = _FunctionNameCollector()
 
     result = set()
 

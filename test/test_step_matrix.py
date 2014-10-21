@@ -47,7 +47,7 @@ def test_step_matrix(show_matrix=True, show_dag=False):
     def rhs(t, y):
         return -y
 
-    def rhs_deriv(n, t, y):
+    def rhs_deriv(deriv_arg, t, y):
         return -1
 
     y = 1.0
