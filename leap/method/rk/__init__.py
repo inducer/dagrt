@@ -195,7 +195,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                         "rel_error_raw", (
                             var("high_order_end_state") - var("low_order_end_state")
                             ) / (
-                                var("len")(state)**0.5
+                                var("<builtin>len")(state)**0.5
                                 *
                                 (self.atol + self.rtol * Max((
                                     var("norm_start_state"),
@@ -218,7 +218,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                     If(
                         condition=LogicalOr((
                             Comparison(var("rel_error"), ">", 1),
-                            var("isnan")(var("rel_error"))
+                            var("<builtin>isnan")(var("rel_error"))
                             )),
                         then_depends_on=["rej_step"],
                         else_depends_on=["acc_adjust_dt", last_rhs_assignment_id,
@@ -229,7 +229,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                     # reject step
 
                     If(
-                        condition=var("isnan")(var("rel_error")),
+                        condition=var("<builtin>isnan")(var("rel_error")),
                         then_depends_on=["min_adjust_dt"],
                         else_depends_on=["rej_adjust_dt"],
                         depends_on=["rel_error_zero_check"],

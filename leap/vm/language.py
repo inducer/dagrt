@@ -82,11 +82,12 @@ Built-in functions:
 
 * ``<builtin>norm(x, ord=p)`` returns the *p*-norm of *x*.
 
-* ``<builtin>dot_product(x, y)`` return the dot product of *x* and *y*.
+* ``<builtin>dot_product(x, y)`` return the dot product of *x* and *y*. The
+  complex conjugate of *x* is taken first, if applicable.
 
-* ``len(state)`` returns the number of degrees of freedom in *state*
+* ``<builtin>len(state)`` returns the number of degrees of freedom in *state*
 
-* ``isnan(state)`` returns True if there are any NaNs in *state*
+* ``<builtin>isnan(state)`` returns True if there are any NaNs in *state*
 """
 
 

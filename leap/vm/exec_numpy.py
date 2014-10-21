@@ -81,12 +81,14 @@ class NumpyInterpreter(object):
         self.exec_controller = ExecutionController(code)
         self.state = {}
         builtins = {
-                "len": len,
-                "isnan": np.isnan,
-                "<builtin>norm": np.linalg.norm
+                "<builtin>len": len,
+                "<builtin>isnan": np.isnan,
+                "<builtin>norm": np.linalg.norm,
+                "<builtin>dot_product": np.vdot
                 }
 
-        # Ensure none of the names in the RHS map conflict with the builtins.
+        # Ensure none of the names in the function map conflict with the
+        # builtins.
         assert not set(builtins) & set(function_map)
 
         self.functions = dict(builtins, **function_map)
