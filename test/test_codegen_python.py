@@ -28,8 +28,7 @@ import sys
 import pytest
 import numpy as np
 
-from leap.vm.language import AssignExpression, AssignNorm, AssignRHS, If, \
-    ReturnState
+from leap.vm.language import AssignExpression, If, ReturnState
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
 from leap.vm.codegen import PythonCodeGenerator
 from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
@@ -87,44 +86,19 @@ def test_basic_conditional_codegen():
     assert isinstance(hist[1], method.StepCompleted)
 
 
-@pytest.mark.parametrize(("order"), [2, np.inf])
-def test_basic_assign_norm_codegen(order):
-    """Test code generation of the AssignNorm instruction."""
-    cbuild = CodeBuilder()
-    cbuild.add_and_get_ids(
-        AssignExpression(id='assign_1', assignee='x',
-                         expression=np.array([-3, 4])),
-        AssignNorm(id='assign_2', assignee='n', expression=var('x'), p=order,
-                   depends_on=['assign_1']),
-        ReturnState(id='return', time=0, time_id='final',
-                    expression=var('n'), component_id='<state>',
-                    depends_on=['assign_2']))
-    cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-        instructions=cbuild.instructions, step_dep_on=['return'],
-        step_before_fail=False)
-    codegen = PythonCodeGenerator(class_name='Method')
-    Method = codegen.get_class(code)
-    method = Method({})
-    method.set_up(t_start=0, dt_start=0, state={})
-    method.initialize()
-    hist = [s for s in method.run(t_end=0)]
-    assert len(hist) == 2
-    assert isinstance(hist[0], method.StateComputed)
-    assert np.isclose(hist[0].state_component, np.linalg.norm([3, 4], ord=order))
-    assert isinstance(hist[1], method.StepCompleted)
-
-
 def test_basic_assign_rhs_codegen():
-    """Test whether the code generator generates RHS code properly."""
+    """Test whether the code generator generates RHS evaluation code
+    properly."""
     cbuild = CodeBuilder()
     cbuild.add_and_get_ids(
-        AssignRHS(id='assign_rhs1', assignees=('<state>y',),
-                  t=var('<t>'), component_id='y', depends_on=[],
-                  rhs_arguments=((),)),
-        AssignRHS(id='assign_rhs2', assignees=('<state>y',),
-                  t=var('<t>'), component_id='yy', depends_on=['assign_rhs1'],
-                  rhs_arguments=((('y', var('<state>y')),),)),
+        AssignExpression(id='assign_rhs1',
+                         assignee='<state>y',
+                         expression=var('y')(t=var('<t>')),
+                         depends_on=[]),
+        AssignExpression(id='assign_rhs2',
+                         assignee='<state>y',
+                         expression=var('yy')(t=var('<t>'), y=var('<state>y')),
+                         depends_on=['assign_rhs1']),
         ReturnState(id='return', time=0, time_id='final',
             expression=var('<state>y'), component_id='<state>',
             depends_on=['assign_rhs2'])
