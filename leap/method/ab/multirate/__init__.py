@@ -103,7 +103,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
     def emit_initialization(self, cbuild):
         """Initialize method variables. Returns the initialization list."""
 
-        from leap.vm.language import AssignRHS, AssignExpression
+        from leap.vm.language import AssignExpression
 
         add_and_get_ids = cbuild.add_and_get_ids
         initialization = []
@@ -118,10 +118,9 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         # Initial value of RK derivative matrix
         initialization += add_and_get_ids(
-            AssignRHS(assignees=(self.rk_rhs.name,), t=self.t,
-            component_id=self.coupled.name,
-            rhs_arguments=((('y', self.rk_y),),), depends_on=[yval]))
-
+            AssignExpression(assignee=self.rk_rhs.name,
+                expression=self.coupled(t=self.t, y=self.rk_y),
+                depends_on=[yval]))
         cbuild.commit()
 
         return initialization
@@ -366,7 +365,7 @@ class MRABCodeEmitter(MRABProcessor):
         MRABProcessor.integrate_in_time(self, insn)
 
     def history_update(self, insn):
-        from leap.vm.language import AssignRHS, AssignExpression
+        from leap.vm.language import AssignExpression
 
         time_slow = self.var_time_level[insn.slow_arg]
 
@@ -387,10 +386,10 @@ class MRABCodeEmitter(MRABProcessor):
 
         # Compute the new RHS
         assignments += self.cbuild.add_and_get_ids(
-            AssignRHS(assignees=(hist[0].name,),
-            component_id=rhs.name, t=t, rhs_arguments=((('u',
-            self.context[insn.fast_arg]), ('v', self.context[insn.slow_arg])),),
-                      depends_on=self.last_step + assignments))
+            AssignExpression(assignee=hist[0].name,
+                expression=rhs(t=t, u=self.context[insn.fast_arg],
+                               v=self.context[insn.slow_arg]),
+                depends_on=self.last_step + assignments))
 
         self.last_step = assignments
 

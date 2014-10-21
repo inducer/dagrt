@@ -52,10 +52,12 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
             supported.
         """
         from leap.vm.language import (
-                AssignRHS, AssignNorm, AssignExpression,
+                AssignNorm, AssignExpression,
                 ReturnState, If, Raise, FailStep,
                 TimeIntegratorCode,
                 CodeBuilder)
+
+        from pymbolic.primitives import CallWithKwargs
 
         cbuild = CodeBuilder()
 
@@ -77,11 +79,12 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
             limiter = lambda x: x
 
         initialization_dep_on = add_and_get_ids(
-                AssignRHS(
-                    assignees=(last_rhs.name,),
-                    component_id=component_id,
-                    t=var("<t>"),
-                    rhs_arguments=(((component_id, state),),)))
+            AssignExpression(
+                assignee=last_rhs.name,
+                expression=CallWithKwargs(
+                    function=var(component_id), parameters=(),
+                    kw_parameters={"t": var("<t>"), component_id: state})
+                ))
 
         cbuild.commit()
 
@@ -108,13 +111,13 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                 all_rhs_eval_ids.append(rhs_insn_id)
 
                 add_and_get_ids(
-                        AssignRHS(
-                            assignees=(rhs_id,),
-                            component_id=component_id,
-                            t=t + c*dt,
-                            rhs_arguments=(((component_id, stage_state),),),
-                            id=rhs_insn_id,
-                            ))
+                    AssignExpression(
+                        assignee=rhs_id,
+                        expression=CallWithKwargs(function=var(component_id),
+                            parameters=(), kw_parameters={"t": t + c * dt,
+                                component_id: stage_state}),
+                        id=rhs_insn_id)
+                    )
 
                 this_rhs = var(rhs_id)
 

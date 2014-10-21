@@ -31,6 +31,7 @@ THE SOFTWARE.
 import numpy
 from leap.method.ab.utils import make_ab_coefficients
 from leap.method import Method
+from pymbolic.primitives import CallWithKwargs
 
 
 class AdamsBashforthTimeStepperBase(Method):
@@ -89,7 +90,7 @@ class AdamsBashforthTimeStepperBase(Method):
         Returns a pair [y, rhs] of instruction names that compute the new value
         of y and the rhs at t + dt."""
 
-        from leap.vm.language import AssignRHS, AssignExpression
+        from leap.vm.language import AssignExpression
         from pymbolic import var
 
         add_and_get_ids = cbuild.add_and_get_ids
@@ -113,11 +114,12 @@ class AdamsBashforthTimeStepperBase(Method):
                 rhs_id = cbuild.fresh_var_name(label + ('_rhs%d' % istage) + "_")
                 rhs_insn_id = cbuild.fresh_insn_id(label+('_ev_rhs%d' % istage)+"_")
 
-                add_and_get_ids(AssignRHS(assignees=(rhs_id, ),
-                                component_id=component_id, t=t + c
-                                * dt, rhs_arguments=((('y', stage_state), ), ),
-                                depends_on=depends_on + all_rhs_eval_ids,
-                                id=rhs_insn_id))
+                add_and_get_ids(AssignExpression(
+                        assignee=var(rhs_id),
+                        expression=var(component_id)(t=t + c * dt,
+                                                     y=stage_state),
+                        depends_on=depends_on + all_rhs_eval_ids,
+                        id=rhs_insn_id))
 
                 all_rhs_eval_ids.append(rhs_insn_id)
                 this_rhs = var(rhs_id)
@@ -191,7 +193,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         return rk
 
     def __call__(self, component_id):
-        from leap.vm.language import AssignRHS, AssignExpression, If, \
+        from leap.vm.language import AssignExpression, If, \
             TimeIntegratorCode, CodeBuilder
 
         cbuild = CodeBuilder()
@@ -217,10 +219,11 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         initialization_dep_on = \
             add_and_get_ids(AssignExpression(step.name, 0),
-                            AssignRHS(assignees=(last_rhs.name, ),
-                            component_id=component_id, t=t,
-                            rhs_arguments=(((component_id, state), ),)))
-
+                            AssignExpression(assignee=last_rhs.name,
+                                expression=CallWithKwargs(
+                                    function=var(component_id),
+                                    parameters=(), kw_parameters={'t': t,
+                                    component_id: state})))
         cbuild.commit()
 
         # RK bootstrap stage
@@ -236,9 +239,11 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         # AB stage
 
         add_and_get_ids(
-            AssignRHS(assignees=(curr_rhs.name,), component_id=component_id,
-                      t=t, rhs_arguments=(((component_id, state),),),
-                      id='compute_curr_rhs'),
+            AssignExpression(assignee=curr_rhs.name,
+                expression=CallWithKwargs(function=var(component_id),
+                    parameters=(),
+                    kw_parameters={'t': t, component_id: state}),
+                id='compute_curr_rhs'),
             AssignExpression(state.name, state + dt *
                 (sum(self.coeffs[i] * fvals[i] for i in range(0, self.order-1))
                  + curr_rhs * self.coeffs[-1]), id='ab_update_state',
