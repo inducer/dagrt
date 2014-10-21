@@ -22,8 +22,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pymbolic.mapper.stringifier import StringifyMapper
+from pymbolic.mapper.stringifier import (
+        StringifyMapper, PREC_NONE)
 from pytools import DictionaryWithDefault
+import numpy as np
 
 
 # {{{ fortran
@@ -31,14 +33,12 @@ from pytools import DictionaryWithDefault
 class FortranExpressionMapper(StringifyMapper):
     """Converts expressions to Fortran code."""
 
-    def __init__(self, variable_names):
-        """variable_names is a map from a variable name (as a string) to its
+    def __init__(self, name_manager):
+        """name_manager is a map from a variable name (as a string) to its
         representation (as a string).
-
-        numpy is the name of the numpy module.
         """
         super(FortranExpressionMapper, self).__init__(repr)
-        self._variable_names = variable_names
+        self._name_manager = name_manager
 
     def map_foreign(self, expr, *args):
         if expr is None:
@@ -49,7 +49,7 @@ class FortranExpressionMapper(StringifyMapper):
             return super(FortranExpressionMapper, self).map_foreign(expr, *args)
 
     def map_variable(self, expr, enclosing_prec):
-        return self._variable_names[expr.name]
+        return self._name_manager[expr.name]
 
     def map_numpy_array(self, expr, *args):
         if len(expr.shape) > 1:
@@ -64,18 +64,33 @@ class FortranExpressionMapper(StringifyMapper):
 
 # {{{ python
 
+def _map_python_constant(constant):
+    if isinstance(constant, (float, np.number)):
+        if np.isinf(constant):
+            return "float('inf')"
+        elif np.isnan(constant):
+            return "float('nan')"
+    return repr(constant)
+
+
 class PythonExpressionMapper(StringifyMapper):
     """Converts expressions to Python code."""
 
-    def __init__(self, variable_names, numpy='numpy'):
-        """variable_names is a map from a variable name (as a string) to its
+    def __init__(self, name_manager, numpy='numpy'):
+        """name_manager is a map from a variable name (as a string) to its
         representation (as a string).
 
         numpy is the name of the numpy module.
         """
-        super(PythonExpressionMapper, self).__init__(repr)
-        self._variable_names = variable_names
+        super(PythonExpressionMapper, self).__init__(_map_python_constant)
+        self._name_manager = name_manager
         self._numpy = numpy
+        self._builtins = {
+            "<builtin>norm": "{numpy}.linalg.norm({args})",
+            "<builtin>len": "len({args})",
+            "<builtin>isnan": "{numpy}.isnan({args})",
+            "<builtin>dot_product": "{numpy}.vdot({args})"
+            }
 
     def map_foreign(self, expr, *args):
         if expr is None:
@@ -86,7 +101,7 @@ class PythonExpressionMapper(StringifyMapper):
             return super(PythonExpressionMapper, self).map_foreign(expr, *args)
 
     def map_variable(self, expr, enclosing_prec):
-        return self._variable_names[expr.name]
+        return self._name_manager[expr.name]
 
     def map_numpy_array(self, expr, *args):
         if len(expr.shape) > 1:
@@ -95,6 +110,35 @@ class PythonExpressionMapper(StringifyMapper):
         elements = [self.rec(element, *args) for element in expr]
         return '{numpy}.array([{elements}],dtype=\'object\')'.format(
             numpy=self._numpy, elements=', '.join(elements))
+
+    def map_generic_call(self, symbol, args, kwargs):
+        args_strs = [
+                self.rec(val, PREC_NONE)
+                for val in args
+                ] + [
+                '{name}={expr}'.format(
+                    name=name,
+                    expr=self.rec(val, PREC_NONE))
+                for name, val in kwargs]
+
+        if symbol.name in self._builtins:
+            call_template = self._builtins[symbol.name]
+            return call_template.format(numpy=self._numpy,
+                                        args=", ".join(args_strs))
+
+        return 'self._functions.{rhs}({args})'.format(
+                rhs=self._name_manager.name_function(symbol),
+                args=", ".join(args_strs))
+
+    def map_call(self, expr, enclosing_prec):
+        return self.map_generic_call(
+                expr.function, expr.parameters, {})
+
+    def map_call_with_kwargs(self, expr, enclosing_prec):
+        return self.map_generic_call(
+                expr.function, expr.parameters,
+                expr.kw_parameters.items())
+
 
 string_mapper = PythonExpressionMapper(DictionaryWithDefault(lambda x: x))
 

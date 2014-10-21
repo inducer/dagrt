@@ -79,8 +79,14 @@ under the control of the user.
 
 Built-in functions:
 
-* ``len(state)`` returns the number of degrees of freedom in *state*
-* ``isnan(state)`` returns True if there are any NaNs in *state*
+* ``<builtin>norm(x, ord=p)`` returns the *p*-norm of *x*.
+
+* ``<builtin>dot_product(x, y)`` return the dot product of *x* and *y*. The
+  complex conjugate of *x* is taken first, if applicable.
+
+* ``<builtin>len(state)`` returns the number of degrees of freedom in *state*
+
+* ``<builtin>isnan(state)`` returns True if there are any NaNs in *state*
 """
 
 
@@ -122,14 +128,22 @@ class Instruction(RecordWithoutPickling):
         """
         raise NotImplementedError()
 
+    def visit_expressions(self, visitor):
+        """Calls ``visitor(expr)`` for every :class:`pymbolic.primitives.Expression`
+        contained in *self*.
+        """
+        raise NotImplementedError()
+
 
 # {{{ assignments
 
-class AssignRHS(Instruction):
+def AssignRHS(
+        assignees, component_id, t, rhs_arguments,
+        id=None, depends_on=frozenset()):
     """
-    .. attribute:: assignees
+    .. attribute:: assignee
 
-        A tuple of strings, the names of the variable being assigned to.
+        A string, the name of the variable being assigned to.
 
     .. attribute:: component_id
 
@@ -142,38 +156,32 @@ class AssignRHS(Instruction):
         is to be evaluated. Time is implicitly the first argument to each
         expression.
 
-    .. attribute:: rhs_arguments
+    .. attribute:: arguments
 
-        A tuple of tuples. The outer tuple is the vectorization list, where each
-        entry corresponds to one of the entries of :attr:`assignees`. The inner
-        lists corresponds to arguments being passed to the right-hand side
-        (identified by :attr:`component_id`) being invoked. These are tuples
+        A tuple that lists arguments being passed to the right-hand side
+        (identified by :attr:`component_id`) being invoked.  These are tuples
         ``(arg_name, expression)``, where *expression* is a :mod:`pymbolic`
         expression.
+
+    :returns: a :class:`AssignExpression` instance
     """
 
-    def get_assignees(self):
-        return frozenset(self.assignees)
+    # It was never used with more than one RHS
+    if len(assignees) != 1:
+        raise ValueError("only one assignee is supported")
 
-    def get_read_variables(self):
-        result = get_variables(self.t)
-        for args in self.rhs_arguments:
-            for var, expr in args:
-                result = result | get_variables(expr)
+    from warnings import warn
+    warn("AssignRHS is deprecated. Right-hand sides should be specified "
+            "as expressions, which may (or may not) call functions",
+            DeprecationWarning, stacklevel=2)
 
-        return result
+    assignee, = assignees
+    arg_list, = rhs_arguments
 
-    def __str__(self):
-        lines = ["at time: %s" % self.t]
-        for assignee, rhs_args in zip(self.assignees, self.rhs_arguments):
-            lines.append("%s <- rhs:%s(%s)"
-                    % (assignee, self.component_id,
-                        ", ".join(str(arg)
-                            for var, arg in rhs_args)))
-
-        return "\n".join(lines)
-
-    exec_method = six.moves.intern("exec_AssignRHS")
+    from pymbolic import var
+    return AssignExpression(
+            assignee, var(component_id)(t=t, **dict(arg_list)),
+            id=id, depends_on=depends_on)
 
 
 class AssignSolvedRHS(Instruction):
@@ -242,40 +250,33 @@ class AssignExpression(Instruction):
     def get_read_variables(self):
         return get_variables(self.expression)
 
+    def visit_expressions(self, visitor):
+        visitor(self.expression)
+
     def __str__(self):
         return "%s <- %s" % (self.assignee, self.expression)
 
     exec_method = "exec_AssignExpression"
 
 
-class AssignNorm(Instruction):
+def AssignNorm(assignee, expression, p=2, id=None, depends_on=frozenset()):
     """
     .. attribute:: assignee
     .. attribute:: expression
     .. attribute:: p
     """
-
-    def __init__(self, assignee, expression, p=2, id=None, depends_on=frozenset()):
-        Instruction.__init__(self,
-                assignee=assignee,
-                expression=expression,
-                p=p,
-                id=id,
-                depends_on=depends_on)
-
-    def get_assignees(self):
-        return frozenset([self.assignee])
-
-    def get_read_variables(self):
-        return get_variables(self.expression)
-
-    def __str__(self):
-        return "%s <- ||%s||_%s" % (self.assignee, self.expression, self.p)
-
-    exec_method = "exec_AssignNorm"
+    from pymbolic import var
+    from warnings import warn
+    warn("AssignNorm is deprecated. Use a call to <builtin>norm.",
+            DeprecationWarning, stacklevel=2)
+    return AssignExpression(
+            assignee, var("<builtin>norm")(expression, ord=p),
+            id=id, depends_on=depends_on)
 
 
-class AssignDotProduct(Instruction):
+def AssignDotProduct(
+        assignee, expression_1, expression_2,
+        id=None, depends_on=frozenset()):
     """
     .. attribute:: assignee
     .. attribute:: expression_1
@@ -285,16 +286,13 @@ class AssignDotProduct(Instruction):
 
     .. attribute:: expression_2
     """
-
-    def get_assignees(self):
-        return frozenset(self.assignees)
-
-    def get_read_variables(self):
-        return (
-                get_variables(self.expression_1)
-                | get_variables(self.expression_2))
-
-    exec_method = "exec_AssignDotProduct"
+    from pymbolic import var
+    from warnings import warn
+    warn("AssignDotProduct is deprecated. Use a call to <builtin>dot_product.",
+            DeprecationWarning, stacklevel=2)
+    return AssignExpression(
+            assignee, var("<builtin>dot_product")(expression_1, expression_2),
+            id=id, depends_on=depends_on)
 
 # }}}
 
@@ -316,6 +314,9 @@ class ReturnState(Instruction):
 
     def get_read_variables(self):
         return get_variables(self.expression)
+
+    def visit_expressions(self, visitor):
+        visitor(self.expression)
 
     def __str__(self):
         return "Ret %s at %s as %s" % (
@@ -351,6 +352,9 @@ class Raise(Instruction):
     def get_read_variables(self):
         return frozenset()
 
+    def visit_expressions(self, visitor):
+        pass
+
     def __str__(self):
         result = "Raise %s" % self.error_condition.__name__
 
@@ -371,6 +375,9 @@ class FailStep(Instruction):
 
     def get_read_variables(self):
         return frozenset()
+
+    def visit_expressions(self, visitor):
+        pass
 
     def __str__(self):
         return "FailStep"
@@ -397,6 +404,9 @@ class If(Instruction):
 
     def get_read_variables(self):
         return get_variables(self.condition)
+
+    def visit_expressions(self, visitor):
+        visitor(self.condition)
 
     def __str__(self):
         return "If %s" % self.condition

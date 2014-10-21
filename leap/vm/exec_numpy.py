@@ -22,63 +22,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from leap.vm.expression import (DifferentiationMapperWithContext, EvaluationMapper)
 from collections import namedtuple
 import numpy as np
-import numpy.linalg as la
 import scipy.optimize
 
 from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
 from pymbolic.mapper.differentiator import DifferentiationMapper as \
     DifferentiationMapperBase
-
 import six
 
 
 class FailStepException(Exception):
     pass
-
-
-class EvaluationMapper(EvaluationMapperBase):
-
-    def __init__(self, context, functions):
-        """
-        :arg context: a mapping from variable names to values
-        :arg functions: a mapping from function names to functions
-        """
-        EvaluationMapperBase.__init__(self, context)
-        self.functions = functions
-
-    def handle_call(self, function_name, parameters, kw_parameters):
-        if function_name in self.functions:
-            function = self.functions[function_name]
-        else:
-            raise ValueError("Call to unknown function: " + str(function_name))
-        evaluated_parameters = (self.rec(param) for param in parameters)
-        evaluated_kw_parameters = {param_id: self.rec(param)
-             for param_id, param in six.iteritems(kw_parameters)}
-        return function(*evaluated_parameters, **evaluated_kw_parameters)
-
-    def map_call(self, expr):
-        return self.handle_call(expr.function.name, expr.parameters, {})
-
-    def map_call_with_kwargs(self, expr):
-        return self.handle_call(expr.function.name, expr.parameters,
-                                expr.kw_parameters)
-
-
-class DifferentiationMapperWithContext(DifferentiationMapperBase):
-
-    def __init__(self, variable, functions, context):
-        DifferentiationMapperBase.__init__(self, variable, None)
-        self.context = context
-        self.functions = functions
-
-    def map_call(self, expr):
-        raise NotImplementedError
-
-    def map_variable(self, expr):
-        return self.context[expr.name] if expr.name in self.context else \
-            DifferentiationMapperBase.map_variable(self, expr)
 
 
 class NumpyInterpreter(object):
@@ -119,23 +75,27 @@ class NumpyInterpreter(object):
         """
 # }}}
 
-    def __init__(self, code, rhs_map):
+    def __init__(self, code, function_map):
         """
         :arg code: an instance of :class:`leap.vm.TimeIntegratorCode`
-        :arg rhs_map: a mapping from component ids to right-hand-side
-            functions
+        :arg function_map: a mapping from function identifiers to functions
         """
         self.code = code
         from leap.vm.language import ExecutionController
         self.exec_controller = ExecutionController(code)
         self.state = {}
-        builtins = {"len": len, "isnan": np.isnan}
+        builtins = {
+                "<builtin>len": len,
+                "<builtin>isnan": np.isnan,
+                "<builtin>norm": np.linalg.norm,
+                "<builtin>dot_product": np.vdot
+                }
 
-        assert not set(builtins.keys()) & set(rhs_map.keys())
+        # Ensure none of the names in the function map conflict with the
+        # builtins.
+        assert not set(builtins) & set(function_map)
 
-        self.functions = dict(builtins, **rhs_map)
-        self.rhs_map = rhs_map
-
+        self.functions = dict(builtins, **function_map)
         self.eval_mapper = EvaluationMapper(self.state, self.functions)
 
     def set_up(self, t_start, dt_start, state):
@@ -257,16 +217,6 @@ class NumpyInterpreter(object):
     def exec_AssignExpression(self, insn):
         self.state[insn.assignee] = self.eval_mapper(insn.expression)
 
-    def exec_AssignNorm(self, insn):
-        self.state[insn.assignee] = la.norm(
-                self.eval_mapper(insn.expression), insn.p)
-
-    def exec_AssignDotProduct(self, insn):
-        self.state[insn.assignee] = np.vdot(
-                self.eval_mapper(insn.expression_1),
-                self.eval_mapper(insn.expression_2)
-                )
-
     def exec_Raise(self, insn):
         raise insn.error_condition(insn.error_message)
 
@@ -282,12 +232,21 @@ class NumpyInterpreter(object):
     # }}}
 
 
-class StepMatrixFinder(NumpyInterpreter):
-    """Constructs a step matrix on-the-fly while interpreting code."""
+# {{{ step matrix finder
 
-    def __init__(self, code, rhs_map, rhs_deriv_map, variables=None):
-        NumpyInterpreter.__init__(self, code, rhs_map)
-        self.rhs_deriv_map = rhs_deriv_map
+class StepMatrixFinder(NumpyInterpreter):
+    """Constructs a step matrix on-the-fly while interpreting code.
+
+    Assumes that all function evaluations occur as the root node of
+    a separate assignment instruction.
+    """
+
+    def __init__(self, code, function_map, function_deriv_map, variables=None):
+        NumpyInterpreter.__init__(self, code, function_map)
+
+        self.function_map = function_map
+        self.function_deriv_map = function_deriv_map
+
         self.diff_states = {}
         if variables is None:
             variables = self.get_state_variables()
@@ -299,7 +258,7 @@ class StepMatrixFinder(NumpyInterpreter):
         for variable in variables:
             context = self.diff_states[variable]
             self.diff_mappers[variable] = \
-                DifferentiationMapperWithContext(variable, rhs_deriv_map,
+                DifferentiationMapperWithContext(variable, function_deriv_map,
                 context)
 
     def get_state_variables(self):
@@ -370,34 +329,58 @@ class StepMatrixFinder(NumpyInterpreter):
             if last_step:
                 break
 
-    def exec_AssignRHS(self, insn):
-        rhs = self.rhs_map[insn.component_id]
-        t = self.eval_mapper(insn.t)
+    def _exec_func_eval_assignment(self, assignee, call):
+        func = self.function_map[call.function.name]
 
-        evaluated = []
+        from pymbolic.primitives import CallWithKwargs
+        evaluated_args = [
+            self.eval_mapper(arg_expr)
+            for name, arg_expr in call.parameters]
 
-        for assignee, args in zip(insn.assignees, insn.rhs_arguments):
-            rhsargs = [(name, self.eval_mapper(expr)) for name, expr in args]
-            evaluated.append(rhsargs)
-            self.state[assignee] = rhs(t, **dict(rhsargs))
+        if isinstance(call, CallWithKwargs):
+            evaluated_kwargs = [
+                    (name, self.eval_mapper(arg_expr))
+                    for name, arg_expr in call.kw_parameters.items()]
+        else:
+            evaluated_kwargs = []
+
+        self.state[assignee] = func(*evaluated_args, **dict(evaluated_kwargs))
 
         # Compute derivatives of assignee by chain rule.
-        rhs_deriv = self.rhs_deriv_map[insn.component_id]
+        func_deriv = self.function_deriv_map[call.function.name]
 
-        for assignee, args, ev_args in \
-                zip(insn.assignees, insn.rhs_arguments, evaluated):
-            for variable in self.variables:
-                total_deriv = 0
-                for n, arg in enumerate(args):
-                    deriv = self.diff_mappers[variable](arg[1])
+        for variable in self.variables:
+            total_deriv = 0
+
+            for i, arg in enumerate(call.parameters):
+                deriv = self.diff_mappers[variable](arg)
+                eval_deriv = self.eval_mapper(deriv)
+                total_deriv += (
+                        func_deriv(i, *evaluated_args, **dict(evaluated_kwargs))
+                        * eval_deriv)
+
+            if isinstance(call, CallWithKwargs):
+                for arg_name, arg in call.kw_parameters.items():
+                    deriv = self.diff_mappers[variable](arg)
                     eval_deriv = self.eval_mapper(deriv)
-                    total_deriv += rhs_deriv(1 + n, t, **dict(ev_args)) * eval_deriv
-                self.diff_states[variable][assignee] = self.eval_mapper(total_deriv)
+                    total_deriv += (
+                            func_deriv(arg_name,
+                                *evaluated_args, **dict(evaluated_kwargs))
+                            * eval_deriv)
+
+            self.diff_states[variable][assignee] = self.eval_mapper(total_deriv)
 
     def exec_AssignExpression(self, insn):
-        self.state[insn.assignee] = self.eval_mapper(insn.expression)
-        for variable in self.variables:
-            deriv = self.diff_mappers[variable](insn.expression)
-            self.diff_states[variable][insn.assignee] = self.eval_mapper(deriv)
+        from pymbolic.primitives import Call, CallWithKwargs
+
+        if isinstance(insn.expression, (Call, CallWithKwargs)):
+            self._exec_func_eval_assignment(insn.assignee, insn.expression)
+        else:
+            self.state[insn.assignee] = self.eval_mapper(insn.expression)
+            for variable in self.variables:
+                deriv = self.diff_mappers[variable](insn.expression)
+                self.diff_states[variable][insn.assignee] = self.eval_mapper(deriv)
+
+# }}}
 
 # vim: fdm=marker

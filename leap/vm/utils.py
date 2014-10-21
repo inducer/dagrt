@@ -28,26 +28,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pymbolic.mapper.dependency import DependencyMapper
-
-
-class ExtendedDependencyMapper(DependencyMapper):
-    """Extends DependencyMapper to handle values encountered in leap
-    IR.
-    """
-
-    def map_foreign(self, expr):
-        if expr is None or isinstance(expr, str):
-            return frozenset()
-        else:
-            return super(ExtendedDependencyMapper, self).map_foreign(expr)
-
-
-variable_mapper = ExtendedDependencyMapper(composite_leaves=False)
-
 
 def get_variables(expr):
     """Returns the set of names of variables used in the expression."""
+    from leap.vm.expression import variable_mapper
     return frozenset(dep.name for dep in variable_mapper(expr))
 
 

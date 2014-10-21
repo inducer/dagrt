@@ -191,7 +191,15 @@ class _FunctionDescriptor(Record):
 
 class FortranCodeGenerator(StructuredCodeGenerator):
 
-    def __init__(self, module_name, time_kind="8"):
+    def __init__(self, module_name, time_kind="8",
+            rhs_id_to_component_id=None):
+        """
+        :arg rhs_id_to_component_id: a function to map
+            :attr:`leap.vm.expression.RHSEvaluation.rhs_id`
+            to an ODE component whose right hand side it
+            computes. Identity if not given.
+        """
+
         self.module_name = module_name
         self.time_kind = time_kind
 
@@ -202,6 +210,11 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         self.module_emitter.__enter__()
 
         self.emitters = [self.module_emitter]
+
+        if rhs_id_to_component_id is None:
+            rhs_id_to_component_id = lambda name: name
+
+        self.rhs_id_to_component_id = rhs_id_to_component_id
 
     @property
     def emitter(self):
@@ -218,9 +231,13 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         for wrapped_line in wrap_line(line, level):
             self.emitter(wrapped_line)
 
-    def __call__(self, dag, optimize=True):
-        from .analysis import verify_code
+    def __call__(self, dag, rhs_id_to_component_id, optimize=True):
+        from .analysis import (
+                verify_code,
+                collect_function_names_from_dag)
         verify_code(dag)
+
+        func_names = collect_function_names_from_dag(dag)
 
         from .codegen_base import NewTimeIntegratorCode
         dag = NewTimeIntegratorCode.from_old(dag)
@@ -255,24 +272,17 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
         from leap.vm.codegen.data import SymbolKindFinder
 
-        sym_kind_table = SymbolKindFinder()([
+        sym_kind_table = SymbolKindFinder(self.rhs_id_to_component_id)([
             fd.function for fd in fdescrs])
 
-        1/0
-
-
-
-
-
-
         self.begin_emit(dag)
-        for stage, dependencies in dag.stages.iteritems():
+        for fdescr in fdescrs:
             code = dag_extractor(dag.instructions, dependencies)
-            function = assembler(code, dependencies)
+            function = assembler(stage_name, code, dependencies)
             if self.optimize:
                 function = optimizer(function)
             control_tree = extract_structure(function)
-            self.lower_function(stage, control_tree)
+            self.lower_function(stage_name, control_tree)
 
         self.finish_emit(dag)
 
