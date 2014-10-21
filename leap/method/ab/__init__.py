@@ -115,7 +115,7 @@ class AdamsBashforthTimeStepperBase(Method):
                 rhs_insn_id = cbuild.fresh_insn_id(label+('_ev_rhs%d' % istage)+"_")
 
                 add_and_get_ids(AssignExpression(
-                        assignee=var(rhs_id),
+                        assignee=rhs_id,
                         expression=var(component_id)(t=t + c * dt,
                                                      y=stage_state),
                         depends_on=depends_on + all_rhs_eval_ids,
