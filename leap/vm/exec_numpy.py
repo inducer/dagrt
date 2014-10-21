@@ -33,11 +33,6 @@ class FailStepException(Exception):
     pass
 
 
-class ExecutionBackend(object):
-    def __init__(self):
-        pass
-
-
 class NumpyInterpreter(object):
     """A :mod:`numpy`-targeting interpreter for the time integration language
     defined in :mod:`leap.vm.language`.
@@ -76,7 +71,7 @@ class NumpyInterpreter(object):
         """
 # }}}
 
-    def __init__(self, code, execution_backend):
+    def __init__(self, code, rhs_map):
         """
         :arg code: an instance of :class:`leap.vm.TimeIntegratorCode`
         :arg rhs_map: a mapping from component ids to right-hand-side
@@ -86,13 +81,18 @@ class NumpyInterpreter(object):
         from leap.vm.language import ExecutionController
         self.exec_controller = ExecutionController(code)
         self.state = {}
-        self.functions = {
+        builtins = {
                 "len": len,
                 "isnan": np.isnan,
                 "<builtin>norm": np.linalg.norm
                 }
 
-        self.eval_mapper = EvaluationMapper(self.state, self.functions, rhs_map)
+        # Ensure none of the names in the RHS map conflict with the builtins.
+        assert not set(builtins) & set(rhs_map)
+
+        self.functions = dict(builtins, **rhs_map)
+
+        self.eval_mapper = EvaluationMapper(self.state, self.functions)
 
     def set_up(self, t_start, dt_start, state):
         """

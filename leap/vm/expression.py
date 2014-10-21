@@ -63,32 +63,32 @@ class ExtendedDependencyMapper(DependencyMapper):
 
 variable_mapper = ExtendedDependencyMapper(composite_leaves=False)
 
-
 class EvaluationMapper(EvaluationMapperBase):
-    def __init__(self, context, execution_backend):
+
+    def __init__(self, context, functions):
         """
         :arg context: a mapping from variable names to values
+        :arg functions: a mapping from function names to functions
         """
         EvaluationMapperBase.__init__(self, context)
-        self.execution_backend = execution_backend
+        self.functions = functions
+
+    def map_generic_call(self, function_name, parameters, kw_parameters):
+        if function_name in self.functions:
+            function = self.functions[function_name]
+        else:
+            raise ValueError("Call to unknown function: " + str(function_name))
+        evaluated_parameters = (self.rec(param) for param in parameters)
+        evaluated_kw_parameters = {param_id: self.rec(param)
+             for param_id, param in six.iteritems(kw_parameters)}
+        return function(*evaluated_parameters, **evaluated_kw_parameters)
 
     def map_call(self, expr):
-        func = self.execution_backend.resolve(expr.function)
-        return func(
-                *[self.rec(par) for par in expr.parameters],
-                **dict(
-                    (name, self.rec(par))
-                    for name, par in expr.kw_parameters))
+        return self.map_generic_call(expr.function.name, expr.parameters, {})
 
-    def map_norm(self, expr):
-        return la.norm(
-                self.rec(expr.expression),
-                self.rec(expr.p))
-
-    def map_dot_product(self, expr):
-        return np.vdot(
-                self.rec(expr.expression_1),
-                self.rec(expr.expression_2))
+    def map_call_with_kwargs(self, expr):
+        return self.map_generic_call(expr.function.name, expr.parameters,
+                                     expr.kw_parameters)
 
 
 class DifferentiationMapperWithContext(DifferentiationMapperBase):
