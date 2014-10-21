@@ -61,11 +61,11 @@ class Norm(LeapExpression):
 
     .. attribute:: p
     """
-    def __init__(self, expression, p):
+    def __init__(self, p):
         self.p = p
 
     def __getinitargs__(self):
-        return (self.expression, self.p)
+        return (self.p,)
 
     mapper_method = six.moves.intern("map_norm_symbol")
 
@@ -96,7 +96,7 @@ class DependencyMapper(DependencyMapperBase, CombineMapper):
     def map_norm(self, expr):
         return frozenset()
 
-    map_dot_product = map_norm
+    map_dot_product_symbol = map_norm
 
 
 class ExtendedDependencyMapper(DependencyMapper):
@@ -109,6 +109,11 @@ class ExtendedDependencyMapper(DependencyMapper):
             return frozenset()
         else:
             return super(ExtendedDependencyMapper, self).map_foreign(expr)
+
+    def map_norm_symbol(self, expr):
+        return frozenset()
+
+    map_dot_product_symbol = map_norm_symbol
 
 
 variable_mapper = ExtendedDependencyMapper(composite_leaves=False)

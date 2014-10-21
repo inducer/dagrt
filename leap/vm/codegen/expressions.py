@@ -26,6 +26,7 @@ from pymbolic.mapper.stringifier import (
         StringifyMapper, PREC_NONE)
 from pytools import DictionaryWithDefault
 import numpy as np
+from leap.vm.expression import Norm
 
 
 # {{{ fortran
@@ -96,17 +97,19 @@ class PythonExpressionMapper(StringifyMapper):
         return '{numpy}.array([{elements}],dtype=\'object\')'.format(
             numpy=self._numpy, elements=', '.join(elements))
 
-    def map_norm(self, expr, enclosing_prec):
-        if isinstance(expr.p, (float, np.number)) and np.isinf(expr.p):
-            p_str = "float('inf')"
-        else:
-            p_str = self.rec(expr.p, PREC_NONE)
-
-        return 'self.numpy.linalg.norm({expr}, ord={ord})'.format(
-                   expr=self.rec(expr.expression, PREC_NONE),
-                   ord=p_str)
-
     def map_generic_call(self, symbol, args, kwargs):
+        if isinstance(symbol, Norm):
+            assert len(args) == 1
+            assert kwargs == {}
+            order = symbol.p
+            if isinstance(order, (float, np.number)) and np.isinf(order):
+                order_str = "float('inf')"
+            else:
+                order_str = self.rec(order, PREC_NONE)
+            return '{numpy}.linalg.norm({expr}, ord={ord})'.format(
+                numpy=self._numpy, expr=self.rec(args[0], PREC_NONE),
+                ord=order_str)
+
         args_strs = [
                 self.rec(val, PREC_NONE)
                 for val in args
