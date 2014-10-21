@@ -64,6 +64,15 @@ class FortranExpressionMapper(StringifyMapper):
 
 # {{{ python
 
+def _map_python_constant(constant):
+    if isinstance(constant, (float, np.number)):
+        if np.isinf(constant):
+            return "float('inf')"
+        elif np.isnan(constant):
+            return "float('nan')"
+    return repr(constant)
+
+
 class PythonExpressionMapper(StringifyMapper):
     """Converts expressions to Python code."""
 
@@ -73,9 +82,15 @@ class PythonExpressionMapper(StringifyMapper):
 
         numpy is the name of the numpy module.
         """
-        super(PythonExpressionMapper, self).__init__(repr)
+        super(PythonExpressionMapper, self).__init__(_map_python_constant)
         self._name_manager = name_manager
         self._numpy = numpy
+        self._builtins = {
+            "<builtin>norm": "{numpy}.linalg.norm({args})",
+            "<builtin>len": "len({args})",
+            "<builtin>isnan": "{numpy}.isnan({args})",
+            "<builtin>dot_product": "{numpy}.vdot({args})"
+            }
 
     def map_foreign(self, expr, *args):
         if expr is None:
@@ -97,16 +112,6 @@ class PythonExpressionMapper(StringifyMapper):
             numpy=self._numpy, elements=', '.join(elements))
 
     def map_generic_call(self, symbol, args, kwargs):
-        if symbol.name == "<builtin>norm":
-            order = dict(kwargs)["ord"]
-            if isinstance(order, (float, np.number)) and np.isinf(order):
-                order_str = "float('inf')"
-            else:
-                order_str = self.rec(order, PREC_NONE)
-            return '{numpy}.linalg.norm({expr}, ord={ord})'.format(
-                numpy=self._numpy, expr=self.rec(args[0], PREC_NONE),
-                ord=order_str)
-
         args_strs = [
                 self.rec(val, PREC_NONE)
                 for val in args
@@ -115,6 +120,11 @@ class PythonExpressionMapper(StringifyMapper):
                     name=name,
                     expr=self.rec(val, PREC_NONE))
                 for name, val in kwargs]
+
+        if symbol.name in self._builtins:
+            call_template = self._builtins[symbol.name]
+            return call_template.format(numpy=self._numpy,
+                                        args=", ".join(args_strs))
 
         return 'self._functions.{rhs}({args})'.format(
                 rhs=self._name_manager.name_function(symbol),

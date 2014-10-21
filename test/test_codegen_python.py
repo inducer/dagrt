@@ -312,6 +312,24 @@ def test_multirate_codegen():
     assert orderest > 4 * 0.70
 
 
+from test_builtins import BuiltinsTestBase
+
+
+class TestBuiltinsWithPythonCodeGenerator(BuiltinsTestBase):
+
+    def execute_and_return_single_result(self, code):
+        codegen = PythonCodeGenerator(class_name='Method')
+        Method = codegen.get_class(code)
+        method = Method({})
+        method.set_up(t_start=0, dt_start=0, state={})
+        method.initialize()
+        events = [event for event in method.run(t_end=0)]
+        assert len(events) == 2
+        assert isinstance(events[0], method.StateComputed)
+        assert isinstance(events[1], method.StepCompleted)
+        return events[0].state_component
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])
