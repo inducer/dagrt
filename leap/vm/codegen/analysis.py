@@ -23,7 +23,7 @@ THE SOFTWARE.
 """
 
 from pytools import memoize_method
-from leap.vm.expression import CombineMapper
+from pymbolic.mapper import CombineMapper
 from leap.vm.language import Instruction, If
 from .graphs import InstructionDAGIntGraph
 import six

@@ -25,26 +25,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pymbolic.primitives import Expression
-from pymbolic.mapper import (  # noqa
-        IdentityMapper as IdentityMapperBase,
-        WalkMapper as WalkMapperBase,
-        CombineMapper
-        )
 from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
 from pymbolic.mapper.differentiator import DifferentiationMapper as \
     DifferentiationMapperBase
 
 from pymbolic.mapper.dependency import DependencyMapper
 
-from pymbolic.mapper.stringifier import (
-        StringifyMapper as StringifyMapperBase)
-
 import logging
 import six.moves
-
-import numpy as np
-import numpy.linalg as la
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +50,7 @@ class ExtendedDependencyMapper(DependencyMapper):
 
 
 variable_mapper = ExtendedDependencyMapper(composite_leaves=False)
+
 
 class EvaluationMapper(EvaluationMapperBase):
 

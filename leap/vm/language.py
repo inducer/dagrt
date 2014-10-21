@@ -27,7 +27,6 @@ THE SOFTWARE.
 
 from pytools import RecordWithoutPickling, memoize_method
 from leap.vm.utils import get_variables
-from . import expression as expr
 
 import logging
 import six

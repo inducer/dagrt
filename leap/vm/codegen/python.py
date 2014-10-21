@@ -32,7 +32,6 @@ from leap.vm.utils import is_state_variable, get_unique_name
 from leap.vm.codegen.utils import wrap_line_base, exec_in_new_namespace
 from functools import partial
 import six
-import pymbolic.primitives as prim
 
 
 def pad_python(line, width):
