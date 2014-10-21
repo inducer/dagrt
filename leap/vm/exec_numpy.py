@@ -27,9 +27,6 @@ from collections import namedtuple
 import numpy as np
 import scipy.optimize
 
-from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
-from pymbolic.mapper.differentiator import DifferentiationMapper as \
-    DifferentiationMapperBase
 import six
 
 
