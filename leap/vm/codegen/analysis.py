@@ -148,7 +148,7 @@ def verify_code(code):
 class _RHSNameCollector(CombineMapper):
     def combine(self, values):
         import operator
-        return reduce(operator.or_, values, set())
+        return six.moves.reduce(operator.or_, values, set())
 
     def map_constant(self, expr):
         return set()
