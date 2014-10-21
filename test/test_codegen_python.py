@@ -87,13 +87,14 @@ def test_basic_conditional_codegen():
     assert isinstance(hist[1], method.StepCompleted)
 
 
-def test_basic_assign_norm_codegen():
+@pytest.mark.parametrize(("order"), [2, np.inf])
+def test_basic_assign_norm_codegen(order):
     """Test code generation of the AssignNorm instruction."""
     cbuild = CodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_1', assignee='x',
                          expression=np.array([-3, 4])),
-        AssignNorm(id='assign_2', assignee='n', expression=var('x'), p=2,
+        AssignNorm(id='assign_2', assignee='n', expression=var('x'), p=order,
                    depends_on=['assign_1']),
         ReturnState(id='return', time=0, time_id='final',
                     expression=var('n'), component_id='<state>',
@@ -110,7 +111,7 @@ def test_basic_assign_norm_codegen():
     hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
     assert isinstance(hist[0], method.StateComputed)
-    assert np.isclose(hist[0].state_component, 5.0)
+    assert np.isclose(hist[0].state_component, np.linalg.norm([3, 4], ord=order))
     assert isinstance(hist[1], method.StepCompleted)
 
 
