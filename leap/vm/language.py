@@ -80,7 +80,12 @@ under the control of the user.
 
 Built-in functions:
 
+* ``<builtin>norm(x, ord=p)`` returns the *p*-norm of *x*.
+
+* ``<builtin>dot_product(x, y)`` return the dot product of *x* and *y*.
+
 * ``len(state)`` returns the number of degrees of freedom in *state*
+
 * ``isnan(state)`` returns True if there are any NaNs in *state*
 """
 
@@ -243,12 +248,12 @@ def AssignNorm(assignee, expression, p=2, id=None, depends_on=frozenset()):
     .. attribute:: expression
     .. attribute:: p
     """
+    from pymbolic import var
     from warnings import warn
-    warn("AssignNorm is deprecated. Use the leap.vm.expression.Norm node "
-            "with AssignExpression instead",
+    warn("AssignNorm is deprecated. Use a call to <builtin>norm.",
             DeprecationWarning, stacklevel=2)
     return AssignExpression(
-            assignee, expr.Norm(p)(expression),
+            assignee, var("<builtin>norm")(expression, ord=p),
             id=id, depends_on=depends_on)
 
 
@@ -264,12 +269,12 @@ def AssignDotProduct(
 
     .. attribute:: expression_2
     """
+    from pymbolic import var
     from warnings import warn
-    warn("AssignNorm is deprecated. Use the leap.vm.expression.DotProduct node "
-            "with AssignExpression instead",
+    warn("AssignDotProduct is deprecated. Use a call to <builtin>dot_product.",
             DeprecationWarning, stacklevel=2)
     return AssignExpression(
-            assignee, expr.DotProduct()(expression_1, expression_2),
+            assignee, var("<builtin>dot_product")(expression_1, expression_2),
             id=id, depends_on=depends_on)
 
 # }}}

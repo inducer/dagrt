@@ -26,7 +26,6 @@ from pymbolic.mapper.stringifier import (
         StringifyMapper, PREC_NONE)
 from pytools import DictionaryWithDefault
 import numpy as np
-from leap.vm.expression import Norm
 
 
 # {{{ fortran
@@ -98,10 +97,8 @@ class PythonExpressionMapper(StringifyMapper):
             numpy=self._numpy, elements=', '.join(elements))
 
     def map_generic_call(self, symbol, args, kwargs):
-        if isinstance(symbol, Norm):
-            assert len(args) == 1
-            assert kwargs == {}
-            order = symbol.p
+        if symbol.name == "<builtin>norm":
+            order = dict(kwargs)["ord"]
             if isinstance(order, (float, np.number)) and np.isinf(order):
                 order_str = "float('inf')"
             else:

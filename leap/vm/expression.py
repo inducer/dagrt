@@ -28,14 +28,14 @@ THE SOFTWARE.
 from pymbolic.primitives import Expression
 from pymbolic.mapper import (  # noqa
         IdentityMapper as IdentityMapperBase,
-        CombineMapper as CombineMapperBase,
         WalkMapper as WalkMapperBase,
+        CombineMapper
         )
 from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
 from pymbolic.mapper.differentiator import DifferentiationMapper as \
     DifferentiationMapperBase
 
-from pymbolic.mapper.dependency import DependencyMapper as DependencyMapperBase
+from pymbolic.mapper.dependency import DependencyMapper
 
 from pymbolic.mapper.stringifier import (
         StringifyMapper as StringifyMapperBase)
@@ -49,56 +49,6 @@ import numpy.linalg as la
 logger = logging.getLogger(__name__)
 
 
-# {{{ symbol nodes
-
-class LeapExpression(Expression):
-    def stringifier(self):
-        return StringifyMapper
-
-
-class Norm(LeapExpression):
-    """Function symbol for norm evaluation.
-
-    .. attribute:: p
-    """
-    def __init__(self, p):
-        self.p = p
-
-    def __getinitargs__(self):
-        return (self.p,)
-
-    mapper_method = six.moves.intern("map_norm_symbol")
-
-
-class DotProduct(LeapExpression):
-    """Function symbol for dot product evaluation."""
-
-    mapper_method = six.moves.intern("map_dot_product_symbol")
-
-# }}}
-
-
-# {{{ mappers
-
-class StringifyMapper(StringifyMapperBase):
-    def map_norm_symbol(self, expr, enclosing_prec):
-        return "norm[%p]" % self.rec(expr.p)
-
-    def map_dot_product_symbol(self, expr, enclosing_prec):
-        return "dot"
-
-
-class CombineMapper(CombineMapperBase):
-    pass
-
-
-class DependencyMapper(DependencyMapperBase, CombineMapper):
-    def map_norm(self, expr):
-        return frozenset()
-
-    map_dot_product_symbol = map_norm
-
-
 class ExtendedDependencyMapper(DependencyMapper):
     """Extends DependencyMapper to handle values encountered in leap
     IR.
@@ -109,11 +59,6 @@ class ExtendedDependencyMapper(DependencyMapper):
             return frozenset()
         else:
             return super(ExtendedDependencyMapper, self).map_foreign(expr)
-
-    def map_norm_symbol(self, expr):
-        return frozenset()
-
-    map_dot_product_symbol = map_norm_symbol
 
 
 variable_mapper = ExtendedDependencyMapper(composite_leaves=False)

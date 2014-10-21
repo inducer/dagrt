@@ -136,9 +136,6 @@ class PythonNameManager(object):
         try:
             return self.function_map[var]
         except KeyError:
-            if not isinstance(var, prim.Variable):
-                raise ValueError("cannot manage names for builtin function symbols")
-
             base = self._filter_name(var.name)
             named_func = get_unique_name(base, self.function_map)
             self.function_map[var] = named_func

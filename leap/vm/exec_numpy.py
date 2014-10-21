@@ -89,6 +89,7 @@ class NumpyInterpreter(object):
         self.functions = {
                 "len": len,
                 "isnan": np.isnan,
+                "<builtin>norm": np.linalg.norm
                 }
 
         self.eval_mapper = EvaluationMapper(self.state, self.functions, rhs_map)
