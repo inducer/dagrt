@@ -25,7 +25,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from leap.vm.utils import TODO
 from pytools import RecordWithoutPickling
 from leap.vm.codegen.data import ODEComponent, Boolean, Scalar
 
@@ -41,12 +40,13 @@ class Function(RecordWithoutPickling):
     .. attribute:: default_dict
     """
 
-    def __init__(self, language_to_codegen=None):
+    def __init__(self, language_to_codegen=None, **kwargs):
         if language_to_codegen is None:
             language_to_codegen = {}
 
         super(Function, self).__init__(
-                language_to_codegen=language_to_codegen)
+                language_to_codegen=language_to_codegen,
+                **kwargs)
 
     def get_result_kind(self, arg_kinds):
         """Return the :class:`leap.vm.codegen.data.SymbolKind` this function
@@ -138,9 +138,6 @@ class FunctionRegistry(RecordWithoutPickling):
                     % function_id)
 
         return func.get_codegen(language)
-
-    def register_right_hand_sides(self, rhs_list):
-        raise TODO()
 
 # }}}
 
@@ -258,11 +255,13 @@ base_function_registry = _make_bfr()
 class _ODERightHandSide(Function):
     default_dict = {}
 
-    def __init__(self, identifier, component_id, input_component_ids):
-        super(Function, self).__init__(
+    def __init__(self, identifier, component_id, input_component_ids,
+            language_to_codegen=None):
+        super(_ODERightHandSide, self).__init__(
                 identifier=identifier,
                 component_id=component_id,
-                input_component_ids=input_component_ids)
+                input_component_ids=input_component_ids,
+                language_to_codegen=language_to_codegen)
 
     @property
     def arg_names(self):

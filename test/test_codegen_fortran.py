@@ -30,7 +30,8 @@ import pytest
 from leap.vm.language import AssignExpression, AssignNorm, AssignRHS, If, \
     ReturnState
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
-from leap.vm.codegen.fortran import FortranCodeGenerator, FortranType
+from leap.vm.codegen.fortran import (
+        FortranCodeGenerator, FortranType, FortranCallCode)
 from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
 
 
@@ -69,6 +70,10 @@ def test_rk_codegen(stepper):
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs)
     freg = register_ode_rhs(base_function_registry, component_id)
+    freg = freg.register_codegen(component_id, "fortran",
+            FortranCallCode("""
+                ${assignee} = -2*${y}
+                """))
 
     code = stepper(component_id)
 
@@ -76,7 +81,10 @@ def test_rk_codegen(stepper):
             'RKMethod', freg,
             ode_component_type_map={
                 component_id: FortranType('real', (200,), ('kind(8)',))
-                })
+                },
+            module_preamble="""
+            use ModStuff
+            """)
 
     print(codegen(code))
 

@@ -69,3 +69,54 @@ def exec_in_new_namespace(code):
     namespace["_MODULE_SOURCE_CODE"] = code
 
     return namespace
+
+
+def chop_common_indentation(text):
+    if text is None:
+        return []
+
+    if not text.startswith("\n"):
+        raise ValueError("expected newline as first character "
+                "in preamble")
+
+    lines = text.split("\n")
+    while lines[0].strip() == "":
+        lines.pop(0)
+    while lines[-1].strip() == "":
+        lines.pop(-1)
+
+    if lines:
+        base_indent = 0
+        while lines[0][base_indent] in " \t":
+            base_indent += 1
+
+        for line in lines[1:]:
+            if line[:base_indent].strip():
+                raise ValueError("inconsistent indentation in preamble")
+
+    return [line[base_indent:] for line in lines]
+
+
+def remove_redundant_blank_lines(lines):
+    def is_blank(l):
+        return not l.strip()
+
+    pending_blanks = []
+    at_start = True
+
+    result = []
+    for l in lines:
+        if is_blank(l):
+            if not pending_blanks:
+                pending_blanks.append(l)
+
+        else:
+            if not at_start:
+                result.extend(pending_blanks)
+
+            pending_blanks = []
+            at_start = False
+
+            result.append(l)
+
+    return result

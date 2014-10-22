@@ -22,9 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from leap.vm.language import Instruction, AssignExpression, AssignNorm, \
-    AssignDotProduct, AssignSolvedRHS, AssignRHS, If, ReturnState, Raise, \
-    FailStep
+from leap.vm.language import (
+        Instruction, AssignExpression, AssignSolvedRHS,
+        If, ReturnState, Raise, FailStep)
 from leap.vm.utils import TODO
 from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import get_unique_name, is_state_variable
@@ -507,11 +507,7 @@ class ControlFlowGraphAssembler(object):
                                 ('expression', instruction.expression))
                 main_bb.add_assignment((self._return_val, return_value))
 
-            elif isinstance(instruction, AssignExpression) or \
-                    isinstance(instruction, AssignRHS) or \
-                    isinstance(instruction, AssignNorm) or \
-                    isinstance(instruction, AssignSolvedRHS) or \
-                    isinstance(instruction, AssignDotProduct):
+            elif isinstance(instruction, (AssignExpression, AssignSolvedRHS)):
                 main_bb.add_assignment(instruction)
 
             elif isinstance(instruction, Raise):
