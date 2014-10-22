@@ -25,27 +25,28 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import six
 from leap.vm.utils import TODO
 from pytools import RecordWithoutPickling
 from leap.vm.codegen.data import ODEComponent, Boolean, Scalar
+
+NoneType = type(None)
 
 
 # {{{ function
 
 class Function(RecordWithoutPickling):
     """
-    .. attribute:: name
+    .. attribute:: identifier
     .. attribute:: arg_names
     .. attribute:: default_dict
     """
 
-    def __init__(self, _language_to_codegen=None):
-        if _language_to_codegen is None:
-            _language_to_codegen = {}
+    def __init__(self, language_to_codegen=None):
+        if language_to_codegen is None:
+            language_to_codegen = {}
 
         super(Function, self).__init__(
-                _language_to_codegen=_language_to_codegen)
+                language_to_codegen=language_to_codegen)
 
     def get_result_kind(self, arg_kinds):
         """Return the :class:`leap.vm.codegen.data.SymbolKind` this function
@@ -59,23 +60,23 @@ class Function(RecordWithoutPickling):
         raise NotImplementedError()
 
     def register_codegen(self, language, codegen_function):
-        new_language_to_codegen = self._language_to_codegen.copy()
+        new_language_to_codegen = self.language_to_codegen.copy()
 
         if language in new_language_to_codegen:
             raise ValueError("a code generator for function '%s' in "
                     "language '%s' is already known"
-                    % (self.name, language))
+                    % (self.identifier, language))
 
         new_language_to_codegen[language] = codegen_function
-        return self.copy(_language_to_codegen=new_language_to_codegen)
+        return self.copy(language_to_codegen=new_language_to_codegen)
 
     def get_codegen(self, language):
         try:
-            return self._language_to_codegen[language]
+            return self.language_to_codegen[language]
         except KeyError:
             return ValueError(
                     "'%s' has no code generator for language '%s'"
-                    % (self.name, language))
+                    % (self.identifier, language))
 
     def resolve_args(self, arg_dict):
         from leap.vm.utils import resolve_args
@@ -87,23 +88,31 @@ class Function(RecordWithoutPickling):
 # {{{ function registry
 
 class FunctionRegistry(RecordWithoutPickling):
-    def __init__(self, _id_to_function=None):
-        if _id_to_function is None:
-            _id_to_function = {}
+    def __init__(self, id_to_function=None):
+        if id_to_function is None:
+            id_to_function = {}
 
-        super(FunctionRegistry, self).__init__(self,
-                _id_to_function=_id_to_function)
+        super(FunctionRegistry, self).__init__(
+                id_to_function=id_to_function)
 
     def register(self, function):
         """Return a copy of *self* with *function* registered."""
 
-        if function.identifier in self._id_to_function:
+        if function.identifier in self.id_to_function:
             raise ValueError("function '%s' is already registered"
                     % function.identifier)
 
-        new_id_to_function = self._id_to_function.copy()
+        new_id_to_function = self.id_to_function.copy()
         new_id_to_function[function.identifier] = function
-        return self.copy(_id_to_function=new_id_to_function)
+        return self.copy(id_to_function=new_id_to_function)
+
+    def __getitem__(self, function_id):
+        try:
+            return self.id_to_function[function_id]
+        except KeyError:
+            raise NameError(
+                    "unknown function: '%s'"
+                    % function_id)
 
     def register_codegen(self, function_id, language, codegen):
         """Register a code generation helper object for target *language*
@@ -113,16 +122,16 @@ class FunctionRegistry(RecordWithoutPickling):
             generation for *language*. This interface depends on the code
             generator being used.
         """
-        func = (self._id_to_function[function_id]
+        func = (self.id_to_function[function_id]
                 .register_codegen(language, codegen))
 
-        new_id_to_function = self._id_to_function.copy()
+        new_id_to_function = self.id_to_function.copy()
         new_id_to_function[function_id] = func
-        return self.copy(_id_to_function=new_id_to_function)
+        return self.copy(id_to_function=new_id_to_function)
 
     def get_codegen(self, function_id, language):
         try:
-            func = self._id_to_function[function_id]
+            func = self.id_to_function[function_id]
         except KeyError:
             raise NameError(
                     "unknown function: '%s'"
@@ -133,11 +142,6 @@ class FunctionRegistry(RecordWithoutPickling):
     def register_right_hand_sides(self, rhs_list):
         raise TODO()
 
-    def copy(self):
-        return dict(
-                (identifier, func.copy())
-                for identifier, func in six.iteritems(self._id_to_function))
-
 # }}}
 
 
@@ -146,16 +150,16 @@ class FunctionRegistry(RecordWithoutPickling):
 class _Norm(Function):
     """norm(x, ord)`` returns the *ord*-norm of *x*."""
 
-    name = "<builtin>norm"
+    identifier = "<builtin>norm"
     arg_names = ("x", "ord")
     default_dict = {}
 
     def get_result_kind(self, arg_kinds):
         x_kind, ord_kind = self.resolve_args(arg_kinds)
 
-        if not isinstance(ord_kind, Scalar):
+        if not isinstance(ord_kind, (NoneType, Scalar)):
             raise TypeError("argument 'ord' of 'norm' is not a scalar")
-        if not isinstance(x_kind, ODEComponent):
+        if not isinstance(x_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'x' of 'norm' is not an ODE component")
 
         return Scalar(is_real_valued=True)
@@ -166,16 +170,16 @@ class _DotProduct(Function):
     complex conjugate of *x* is taken first, if applicable.
     """
 
-    name = "<builtin>dot_product"
+    identifier = "<builtin>dot_product"
     arg_names = ("x", "y")
     default_dict = {}
 
     def get_result_kind(self, arg_kinds):
         x_kind, y_kind = self.resolve_args(arg_kinds)
 
-        if not isinstance(x_kind, ODEComponent):
+        if not isinstance(x_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'x' of 'dot_product' is not an ODE component")
-        if not isinstance(y_kind, ODEComponent):
+        if not isinstance(y_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'y' of 'dot_product' is not an ODE component")
 
         return Scalar(is_real_valued=False)
@@ -184,14 +188,14 @@ class _DotProduct(Function):
 class _Len(Function):
     """len(state)`` returns the number of degrees of freedom in *x* """
 
-    name = "<builtin>len"
+    identifier = "<builtin>len"
     arg_names = ("x",)
     default_dict = {}
 
     def get_result_kind(self, arg_kinds):
         x_kind, = self.resolve_args(arg_kinds)
 
-        if not isinstance(x_kind, ODEComponent):
+        if not isinstance(x_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'x' of 'len' is not an ODE component")
 
         return Scalar(is_real_valued=True)
@@ -200,14 +204,14 @@ class _Len(Function):
 class _IsNaN(Function):
     """isnan(x)`` returns True if there are any NaNs in *x*"""
 
-    name = "<builtin>isnan"
+    identifier = "<builtin>isnan"
     arg_names = ("x",)
     default_dict = {}
 
     def get_result_kind(self, arg_kinds):
         x_kind, = self.resolve_args(arg_kinds)
 
-        if not isinstance(x_kind, ODEComponent):
+        if not isinstance(x_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'x' of 'len' is not an ODE component")
 
         return Boolean()
@@ -225,20 +229,26 @@ class _PythonBuiltinFunctionCodeGenerator(object):
             args=", ".join(args))
 
 
-base_function_registry = FunctionRegistry()
+def _make_bfr():
+    bfr = FunctionRegistry()
 
-for func, py_pattern in [
-        (_Norm(), "{numpy}.linalg.norm({args})"),
-        (_DotProduct(), "{numpy}.vdot({args})"),
-        (_Len(), "len({args})"),
-        (_IsNaN(), "{numpy}.isnan({args})"),
-        ]:
+    for func, py_pattern in [
+            (_Norm(), "{numpy}.linalg.norm({args})"),
+            (_DotProduct(), "{numpy}.vdot({args})"),
+            (_Len(), "len({args})"),
+            (_IsNaN(), "{numpy}.isnan({args})"),
+            ]:
 
-    base_function_registry.register(func)
-    base_function_registry.register_codegen(
-        func.name,
-        _PythonBuiltinFunctionCodeGenerator(
-            func, py_pattern))
+        bfr = bfr.register(func)
+        bfr = bfr.register_codegen(
+            func.identifier,
+            "python",
+            _PythonBuiltinFunctionCodeGenerator(
+                func, py_pattern))
+
+    return bfr
+
+base_function_registry = _make_bfr()
 
 # }}}
 
@@ -248,23 +258,48 @@ for func, py_pattern in [
 class _ODERightHandSide(Function):
     default_dict = {}
 
-    def __init__(self, name, component_id, input_component_ids):
-        self.name = name
-        self.component_id = component_id
-        self.arg_names = input_component_ids
+    def __init__(self, identifier, component_id, input_component_ids):
+        super(Function, self).__init__(
+                identifier=identifier,
+                component_id=component_id,
+                input_component_ids=input_component_ids)
+
+    @property
+    def arg_names(self):
+        return ("t",) + self.input_component_ids
 
     def get_result_kind(self, arg_kinds):
-        arg_kinds, = self.resolve_args(arg_kinds)
+        arg_kinds = self.resolve_args(arg_kinds)
 
-        for arg_kind_passed, arg_kind_needed in zip(
-                arg_kinds, self.
-        if not isinstance(x_kind, ODEComponent):
-            raise TypeError("argument 'x' of 'len' is not an ODE component")
+        if not isinstance(arg_kinds[0], (NoneType, Scalar)):
+            raise TypeError("argument 't' of '%s' is not a scalar"
+                    % self.identifier)
 
-        return Boolean()
-def register_ode_rhs(name, component_id=None, input_component_ids=None):
+        for arg_name, arg_kind_passed, input_component_id in zip(
+                self.arg_names[1:], arg_kinds, self.input_component_ids):
+            if arg_kind_passed is not None:
+                pass
+            elif not (isinstance(arg_kind_passed, ODEComponent)
+                    and arg_kind_passed.component_id == input_component_id):
+                raise TypeError("argument '%s' of '%s' is not an ODE component "
+                        "with component ID '%s'"
+                        % (arg_name, self.identifier, input_component_id))
 
-    pass
+        return ODEComponent(self.component_id)
+
+
+def register_ode_rhs(
+        function_registry,
+        component_id, identifier=None, input_component_ids=None):
+    if identifier is None:
+        identifier = component_id
+
+    if input_component_ids is None:
+        input_component_ids = (component_id,)
+
+    return function_registry.register(
+            _ODERightHandSide(
+                identifier, component_id, input_component_ids))
 
 # }}}
 

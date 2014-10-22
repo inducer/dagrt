@@ -72,6 +72,8 @@ class NewTimeIntegratorCode(RecordWithoutPickling):
                                        step_before_fail=step_before_fail)
 
 
+# {{{ structured code generator
+
 class StructuredCodeGenerator(object):
     """Code generation for structured languages"""
 
@@ -166,3 +168,5 @@ class StructuredCodeGenerator(object):
 
     def emit_return(self, expr):
         raise NotImplementedError()
+
+# }}}

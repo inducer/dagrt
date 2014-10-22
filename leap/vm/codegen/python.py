@@ -156,15 +156,15 @@ class PythonNameManager(object):
 
 class PythonCodeGenerator(StructuredCodeGenerator):
 
-    def __init__(self, class_name):
+    def __init__(self, class_name, function_registry):
         self._class_name = class_name
         self._class_emitter = PythonClassEmitter(class_name)
 
         # Map from variable / RHS names to names in generated code
         self._name_manager = PythonNameManager()
 
-        self._expr_mapper = PythonExpressionMapper(self._name_manager,
-                                                   numpy='self._numpy')
+        self._expr_mapper = PythonExpressionMapper(
+                self._name_manager, numpy='self._numpy')
 
     def __call__(self, dag, optimize=True):
         from .analysis import verify_code

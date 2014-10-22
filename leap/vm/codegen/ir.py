@@ -22,12 +22,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from .expressions import string_mapper
 from pytools import RecordWithoutPickling, memoize_method
 from leap.vm.utils import get_unique_name, get_variables, TODO
 from leap.vm.language import AssignExpression, AssignRHS
+from pymbolic.mapper.stringifier import StringifyMapper
 from textwrap import TextWrapper
 from cgi import escape
+
+
+string_mapper = StringifyMapper()
 
 
 # {{{ dag instructions
