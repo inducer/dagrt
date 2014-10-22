@@ -275,8 +275,8 @@ class _ODERightHandSide(Function):
                     % self.identifier)
 
         for arg_name, arg_kind_passed, input_component_id in zip(
-                self.arg_names[1:], arg_kinds, self.input_component_ids):
-            if arg_kind_passed is not None:
+                self.arg_names[1:], arg_kinds[1:], self.input_component_ids):
+            if arg_kind_passed is None:
                 pass
             elif not (isinstance(arg_kind_passed, ODEComponent)
                     and arg_kind_passed.component_id == input_component_id):

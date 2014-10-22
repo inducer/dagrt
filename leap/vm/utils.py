@@ -116,7 +116,7 @@ def resolve_args(arg_names, default_dict, arg_dict):
             if name in default_dict:
                 args.append(default_dict[name])
             else:
-                raise TypeError("argument '%d' not specified" % arg_names[i])
+                raise TypeError("argument '%s' not specified" % arg_names[i])
 
     if arg_dict:
         raise TypeError("leftover arguments after argument resolution: "

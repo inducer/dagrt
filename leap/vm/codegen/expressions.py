@@ -52,10 +52,11 @@ class FortranExpressionMapper(StringifyMapper):
                 return ".false."
         else:
             result = repr(expr).replace("e", "d")
-            if "d" in result:
-                return result
-            else:
-                return result+"d0"
+            if "d" not in result:
+                result = result+"d0"
+            if expr < 0:
+                result = "(%s)" % result
+            return result
 
     def map_foreign(self, expr, enclosing_prec):
         if expr is None:

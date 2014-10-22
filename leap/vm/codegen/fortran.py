@@ -222,18 +222,13 @@ class FortranType(object):
 
         A tuple of ``'200'``, ``'-5:5'``, or some such.
         Entries may be numeric, too.
-
-    .. attribute:: specifiers
-
-        A tuple of things like ``'kind(8)'``
     """
 
-    def __init__(self, base_type, dimension, specifiers):
+    def __init__(self, base_type, dimension):
         self.base_type = base_type
         if dimension:
             dimension = tuple(str(d) for d in dimension)
         self.dimension = dimension
-        self.specifiers = specifiers
 
 
 # {{{ code generator
@@ -262,10 +257,7 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             to an ODE component whose right hand side it
             computes. Identity if not given.
         :arg ode_component_type_map: a map from ODE component_id names
-            to tuples, the first entry of which is the type of the
-            variable, the second is the shape (as another tuple of strings)
-            and further of which are type specifiers
-            such as 'kind(...)'.
+            to :class:`FortranType` instances
         """
 
         self.module_name = module_name
@@ -390,6 +382,9 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                         self.name_manager.name_global(identifier),
                         sym_kind)
 
+        self.emit('contains')
+        self.emit('')
+
     def emit_variable_decl(self, fortran_name, sym_kind,
             is_argument=False, other_specifiers=()):
         from leap.vm.codegen.data import Boolean, Scalar, ODEComponent
@@ -401,19 +396,13 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
         elif isinstance(sym_kind, Scalar):
             if sym_kind.is_real_valued or not self.use_complex_scalars:
-                type_name = 'real'
-                type_specifiers = type_specifiers + (
-                        'kind(%s)' % self.real_scalar_kind,)
+                type_name = 'real (kind=%s)' % self.real_scalar_kind
             else:
-                type_name = 'complex'
-                type_specifiers = type_specifiers + (
-                        'kind(%s)' % self.complex_scalar_kind,)
+                type_name = 'complex (kind=%s)' % self.complex_scalar_kind
 
         elif isinstance(sym_kind, ODEComponent):
             comp_type = self.ode_component_type_map[sym_kind.component_id]
             type_name = comp_type.base_type
-
-            type_specifiers = type_specifiers + comp_type.specifiers
 
             if not is_argument:
                 type_specifiers = type_specifiers + ('allocatable',)
@@ -421,17 +410,17 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             if comp_type.dimension:
                 if is_argument:
                     type_specifiers += (
-                            "dimension(%s)"
-                            % ",".join(len(comp_type.dimension)*":"),)
+                            "dimension(%s)" % ",".join(comp_type.dimension),)
                 else:
                     type_specifiers += (
-                            "dimension(%s)" % ",".join(comp_type.dimension),)
+                            "dimension(%s)"
+                            % ",".join(len(comp_type.dimension)*":"),)
 
         else:
             raise ValueError("unknown variable kind: %s" % type(sym_kind).__name__)
 
         if type_specifiers:
-            self.emit('{type_name} {type_specifier_list} :: {id}'.format(
+            self.emit('{type_name}, {type_specifier_list} :: {id}'.format(
                 type_name=type_name,
                 type_specifier_list=", ".join(type_specifiers),
                 id=fortran_name))
@@ -451,7 +440,9 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                 self.emitter,
                 'initialize', args, self):
 
-            self.emit('leap_state_type pointer :: leap_state')
+            self.emit('implicit none')
+            self.emit('')
+            self.emit('type(leap_state_type), pointer :: leap_state')
             self.emit('integer leap_ierr')
             self.emit('')
 
@@ -539,7 +530,9 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                 'leap_stage_func_' + func_id, ('leap_state',),
                 self).__enter__()
 
-        self.declaration_emitter('leap_state_type pointer :: leap_state')
+        self.declaration_emitter('implicit none')
+        self.declaration_emitter('')
+        self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
         self.declaration_emitter('integer leap_ierr')
         self.declaration_emitter('')
 
