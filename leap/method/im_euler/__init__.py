@@ -57,10 +57,9 @@ class ImplicitEulerMethod(Method):
 
         cbuild.add_and_get_ids(
             AssignSolvedRHS(
-                assignee=self._state.name,
-                solve_component=var('next_state'),
-                t=self._t + self._dt,
-                lhs=[
+                assignees=(self._state.name,),
+                solve_components=(var('next_state'),),
+                expressions=[
                     var('next_state') - self._state -
                     self._dt * CallWithKwargs(
                         function=var(self._component_id),
@@ -70,8 +69,7 @@ class ImplicitEulerMethod(Method):
                             self._component_id: var('next_state')
                         })
                     ],
-                rhs=[0],
-                guess=self._state,
+                solver_parameters={'initial_guess': self._state},
                 solver_id='newton',
                 id='step'),
             ReturnState(

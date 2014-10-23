@@ -22,10 +22,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from leap.vm.expression import (DifferentiationMapperWithContext, EvaluationMapper)
 from collections import namedtuple
 import numpy as np
 import scipy.optimize
+from leap.vm.expression import (EvaluationMapper,
+    DifferentiationMapperWithContext)
 
 import six
 
@@ -81,6 +82,7 @@ class NumpyInterpreter(object):
         from leap.vm.language import ExecutionController
         self.exec_controller = ExecutionController(code)
         self.state = {}
+
         builtins = {
                 "<builtin>len": len,
                 "<builtin>isnan": np.isnan,
@@ -163,18 +165,7 @@ class NumpyInterpreter(object):
 
     # {{{ execution methods
 
-    def exec_AssignRHS(self, insn):
-        rhs = self.rhs_map[insn.component_id]
-        t = self.eval_mapper(insn.t)
-
-        for assignee, args in zip(insn.assignees, insn.rhs_arguments):
-            self.state[assignee] = rhs(t, **dict(
-                    (name, self.eval_mapper(expr))
-                    for name, expr in args))
-
     def exec_AssignSolvedRHS(self, insn):
-        assert len(insn.lhs) == len(insn.rhs)
-        assert len(insn.lhs) == 1
 
         class FunctionWithContext(object):
 
@@ -194,13 +185,13 @@ class NumpyInterpreter(object):
                 else:
                     return self.context[name]
 
-        func = FunctionWithContext(insn.lhs[0] - insn.rhs[0],
-                                   insn.solve_component.name, self.state,
+        func = FunctionWithContext(insn.expressions[0],
+                                   insn.solve_components[0].name, self.state,
                                    self.functions)
 
         if insn.solver_id == 'newton':
-            guess_value = self.eval_mapper(insn.guess)
-            self.state[insn.assignee] = scipy.optimize.newton(func, guess_value)
+            guess = self.eval_mapper(insn.solver_parameters['initial_guess'])
+            self.state[insn.assignees[0]] = scipy.optimize.newton(func, guess)
         else:
             raise ValueError('Unknown solver id: ' + str(insn.solver_id))
 

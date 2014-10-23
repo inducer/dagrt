@@ -191,44 +191,46 @@ class AssignSolvedRHS(Instruction):
 
     # FIXME This needs some thought.
     """
-    .. attribute:: assignee
+    .. attribute:: assignees
 
-        A string, the name of the variable being assigned to.
+        A tuple of strings, the name of the variables being assigned to.
 
-    .. attribute:: component_ids
-    .. attribute:: t
-    .. attribute:: states
-    .. attribute:: solve_component
-    .. attribute:: initial_guess
-    .. attribute:: lhs
+    .. attribute:: solve_components
 
-        A list of expressions involving
+        A tuple of variables, the components to be solved for.
 
-    .. attribute:: rhs
+    .. attribute:: solver_parameters
+
+        A dictionary that is used to pass additional attributes to the solver.
+
+    .. attribute:: expressions
+
+        A list of expressions to be passed to the solver. The solver will find
+        a simultaneous root of the expressions.
+
     .. attribute:: solver_id
 
         An identifier for the solver that is to be used to solve the
         linear system. This identifier is intended to match information
         about solvers which becomes available at the execution or
         code generation stage.
-
-    .. attribute:: guess
     """
 
     exec_method = six.moves.intern("exec_AssignSolvedRHS")
 
     def get_assignees(self):
-        return frozenset([self.assignee])
+        return frozenset(self.assignees)
 
     def get_read_variables(self):
         raise TODO()
 
     def __str__(self):
-        lines = ["at time: %s" % self.t]
+        lines = []
         lines.append('{assignee} <- {solve_component} such that'.format(
-                assignee=self.assignee, solve_component=self.solve_component))
-        for lhs_line, rhs_line in zip(self.lhs, self.rhs):
-            lines.append('\t{lhs}={rhs}'.format(lhs=lhs_line, rhs=rhs_line))
+                assignee=self.assignees[0],
+                solve_component=self.solve_components[0]))
+        for expression in self.expressions:
+            lines.append('\t{expression}=0'.format(expression=expression))
         return "\n".join(lines)
 
 
