@@ -47,7 +47,7 @@ def test_step_matrix(show_matrix=True, show_dag=False):
     def rhs(t, y):
         return -y
 
-    def rhs_deriv(n, t, y):
+    def rhs_deriv(deriv_arg, t, y):
         return -1
 
     y = 1.0
@@ -56,8 +56,10 @@ def test_step_matrix(show_matrix=True, show_dag=False):
     dt = 0.1
 
     step_matrices = []
-    finder = StepMatrixFinder(code, rhs_map={component_id: rhs},
-       rhs_deriv_map={component_id: rhs_deriv})
+    finder = StepMatrixFinder(
+            code,
+            function_map={component_id: rhs},
+            function_deriv_map={component_id: rhs_deriv})
     finder.set_up(t_start=t, dt_start=dt, state={component_id: y})
     finder.initialize()
     for event in finder.run(t_end=final_t):

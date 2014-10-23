@@ -63,5 +63,9 @@ def wrap_line_base(pad_func, line, level=0, width=80, indentation='    '):
 
 def exec_in_new_namespace(code):
     namespace = {}
-    exec(code, globals(), namespace)
+    exec(code, namespace)
+
+    # pudb debugging support
+    namespace["_MODULE_SOURCE_CODE"] = code
+
     return namespace

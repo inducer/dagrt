@@ -78,7 +78,7 @@ def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False
         y = np.array([1, 3], dtype=np.float64)
         final_t = 10
 
-        interp = NumpyInterpreter(code, rhs_map={component_id: rhs})
+        interp = NumpyInterpreter(code, function_map={component_id: rhs})
         interp.set_up(t_start=t, dt_start=dt, state={component_id: y})
         interp.initialize()
 
@@ -153,7 +153,7 @@ def test_adaptive_timestep(method, show_dag=False, plot=False):
 
     from leap.vm.exec_numpy import NumpyInterpreter
 
-    interp = NumpyInterpreter(code, rhs_map={component_id: example})
+    interp = NumpyInterpreter(code, function_map={component_id: example})
     interp.set_up(t_start=example.t_start, dt_start=1e-5, state={component_id: y})
     interp.initialize()
 
