@@ -66,10 +66,8 @@ class FortranExpressionMapper(StringifyMapper):
 
 def _map_python_constant(constant):
     if isinstance(constant, (float, np.number)):
-        if np.isinf(constant):
-            return "float('inf')"
-        elif np.isnan(constant):
-            return "float('nan')"
+        if np.isinf(constant) or np.isnan(constant):
+            return "float('" + repr(constant) + "')"
     return repr(constant)
 
 
