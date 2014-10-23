@@ -216,8 +216,6 @@ class NumpyInterpreter(object):
                     for name, expr in args))
 
     def exec_AssignSolvedRHS(self, insn):
-        assert len(insn.lhs) == len(insn.rhs)
-        assert len(insn.lhs) == 1
 
         class FunctionWithContext(object):
 
@@ -237,13 +235,13 @@ class NumpyInterpreter(object):
                 else:
                     return self.context[name]
 
-        func = FunctionWithContext(insn.lhs[0] - insn.rhs[0],
-                                   insn.solve_component.name, self.state,
+        func = FunctionWithContext(insn.expressions[0],
+                                   insn.solve_components[0].name, self.state,
                                    self.functions)
 
         if insn.solver_id == 'newton':
-            guess_value = self.eval_mapper(insn.guess)
-            self.state[insn.assignee] = scipy.optimize.newton(func, guess_value)
+            guess = self.eval_mapper(insn.solver_parameters['initial_guess'])
+            self.state[insn.assignees[0]] = scipy.optimize.newton(func, guess)
         else:
             raise ValueError('Unknown solver id: ' + str(insn.solver_id))
 
