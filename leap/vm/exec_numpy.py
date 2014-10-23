@@ -24,8 +24,9 @@ THE SOFTWARE.
 
 from collections import namedtuple
 import numpy as np
-import numpy.linalg as la
 import scipy.optimize
+from leap.vm.expression import (EvaluationMapper,
+    DifferentiationMapperWithContext)
 
 import six
 
