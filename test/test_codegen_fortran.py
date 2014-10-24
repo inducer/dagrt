@@ -50,7 +50,8 @@ def test_basic_codegen():
     code = TimeIntegratorCode(initialization_dep_on=[],
         instructions=cbuild.instructions, step_dep_on=['return'],
         step_before_fail=False)
-    codegen = FortranCodeGenerator("simple")
+    codegen = FortranCodeGenerator("simple",
+            ode_component_type_map={})
     print(codegen(code))
 
 
@@ -76,10 +77,11 @@ def test_rk_codegen(stepper):
     code = stepper(component_id)
 
     codegen = FortranCodeGenerator(
-            'RKMethod', freg,
+            'RKMethod',
             ode_component_type_map={
                 component_id: FortranType('real (kind=8)', (200,))
                 },
+            function_registry=freg,
             module_preamble="""
             ! lines copied to the start of the module, e.g. to say:
             ! use ModStuff

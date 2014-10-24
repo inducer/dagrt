@@ -156,7 +156,11 @@ class PythonNameManager(object):
 
 class PythonCodeGenerator(StructuredCodeGenerator):
 
-    def __init__(self, class_name, function_registry):
+    def __init__(self, class_name, function_registry=None):
+        if function_registry is None:
+            from leap.vm.function_registry import base_function_registry
+            function_registry = base_function_registry
+
         self._class_name = class_name
         self._class_emitter = PythonClassEmitter(class_name)
 
@@ -164,7 +168,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         self._name_manager = PythonNameManager()
 
         self._expr_mapper = PythonExpressionMapper(
-                self._name_manager, numpy='self._numpy')
+                self._name_manager, function_registry, numpy='self._numpy')
 
     def __call__(self, dag, optimize=True):
         from .analysis import verify_code

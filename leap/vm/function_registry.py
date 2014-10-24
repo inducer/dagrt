@@ -226,7 +226,7 @@ class _PythonBuiltinFunctionCodeGenerator(object):
     def __call__(self, expr_mapper, arg_strs_dict):
         args = self.function.resolve_args(arg_strs_dict)
         return self.pattern.format(
-            numpy=self.expr_mapper.numpy,
+            numpy=expr_mapper._numpy,
             args=", ".join(args))
 
 

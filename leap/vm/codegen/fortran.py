@@ -245,8 +245,8 @@ class FortranCodeGenerator(StructuredCodeGenerator):
     language = "fortran"
 
     def __init__(self, module_name,
-            function_registry,
             ode_component_type_map,
+            function_registry=None,
             module_preamble=None,
             real_scalar_kind="8",
             complex_scalar_kind="8",
@@ -259,6 +259,9 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         :arg ode_component_type_map: a map from ODE component_id names
             to :class:`FortranType` instances
         """
+        if function_registry is None:
+            from leap.vm.function_registry import base_function_registry
+            function_registry = base_function_registry
 
         self.module_name = module_name
         self.function_registry = function_registry
@@ -524,7 +527,6 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
         self.declaration_emitter = FortranEmitter()
 
-        # The current function is handled by self.emit
         FortranSubroutineEmitter(
                 self.emitter,
                 'leap_stage_func_' + func_id, ('leap_state',),
