@@ -24,7 +24,6 @@ THE SOFTWARE.
 
 from pymbolic.mapper.stringifier import (
         StringifyMapper, PREC_NONE)
-from pytools import DictionaryWithDefault
 import numpy as np
 
 
@@ -133,10 +132,26 @@ class PythonExpressionMapper(StringifyMapper):
         for name, arg in kwargs.items():
             arg_strs_dict[name] = self.rec(arg, PREC_NONE)
 
-        codegen = self.function_registry.get_codegen(
-                symbol.name, "python")
+        from leap.vm.function_registry import FunctionNotFound
+        try:
+            codegen = self._function_registry.get_codegen(
+                    symbol.name, "python")
+        except FunctionNotFound:
+            args_strs = [
+                    self.rec(val, PREC_NONE)
+                    for val in args
+                    ] + [
+                    '{name}={expr}'.format(
+                        name=name,
+                        expr=self.rec(val, PREC_NONE))
+                    for name, val in kwargs.items()]
 
-        return codegen(self, arg_strs_dict)
+            return 'self._functions.{rhs}({args})'.format(
+                    rhs=self._name_manager.name_function(symbol),
+                    args=", ".join(args_strs))
+
+        else:
+            return codegen(self, arg_strs_dict)
 
     def map_call(self, expr, enclosing_prec):
         return self.map_generic_call(
