@@ -33,6 +33,10 @@ NoneType = type(None)
 
 # {{{ function
 
+class FunctionNotFound(KeyError):
+    pass
+
+
 class Function(RecordWithoutPickling):
     """
     .. attribute:: identifier
@@ -74,7 +78,7 @@ class Function(RecordWithoutPickling):
         try:
             return self.language_to_codegen[language]
         except KeyError:
-            return ValueError(
+            return KeyError(
                     "'%s' has no code generator for language '%s'"
                     % (self.identifier, language))
 
@@ -110,7 +114,7 @@ class FunctionRegistry(RecordWithoutPickling):
         try:
             return self.id_to_function[function_id]
         except KeyError:
-            raise NameError(
+            raise FunctionNotFound(
                     "unknown function: '%s'"
                     % function_id)
 
@@ -133,7 +137,7 @@ class FunctionRegistry(RecordWithoutPickling):
         try:
             func = self.id_to_function[function_id]
         except KeyError:
-            raise NameError(
+            raise FunctionNotFound(
                     "unknown function: '%s'"
                     % function_id)
 
