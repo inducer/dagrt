@@ -37,7 +37,7 @@ class LinearODESystemsBase():
 
                             ∂w/∂t = A w,
 
-    with w = [u,v] = [u,∂u/∂t]. The system gets solved for differen matrix A.
+    with w = [f,s] = [f,∂f/∂t]. The system gets solved for differen matrix A.
     """
     def __init__(self):
         self.t_start = 0
@@ -49,8 +49,8 @@ class LinearODESystemsBase():
 class Basic(LinearODESystemsBase):
     """
     ODE-system - basic
-    ∂u/∂t = v
-    ∂v/∂t = -u/t²
+    ∂f/∂t = s
+    ∂s/∂t = -f/t²
     A = [[0, 1]
         [-1/t², 0]].
     """
@@ -59,16 +59,16 @@ class Basic(LinearODESystemsBase):
         self.t_end = 2
         self.initial_values = np.array([1, 3])
 
-    def f2f_rhs(self, t, u, v):
+    def f2f_rhs(self, t, f, s):
         return 0
 
-    def s2f_rhs(self, t, u, v):
-        return v
+    def s2f_rhs(self, t, f, s):
+        return s
 
-    def f2s_rhs(self, t, u, v):
-        return -u/t**2
+    def f2s_rhs(self, t, f, s):
+        return -f/t**2
 
-    def s2s_rhs(self, t, u, v):
+    def s2s_rhs(self, t, f, s):
         return 0
 
     def soln_0(self, t):
@@ -94,17 +94,17 @@ class Full(LinearODESystemsBase):
     def __init__(self):
         LinearODESystemsBase.__init__(self)
 
-    def f2f_rhs(self, t, u, v):
-        return cos(2*t)*u
+    def f2f_rhs(self, t, f, s):
+        return cos(2*t)*f
 
-    def s2f_rhs(self, t, u, v):
-        return (sin(2*t)-1)*v
+    def s2f_rhs(self, t, f, s):
+        return (sin(2*t)-1)*s
 
-    def f2s_rhs(self, t, u, v):
-        return (sin(2*t)+1)*u
+    def f2s_rhs(self, t, f, s):
+        return (sin(2*t)+1)*f
 
-    def s2s_rhs(self, t, u, v):
-        return -cos(2*t)*v
+    def s2s_rhs(self, t, f, s):
+        return -cos(2*t)*s
 
     def soln_0(self, t):
         return exp(t)*cos(t)
@@ -125,17 +125,17 @@ class Real(LinearODESystemsBase):
     def __init__(self):
         LinearODESystemsBase.__init__(self)
 
-    def f2f_rhs(self, t, u, v):
-        return -u
+    def f2f_rhs(self, t, f, s):
+        return -f
 
-    def s2f_rhs(self, t, u, v):
-        return 3*v
+    def s2f_rhs(self, t, f, s):
+        return 3*s
 
-    def f2s_rhs(self, t, u, v):
-        return 2*u
+    def f2s_rhs(self, t, f, s):
+        return 2*f
 
-    def s2s_rhs(self, t, u, v):
-        return -2*v
+    def s2s_rhs(self, t, f, s):
+        return -2*s
 
     def soln_0(self, t):
         return exp(-4*t)*(exp(5*t)+1)
@@ -156,16 +156,16 @@ class Comp(LinearODESystemsBase):
     def __init__(self):
         LinearODESystemsBase.__init__(self)
 
-    def f2f_rhs(self, t, u, v):
+    def f2f_rhs(self, t, f, s):
         return 0
 
-    def s2f_rhs(self, t, u, v):
-        return v
+    def s2f_rhs(self, t, f, s):
+        return s
 
-    def f2s_rhs(self, t, u, v):
-        return -u
+    def f2s_rhs(self, t, f, s):
+        return -f
 
-    def s2s_rhs(self, t, u, v):
+    def s2s_rhs(self, t, f, s):
         return 0
 
     def soln_0(self, t):
@@ -185,17 +185,17 @@ class CC(LinearODESystemsBase):
     def __init__(self):
         LinearODESystemsBase.__init__(self)
 
-    def f2f_rhs(self, t, u, v):
-        return u
+    def f2f_rhs(self, t, f, s):
+        return f
 
-    def s2f_rhs(self, t, u, v):
-        return v
+    def s2f_rhs(self, t, f, s):
+        return s
 
-    def f2s_rhs(self, t, u, v):
-        return -u
+    def f2s_rhs(self, t, f, s):
+        return -f
 
-    def s2s_rhs(self, t, u, v):
-        return v
+    def s2s_rhs(self, t, f, s):
+        return s
 
     def soln_0(self, t):
         return exp(t)*sin(t)
@@ -207,27 +207,27 @@ class CC(LinearODESystemsBase):
 class Tria(LinearODESystemsBase):
     """
     ODE-system - tria
-    ∂²u/∂t² + ∂u/∂t + u = 0
+    ∂²f/∂t² + ∂f/∂t + f = 0
     gets to:
-    ∂u/∂t = v
-    ∂v/∂t = -v -u.
+    ∂f/∂t = s
+    ∂s/∂t = -s -f.
     """
     def __init__(self):
         self.t_start = 0
         self.t_end = 2
         self.initial_values = np.array([1, 3])
 
-    def f2f_rhs(self, t, u, v):
+    def f2f_rhs(self, t, f, s):
         return 0
 
-    def s2f_rhs(self, t, u, v):
-        return v
+    def s2f_rhs(self, t, f, s):
+        return s
 
-    def f2s_rhs(self, t, u, v):
-        return -u
+    def f2s_rhs(self, t, f, s):
+        return -f
 
-    def s2s_rhs(self, t, u, v):
-        return -v
+    def s2s_rhs(self, t, f, s):
+        return -s
 
     def soln_0(self, t):
         inner = sqrt(3)/2*t
@@ -251,17 +251,17 @@ class Inh(LinearODESystemsBase):
     def __init__(self):
         LinearODESystemsBase.__init__(self)
 
-    def f2f_rhs(self, t, u, v):
-        return -2*u + 2*exp(2*t)
+    def f2f_rhs(self, t, f, s):
+        return -2*f + 2*exp(2*t)
 
-    def s2f_rhs(self, t, u, v):
-        return 3*v
+    def s2f_rhs(self, t, f, s):
+        return 3*s
 
-    def f2s_rhs(self, t, u, v):
-        return -3*u
+    def f2s_rhs(self, t, f, s):
+        return -3*f
 
-    def s2s_rhs(self, t, u, v):
-        return -2*v
+    def s2s_rhs(self, t, f, s):
+        return -2*s
 
     def soln_0(self, t):
         return exp(-2*t) * (6/25*sin(3*t)
@@ -289,17 +289,17 @@ class Inh2(LinearODESystemsBase):
     def __init__(self):
         LinearODESystemsBase.__init__(self)
 
-    def f2f_rhs(self, t, u, v):
-        return -1*u + t
+    def f2f_rhs(self, t, f, s):
+        return -1*f + t
 
-    def s2f_rhs(self, t, u, v):
-        return 3*v
+    def s2f_rhs(self, t, f, s):
+        return 3*s
 
-    def f2s_rhs(self, t, u, v):
-        return 2*u
+    def f2s_rhs(self, t, f, s):
+        return 2*f
 
-    def s2s_rhs(self, t, u, v):
-        return -2*v + exp(-t)
+    def s2s_rhs(self, t, f, s):
+        return -2*s + exp(-t)
 
     def soln_0(self, t):
         return 9/40*exp(-4*t)+9/10*exp(t)-0.5*t-5/8-0.5*exp(-t)
@@ -325,17 +325,17 @@ class ExtForceStiff(LinearODESystemsBase):
         self.c1 = (999-2001*(self.lambda_2 + 1))/(self.lambda_1-self.lambda_2)
         self.c2 = 2001 - (999-2001*(self.lambda_2 + 1))/(self.lambda_1-self.lambda_2)
 
-    def f2f_rhs(self, t, u, v):
-        return -1*u
+    def f2f_rhs(self, t, f, s):
+        return -1*f
 
-    def s2f_rhs(self, t, u, v):
-        return 0.001*v
+    def s2f_rhs(self, t, f, s):
+        return 0.001*s
 
-    def f2s_rhs(self, t, u, v):
-        return 0.001*u
+    def f2s_rhs(self, t, f, s):
+        return 0.001*f
 
-    def s2s_rhs(self, t, u, v):
-        return -0.001*v + exp(-t) + exp(-0.001*t)
+    def s2s_rhs(self, t, f, s):
+        return -0.001*s + exp(-t) + exp(-0.001*t)
 
     def soln_0(self, t):
         return self.c1 * exp(self.lambda_1*t)\
@@ -359,17 +359,17 @@ class StiffUncoupled(LinearODESystemsBase):
         self.lambda_2 = -0.001
         LinearODESystemsBase.__init__(self)
 
-    def f2f_rhs(self, t, u, v):
-        return -1*u
+    def f2f_rhs(self, t, f, s):
+        return -1*f
 
-    def s2f_rhs(self, t, u, v):
+    def s2f_rhs(self, t, f, s):
         return 0
 
-    def f2s_rhs(self, t, u, v):
+    def f2s_rhs(self, t, f, s):
         return 0
 
-    def s2s_rhs(self, t, u, v):
-        return -0.001*v
+    def s2s_rhs(self, t, f, s):
+        return -0.001*s
 
     def soln_0(self, t):
         return exp(self.lambda_1*t)
@@ -389,17 +389,17 @@ class NonStiffUncoupled(LinearODESystemsBase):
         self.lambda_2 = -1
         LinearODESystemsBase.__init__(self)
 
-    def f2f_rhs(self, t, u, v):
-        return -1*u
+    def f2f_rhs(self, t, f, s):
+        return -1*f
 
-    def s2f_rhs(self, t, u, v):
+    def s2f_rhs(self, t, f, s):
         return 0
 
-    def f2s_rhs(self, t, u, v):
+    def f2s_rhs(self, t, f, s):
         return 0
 
-    def s2s_rhs(self, t, u, v):
-        return -1*v
+    def s2s_rhs(self, t, f, s):
+        return -1*s
 
     def soln_0(self, t):
         return exp(self.lambda_1*t)
@@ -419,17 +419,17 @@ class WeakCoupled(LinearODESystemsBase):
         LinearODESystemsBase.__init__(self)
         self.t_end = 2
 
-    def f2f_rhs(self, t, u, v):
-        return -1*u
+    def f2f_rhs(self, t, f, s):
+        return -1*f
 
-    def s2f_rhs(self, t, u, v):
-        return 0.001*v
+    def s2f_rhs(self, t, f, s):
+        return 0.001*s
 
-    def f2s_rhs(self, t, u, v):
-        return 0.001*u
+    def f2s_rhs(self, t, f, s):
+        return 0.001*f
 
-    def s2s_rhs(self, t, u, v):
-        return -0.001*v
+    def s2s_rhs(self, t, f, s):
+        return -0.001*s
 
     def soln_0(self, t):
         return exp(self.lambda_1*t) + exp(self.lambda_2*t)
@@ -463,17 +463,17 @@ class WeakCoupledInit(LinearODESystemsBase):
         self.initial_values = np.array([1,1])
         """
 
-    def f2f_rhs(self, t, u, v):
-        return self.a11*u
+    def f2f_rhs(self, t, f, s):
+        return self.a11*f
 
-    def s2f_rhs(self, t, u, v):
-        return self.a12*v
+    def s2f_rhs(self, t, f, s):
+        return self.a12*s
 
-    def f2s_rhs(self, t, u, v):
-        return 0.001*u
+    def f2s_rhs(self, t, f, s):
+        return 0.001*f
 
-    def s2s_rhs(self, t, u, v):
-        return -0.001*v
+    def s2s_rhs(self, t, f, s):
+        return -0.001*s
 
     def soln_0(self, t):
         return self.c1 * exp(self.lambda_1*t)\
@@ -497,17 +497,17 @@ class StrongCoupled(LinearODESystemsBase):
         LinearODESystemsBase.__init__(self)
         self.t_end = 2
 
-    def f2f_rhs(self, t, u, v):
-        return -1*u
+    def f2f_rhs(self, t, f, s):
+        return -1*f
 
-    def s2f_rhs(self, t, u, v):
-        return -1*v
+    def s2f_rhs(self, t, f, s):
+        return -1*s
 
-    def f2s_rhs(self, t, u, v):
-        return 0.001*u
+    def f2s_rhs(self, t, f, s):
+        return 0.001*f
 
-    def s2s_rhs(self, t, u, v):
-        return -0.001*v
+    def s2s_rhs(self, t, f, s):
+        return -0.001*s
 
     def soln_0(self, t):
         return exp(self.lambda_1*t) + exp(self.lambda_2*t)
@@ -536,17 +536,17 @@ class ExtForceNonStiff(LinearODESystemsBase):
         self.c1 = (9-3*(self.lambda_2 + 10))/(self.lambda_1-self.lambda_2)
         self.c2 = 3 - (9-3*(self.lambda_2 + 10))/(self.lambda_1-self.lambda_2)
 
-    def f2f_rhs(self, t, u, v):
-        return -10*u
+    def f2f_rhs(self, t, f, s):
+        return -10*f
 
-    def s2f_rhs(self, t, u, v):
-        return 1*v
+    def s2f_rhs(self, t, f, s):
+        return 1*s
 
-    def f2s_rhs(self, t, u, v):
-        return 1*u
+    def f2s_rhs(self, t, f, s):
+        return 1*f
 
-    def s2s_rhs(self, t, u, v):
-        return -1*v + exp(-t) + exp(-10*t)
+    def s2s_rhs(self, t, f, s):
+        return -1*s + exp(-t) + exp(-10*t)
 
     def soln_0(self, t):
         return self.c1 * exp(self.lambda_1*t) + self.c2 * exp(self.lambda_2*t)\
@@ -569,17 +569,17 @@ class StiffCoupled2(LinearODESystemsBase):
         LinearODESystemsBase.__init__(self)
         self.t_end = 2
 
-    def f2f_rhs(self, t, u, v):
-        return -1*u
+    def f2f_rhs(self, t, f, s):
+        return -1*f
 
-    def s2f_rhs(self, t, u, v):
-        return 0.999*v
+    def s2f_rhs(self, t, f, s):
+        return 0.999*s
 
-    def f2s_rhs(self, t, u, v):
-        return 0*u
+    def f2s_rhs(self, t, f, s):
+        return 0*f
 
-    def s2s_rhs(self, t, u, v):
-        return -0.001*v
+    def s2s_rhs(self, t, f, s):
+        return -0.001*s
 
     def soln_0(self, t):
         return exp(self.lambda_1*t) + exp(self.lambda_2*t)
@@ -599,17 +599,17 @@ class StiffComp(LinearODESystemsBase):
         LinearODESystemsBase.__init__(self)
         self.t_end = 2
 
-    def f2f_rhs(self, t, u, v):
-        return 0*u
+    def f2f_rhs(self, t, f, s):
+        return 0*f
 
-    def s2f_rhs(self, t, u, v):
-        return 1*v
+    def s2f_rhs(self, t, f, s):
+        return 1*s
 
-    def f2s_rhs(self, t, u, v):
-        return -100*u
+    def f2s_rhs(self, t, f, s):
+        return -100*f
 
-    def s2s_rhs(self, t, u, v):
-        return 0*v
+    def s2s_rhs(self, t, f, s):
+        return 0*s
 
     def soln_0(self, t):
         return 2*cos(10*t)
@@ -636,17 +636,17 @@ class StiffComp2(LinearODESystemsBase):
         self.initial_values = np.array([1,1])
         """
 
-    def f2f_rhs(self, t, u, v):
-        return self.a11*u
+    def f2f_rhs(self, t, f, s):
+        return self.a11*f
 
-    def s2f_rhs(self, t, u, v):
-        return self.a12*v
+    def s2f_rhs(self, t, f, s):
+        return self.a12*s
 
-    def f2s_rhs(self, t, u, v):
-        return 1*u
+    def f2s_rhs(self, t, f, s):
+        return 1*f
 
-    def s2s_rhs(self, t, u, v):
-        return -0.001*v
+    def s2s_rhs(self, t, f, s):
+        return -0.001*s
 
     def soln_0(self, t):
         return exp(self.alpha*t)\
@@ -674,17 +674,17 @@ class StiffOscil(LinearODESystemsBase):
         LinearODESystemsBase.__init__(self)
         self.t_end = 2
 
-    def f2f_rhs(self, t, u, v):
-        return cos(t*10) + 0*u
+    def f2f_rhs(self, t, f, s):
+        return cos(t*10) + 0*f
 
-    def s2f_rhs(self, t, u, v):
-        return 0*v
+    def s2f_rhs(self, t, f, s):
+        return 0*s
 
-    def f2s_rhs(self, t, u, v):
-        return 0*u
+    def f2s_rhs(self, t, f, s):
+        return 0*f
 
-    def s2s_rhs(self, t, u, v):
-        return cos(t)+0*v
+    def s2s_rhs(self, t, f, s):
+        return cos(t)+0*s
 
     def soln_0(self, t):
         return 1/10*sin(t*10)
