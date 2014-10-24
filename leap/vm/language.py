@@ -555,8 +555,8 @@ class CodeBuilder(object):
         self.build_group = []
 
     def fresh_var_name(self, prefix):
-        """Return a variable name that is not guaranteed not to be in use and
-        not to be generated in the future."""
+        """Return a variable name that is guaranteed not to be in use and not
+        to be generated in the future."""
         from pytools import generate_unique_names
         for possible_var in generate_unique_names(str(prefix)):
             if possible_var not in self.var_set \
