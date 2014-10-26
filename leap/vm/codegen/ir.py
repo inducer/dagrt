@@ -71,43 +71,6 @@ class Inst(RecordWithoutPickling):
         raise NotImplementedError()
 
 
-class TerminatorInst(Inst):
-    """Base class for instructions that terminate a basic block."""
-    terminal = True
-
-
-class BranchInst(TerminatorInst):
-    """A conditional branch.
-
-    .. attribute:: condition
-        A pymbolic expression for the condition
-
-    .. attribute:: on_true
-    .. attribute:: on_false
-        The BasicBlocks that are destinations of the branch
-    """
-
-    def __init__(self, condition, on_true, on_false, block=None):
-        super(BranchInst, self).__init__(condition=condition, on_true=on_true,
-                                         on_false=on_false, block=block)
-
-    def get_defined_variables(self):
-        return frozenset()
-
-    @memoize_method
-    def get_used_variables(self):
-        return get_variables(self.condition)
-
-    def get_jump_targets(self):
-        return frozenset([self.on_true, self.on_false])
-
-    def __str__(self):
-        return \
-            'if {cond} then goto block {true} else goto block {false}'.format(
-                cond=string_mapper(self.condition), true=self.on_true.number,
-                false=self.on_false.number)
-
-
 class AssignInst(Inst):
     """Assigns a value.
 
@@ -174,6 +137,67 @@ class AssignInst(Inst):
         raise TODO('Implement string representation for all assignment types')
 
 
+class YieldInst(Inst):
+    """Generates a value.
+
+    .. attribute:: expression
+       A pymbolic expression for the generated value.
+    """
+
+    def __init__(self, expression, block=None):
+        super(YieldInst, self).__init__(expression=expression, block=block)
+
+    def get_defined_variables(self):
+        return frozenset()
+
+    @memoize_method
+    def get_used_variables(self):
+        return get_variables(self.expression)
+
+    def get_jump_targets(self):
+        return frozenset()
+
+    def __str__(self):
+        return 'yield ' + string_mapper(self.expression)
+
+
+class TerminatorInst(Inst):
+    """Base class for instructions that terminate a basic block."""
+    terminal = True
+
+
+class BranchInst(TerminatorInst):
+    """A conditional branch.
+
+    .. attribute:: condition
+        A pymbolic expression for the condition
+
+    .. attribute:: on_true
+    .. attribute:: on_false
+        The BasicBlocks that are destinations of the branch
+    """
+
+    def __init__(self, condition, on_true, on_false, block=None):
+        super(BranchInst, self).__init__(condition=condition, on_true=on_true,
+                                         on_false=on_false, block=block)
+
+    def get_defined_variables(self):
+        return frozenset()
+
+    @memoize_method
+    def get_used_variables(self):
+        return get_variables(self.condition)
+
+    def get_jump_targets(self):
+        return frozenset([self.on_true, self.on_false])
+
+    def __str__(self):
+        return \
+            'if {cond} then goto block {true} else goto block {false}'.format(
+                cond=string_mapper(self.condition), true=self.on_true.number,
+                false=self.on_false.number)
+
+
 class JumpInst(TerminatorInst):
     """Jumps to another basic block.
 
@@ -198,34 +222,10 @@ class JumpInst(TerminatorInst):
 
 
 class ReturnInst(TerminatorInst):
-    """Returns from the function.
-
-    .. attribute:: expression
-        A pymbolic expression for the return value
-    """
-
-    def __init__(self, expression, block=None):
-        super(ReturnInst, self).__init__(expression=expression, block=block)
-
-    def get_defined_variables(self):
-        return frozenset()
-
-    @memoize_method
-    def get_used_variables(self):
-        return get_variables(self.expression)
-
-    def get_jump_targets(self):
-        return frozenset()
-
-    def __str__(self):
-        return 'return ' + string_mapper(self.expression)
-
-
-class UnreachableInst(TerminatorInst):
-    """Indicates an unreachable point in the code."""
+    """Returns from the function."""
 
     def __init__(self, block=None):
-        super(UnreachableInst, self).__init__(block=block)
+        super(ReturnInst, self).__init__(block=block)
 
     def get_defined_variables(self):
         return frozenset()
@@ -237,7 +237,8 @@ class UnreachableInst(TerminatorInst):
         return frozenset()
 
     def __str__(self):
-        return 'unreachable'
+        return 'return'
+
 
 # }}}
 
@@ -322,12 +323,6 @@ class BasicBlock(object):
                     self.succesors = set()
         self.code = new_code
 
-    def add_unreachable(self):
-        """Append an unreachable instruction to the block."""
-        assert not self.terminated
-        self.code.append(UnreachableInst(self))
-        self.terminated = True
-
     def add_successor(self, successor):
         """Add a successor block to the set of successors."""
         assert isinstance(successor, BasicBlock)
@@ -349,11 +344,14 @@ class BasicBlock(object):
         """
         self.add_instruction(BranchInst(condition, on_true, on_false))
 
-    def add_return(self, expr):
-        """Append a return instruction to the block that returns the given
-        expression.
-        """
-        self.add_instruction(ReturnInst(expr))
+    def add_return(self):
+        """Append a return instruction to the block."""
+        self.add_instruction(ReturnInst())
+
+    def add_yield(self, expr):
+        """Append a yield instruction to the block with the given
+        expression."""
+        self.add_instruction(YieldInst(expr))
 
     def __str__(self):
         lines = []

@@ -277,28 +277,34 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         emit('current_stage = "initialization"')
         emit('while True:')
         with Indentation(emit):
+            emit('print(current_stage)')
             emit('if self.t + self.dt >= t_end:')
             with Indentation(emit):
                 emit('assert self.t <= t_end')
                 emit('self.dt = t_end - self.t')
                 emit('last_step = True')
-            emit('stage_function = getattr(self, "stage_" + current_stage)')
-            emit('result = stage_function()')
-            emit('if result:')
+            emit('stage = getattr(self, "stage_" + current_stage)()')
+            emit('try:')
             with Indentation(emit):
-                emit('t = result[0][1]')
-                emit('time_id = result[1][1]')
-                emit('component_id = result[2][1]')
-                emit('state_component = result[3][1]')
-                emit('yield self.StateComputed(t=t, time_id=time_id, \\')
-                emit('    component_id=component_id, ' +
-                     'state_component=state_component)')
-                emit('if last_step:')
+                emit('while True:')
                 with Indentation(emit):
-                    emit('yield self.StepCompleted(t=self.t)')
-                    emit('break')
+                    emit('result = next(stage)')
+                    emit('t = result[0][1]')
+                    emit('time_id = result[1][1]')
+                    emit('component_id = result[2][1]')
+                    emit('state_component = result[3][1]')
+                    emit('yield self.StateComputed(t=t, time_id=time_id, \\')
+                    emit('    component_id=component_id, ' +
+                         'state_component=state_component)')
+            emit('except StopIteration:')
+            with Indentation(emit):
+                emit('pass')
+            # STAGE_HACK: Ensure that the primary stage has a chance to run.
+            emit('if last_step and current_stage == "primary":')
+            with Indentation(emit):
+                emit('yield self.StepCompleted(t=self.t)')
+                emit('raise StopIteration()')
             emit('current_stage = next_stages[current_stage]')
-
         emit("")
         self._class_emitter.incorporate(emit)
 
@@ -353,5 +359,17 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         self._emit('{name} = {expr}'.format(name=self._name_manager[name],
                                            expr=self._expr(expr)))
 
-    def emit_return(self, expr):
-        self._emit('return {expr}'.format(expr=self._expr(expr)))
+    def emit_return(self):
+        self._emit('raise StopIteration()')
+        # Ensure that Python recognizes this method as a generator function by
+        # adding a yield statement. Otherwise, calling methods that do not
+        # yield any values may result in raising a naked StopIteration instead
+        # of the creation of a generator, which does not interact well with the
+        # run() implementation.
+        #
+        # TODO: Python 3.3+ has "yield from ()" which results in slightly less
+        # awkward syntax.
+        self._emit('yield')
+
+    def emit_yield(self, expr):
+        self._emit('yield {expr}'.format(expr=self._expr(expr)))

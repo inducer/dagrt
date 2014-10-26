@@ -667,8 +667,11 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                 name=self.name_manager[name], rhs=self.rhs(rhs),
                 t=self.expr(time), kwargs=kwargs))
 
-    def emit_return(self, expr):
-        self.emit('return {expr}'.format(expr=self.expr(expr)))
+    def emit_return(self):
+        self.emit('return')
+
+    def emit_yield(self, expr):
+        self.emit('yield {expr}'.format(expr=self.expr(expr)))
 
     # }}}
 
