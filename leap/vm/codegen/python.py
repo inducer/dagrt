@@ -277,7 +277,6 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         emit('current_stage = "initialization"')
         emit('while True:')
         with Indentation(emit):
-            emit('print(current_stage)')
             emit('if self.t + self.dt >= t_end:')
             with Indentation(emit):
                 emit('assert self.t <= t_end')
