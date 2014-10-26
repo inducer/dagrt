@@ -23,8 +23,8 @@ THE SOFTWARE.
 """
 
 from pytools import memoize_method
-from pymbolic.mapper import CombineMapper
-from leap.vm.language import Instruction, If
+from pymbolic.mapper import Collector
+from leap.vm.language import Instruction, If, ReturnState
 from .graphs import InstructionDAGIntGraph
 import six
 
@@ -145,17 +145,7 @@ def verify_code(code):
 
 # {{{ collect rhs names from DAG
 
-class _FunctionNameCollector(CombineMapper):
-    def combine(self, values):
-        import operator
-        return six.moves.reduce(operator.or_, values, set())
-
-    def map_constant(self, expr):
-        return set()
-
-    def map_variable(self, expr):
-        return set()
-
+class _FunctionNameCollector(Collector):
     def map_call(self, expr):
         return (set([expr.function])
                 | super(_FunctionNameCollector, self).map_call(expr))
@@ -175,6 +165,20 @@ def collect_function_names_from_dag(dag):
 
     for insn in dag.instructions:
         insn.visit_expressions(visit)
+
+    return result
+
+# }}}
+
+
+# {{{ collect time IDs from DAG
+
+def collect_time_ids_from_dag(dag):
+    result = set()
+
+    for insn in dag.instructions:
+        if isinstance(insn, ReturnState):
+            result.add(insn.time_id)
 
     return result
 

@@ -388,8 +388,6 @@ class If(Instruction):
 
 # }}}
 
-# light cone optimizations?
-
 
 # {{{ code container
 

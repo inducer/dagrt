@@ -299,12 +299,8 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             self.emitter(wrapped_line)
 
     def __call__(self, dag, optimize=True):
-        from .analysis import (
-                verify_code,
-                collect_function_names_from_dag)
+        from .analysis import verify_code
         verify_code(dag)
-
-        func_names = collect_function_names_from_dag(dag)
 
         from .codegen_base import NewTimeIntegratorCode
         dag = NewTimeIntegratorCode.from_old(dag)
@@ -365,6 +361,12 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             for l in self.module_preamble:
                 self.emit(l)
             self.emit('')
+
+        from .analysis import collect_time_ids_from_dag
+        for i, time_id in enumerate(collect_time_ids_from_dag(dag)):
+            self.emit("parameter (leap_time_{time_id} = {i})".format(
+                time_id=time_id, i=i))
+        self.emit('')
 
         for i, stage in enumerate(dag.stages):
             self.emit("parameter (leap_stage_{stage_name} = {i})".format(
