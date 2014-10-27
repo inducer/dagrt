@@ -493,7 +493,6 @@ class SymbolTableEntry(RecordWithoutPickling):
     """Holds information about the contents of a variable. This includes
     all instructions that reference the variable.
 
-    .. attribute:: is_return_value
     .. attribute:: is_flag
     .. attribute:: is_global
 
@@ -503,7 +502,6 @@ class SymbolTableEntry(RecordWithoutPickling):
     """
 
     def __init__(self,
-            is_return_value=False,
             is_flag=False,
             is_global=False,
             references=None):
@@ -511,7 +509,6 @@ class SymbolTableEntry(RecordWithoutPickling):
             references = set()
 
         super(SymbolTableEntry, self).__init__(
-                is_return_value=is_return_value,
                 is_flag=is_flag,
                 is_global=is_global,
                 references=references,

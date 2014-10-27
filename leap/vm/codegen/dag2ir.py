@@ -335,10 +335,6 @@ class ControlFlowGraphAssembler(object):
         # Create the function object to associate with each basic block.
         self._function = ir.Function(name, self._symbol_table)
 
-        # Initialize a new variable to hold the return value.
-        self._return_val = self._symbol_table.get_fresh_variable_name('retval')
-        self._symbol_table.add_variable(self._return_val, is_return_value=True)
-
         # Find the exit block and create a new basic block out of it.
         exit_block = inst_id_to_block[ex.id]
 
