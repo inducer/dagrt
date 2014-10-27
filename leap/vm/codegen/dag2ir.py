@@ -22,9 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from leap.vm.language import Instruction, AssignExpression, AssignNorm, \
-    AssignDotProduct, AssignSolvedRHS, AssignRHS, If, ReturnState, Raise, \
-    FailStep
+from leap.vm.language import (
+        Instruction, AssignExpression, AssignSolvedRHS,
+        If, ReturnState, Raise, FailStep)
 from leap.vm.utils import TODO
 from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import get_unique_name, is_state_variable
@@ -335,10 +335,6 @@ class ControlFlowGraphAssembler(object):
         # Create the function object to associate with each basic block.
         self._function = ir.Function(name, self._symbol_table)
 
-        # Initialize a new variable to hold the return value.
-        self._return_val = self._symbol_table.get_fresh_variable_name('retval')
-        self._symbol_table.add_variable(self._return_val, is_return_value=True)
-
         # Find the exit block and create a new basic block out of it.
         exit_block = inst_id_to_block[ex.id]
 
@@ -353,9 +349,6 @@ class ControlFlowGraphAssembler(object):
         # Create the control flow graph.
         end_bb, flag_tracker = self._process_block(exit_block, entry_bb,
                                                    flag_tracker)
-
-        if not end_bb.terminated:
-            end_bb.add_unreachable()
 
         self._function.assign_entry_block(entry_bb)
         return self._function
@@ -409,8 +402,6 @@ class ControlFlowGraphAssembler(object):
         # Initialize the flag variables.
         for flag in six.itervalues(self._flags):
             start_bb.add_assignment((flag, False))
-        # Initialize the return value.
-        start_bb.add_assignment((self._return_val, None))
         return start_bb
 
     def _process_block_sequence(self, block_sequence, top_bb, flag_tracker):
@@ -470,7 +461,7 @@ class ControlFlowGraphAssembler(object):
                 continue
 
             elif isinstance(instruction, Exit):
-                main_bb.add_return(var(self._return_val))
+                main_bb.add_return()
                 break
 
             elif isinstance(instruction, If):
@@ -501,17 +492,13 @@ class ControlFlowGraphAssembler(object):
                 main_bb = then_else_merge_bb
 
             elif isinstance(instruction, ReturnState):
-                return_value = (('time', instruction.time),
-                                ('time_id', instruction.time_id),
-                                ('component_id', instruction.component_id),
-                                ('expression', instruction.expression))
-                main_bb.add_assignment((self._return_val, return_value))
+                yield_value = (('time', instruction.time),
+                               ('time_id', instruction.time_id),
+                               ('component_id', instruction.component_id),
+                               ('expression', instruction.expression))
+                main_bb.add_yield(yield_value)
 
-            elif isinstance(instruction, AssignExpression) or \
-                    isinstance(instruction, AssignRHS) or \
-                    isinstance(instruction, AssignNorm) or \
-                    isinstance(instruction, AssignSolvedRHS) or \
-                    isinstance(instruction, AssignDotProduct):
+            elif isinstance(instruction, (AssignExpression, AssignSolvedRHS)):
                 main_bb.add_assignment(instruction)
 
             elif isinstance(instruction, Raise):

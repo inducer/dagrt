@@ -29,6 +29,7 @@ THE SOFTWARE.
 
 import leap.vm.language as lang
 import leap.vm.codegen.ir as ir
+from leap.vm.utils import is_state_variable
 from pytools import RecordWithoutPickling
 from pymbolic.mapper import Mapper
 
@@ -48,7 +49,7 @@ class SymbolKind(RecordWithoutPickling):
         return ()
 
 
-class Flag(SymbolKind):
+class Boolean(SymbolKind):
     pass
 
 
@@ -83,9 +84,7 @@ class SymbolKindTable(object):
         a mapping from symbol names to :class:`SymbolKind` instances,
         for global symbols
 
-    .. attribute:: per_function_table
-
-        a mapping from ``(function, symbol_name)``
+    .. attribute:: a nested mapping ``[function][symbol_name]``
         to :class:`SymbolKind` instances
     """
 
@@ -97,7 +96,6 @@ class SymbolKindTable(object):
         self.per_function_table = {}
 
     def _set(self, func_name, name, kind):
-        from leap.vm.utils import is_state_variable
         if is_state_variable(name):
             tbl = self.global_table
         else:
@@ -113,6 +111,14 @@ class SymbolKindTable(object):
                             type(tbl[name]).__name__))
         else:
             tbl[name] = kind
+
+    def get(self, func_name, name):
+        if is_state_variable(name):
+            tbl = self.global_table
+        else:
+            tbl = self.per_function_table.setdefault(func_name, {})
+
+        return tbl[name]
 
     def __str__(self):
         def format_table(tbl, indent="  "):
@@ -138,9 +144,9 @@ def unify(kind_a, kind_b):
     if kind_b is None:
         return kind_a
 
-    if isinstance(kind_a, Flag):
+    if isinstance(kind_a, Boolean):
         raise ValueError("arithmetic with flags is not permitted")
-    if isinstance(kind_b, Flag):
+    if isinstance(kind_b, Boolean):
         raise ValueError("arithmetic with flags is not permitted")
 
     if isinstance(kind_a, ODEComponent):
@@ -177,10 +183,10 @@ class KindInferenceMapper(Mapper):
         currently being processed.
     """
 
-    def __init__(self, global_table, local_table, rhs_id_to_component_id):
+    def __init__(self, global_table, local_table, function_registry):
         self.global_table = global_table
         self.local_table = local_table
-        self.rhs_id_to_component_id = rhs_id_to_component_id
+        self.function_registry = function_registry
 
     def map_constant(self, expr):
         if isinstance(expr, complex):
@@ -236,8 +242,50 @@ class KindInferenceMapper(Mapper):
                     "is meaningless"
                     % type(self.rec(expr.exponent)).__name__)
 
-    def map_rhs_evaluation(self, expr):
-        return ODEComponent(self.rhs_id_to_component_id(expr.rhs_id))
+    def map_generic_call(self, function_id, arg_dict):
+        func = self.function_registry[function_id]
+        arg_kinds = {}
+        for key, val in arg_dict.items():
+            try:
+                arg_kinds[key] = self.rec(val)
+            except UnableToInferType:
+                arg_kinds[key] = None
+
+        z = func.get_result_kind(arg_kinds)
+        return z
+
+    def map_call(self, expr):
+        return self.map_generic_call(expr.function.name,
+                dict(enumerate(expr.parameters)))
+
+    def map_call_with_kwargs(self, expr):
+        arg_dict = dict(enumerate(expr.parameters))
+        arg_dict.update(expr.kw_parameters)
+        return self.map_generic_call(expr.function.name, arg_dict)
+
+    def map_comparison(self, expr):
+        return Boolean()
+
+    def map_logical_or(self, expr):
+        for ch in expr.children:
+            ch_kind = self.rec(ch)
+            if not isinstance(ch_kind, Boolean):
+                raise ValueError(
+                        "logical operations on '%s' are undefined"
+                        % type(ch_kind).__name__)
+
+        return Boolean()
+
+    map_logical_and = map_logical_or
+
+    def map_logical_not(self, expr):
+        ch_kind = self.rec(expr.child)
+        if not isinstance(ch_kind, Boolean):
+            raise ValueError(
+                    "logical operations on '%s' are undefined"
+                    % type(ch_kind).__name__)
+
+        return Boolean()
 
 # }}}
 
@@ -245,8 +293,8 @@ class KindInferenceMapper(Mapper):
 # {{{ symbol kind finder
 
 class SymbolKindFinder(object):
-    def __init__(self, rhs_id_to_component_id):
-        self.rhs_id_to_component_id = rhs_id_to_component_id
+    def __init__(self, function_registry):
+        self.function_registry = function_registry
 
     def __call__(self, functions):
         """Return a :class:`SymbolKindTable`.
@@ -269,6 +317,7 @@ class SymbolKindFinder(object):
 
                 insn_queue = insn_queue_push_buffer
                 insn_queue_push_buffer = []
+                made_progress = False
 
             func_name, insn = insn_queue.pop()
 
@@ -289,7 +338,8 @@ class SymbolKindFinder(object):
                     kim = KindInferenceMapper(
                             result.global_table,
                             result.per_function_table.get(func_name, {}),
-                            self.rhs_id_to_component_id)
+                            self.function_registry)
+
                     try:
                         kind = kim(insn.assignment.expression)
                     except UnableToInferType:

@@ -71,22 +71,12 @@ following special variable names are supported:
     This variable contains persistent state.
     (that survives from one step to the next)
 
-``<func>NAME``
-    A user-defined function.
-
 The latter two serve to separate the name space used by the method from that
 under the control of the user.
 
-Built-in functions:
-
-* ``<builtin>norm(x, ord=p)`` returns the *p*-norm of *x*.
-
-* ``<builtin>dot_product(x, y)`` return the dot product of *x* and *y*. The
-  complex conjugate of *x* is taken first, if applicable.
-
-* ``<builtin>len(state)`` returns the number of degrees of freedom in *state*
-
-* ``<builtin>isnan(state)`` returns True if there are any NaNs in *state*
+See :module:`leap.vm.function_registry` for interpretation of function names.
+The function namespace and the variable namespace are distinct. No user-defined
+identifiers should start with `leap_`.
 """
 
 
@@ -416,8 +406,6 @@ class If(Instruction):
     exec_method = six.moves.intern("exec_If")
 
 # }}}
-
-# light cone optimizations?
 
 
 # {{{ code container

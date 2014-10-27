@@ -54,6 +54,7 @@ def main():
               "pytools>=2014.1",
               "pymbolic>=2014.1",
               "pytest>=2.3",
+              "mako",
               "six",
               ],
           )

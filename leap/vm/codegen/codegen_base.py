@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 from .structured_ir import SingleNode, IfThenNode, IfThenElseNode, BlockNode, \
     UnstructuredIntervalNode
-from .ir import AssignInst, JumpInst, BranchInst, ReturnInst
+from .ir import AssignInst, JumpInst, BranchInst, ReturnInst, YieldInst
 from leap.vm.language import AssignExpression
 from leap.vm.utils import TODO
 
@@ -71,6 +71,8 @@ class NewTimeIntegratorCode(RecordWithoutPickling):
                                        initial_stage=initial_stage,
                                        step_before_fail=step_before_fail)
 
+
+# {{{ structured code generator
 
 class StructuredCodeGenerator(object):
     """Code generation for structured languages"""
@@ -121,7 +123,9 @@ class StructuredCodeGenerator(object):
         elif isinstance(inst, BranchInst):
             self.emit_if_begin(inst.condition)
         elif isinstance(inst, ReturnInst):
-            self.emit_return(inst.expression)
+            self.emit_return()
+        elif isinstance(inst, YieldInst):
+            self.emit_yield(inst.expression)
 
     # Emit routines (to be implemented by subclass)
 
@@ -158,11 +162,10 @@ class StructuredCodeGenerator(object):
     def emit_assign_expr(self, name, expr):
         raise NotImplementedError()
 
-    def emit_assign_norm(self, name, expr, p):
+    def emit_return(self):
         raise NotImplementedError()
 
-    def emit_assign_rhs(self, name, rhs, time, arg):
+    def emit_yield(self, expr):
         raise NotImplementedError()
 
-    def emit_return(self, expr):
-        raise NotImplementedError()
+# }}}

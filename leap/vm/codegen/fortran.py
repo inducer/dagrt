@@ -27,7 +27,8 @@ from .codegen_base import StructuredCodeGenerator
 from leap.vm.utils import is_state_variable, get_unique_name
 from pytools.py_codegen import (
         # It's the same code. So sue me.
-        PythonCodeGenerator as FortranEmitter)
+        PythonCodeGenerator as FortranEmitterBase)
+from pymbolic.primitives import Call, CallWithKwargs
 from .utils import wrap_line_base
 from functools import partial
 import re  # noqa
@@ -53,12 +54,18 @@ class FortranNameManager(object):
     def __init__(self):
         self.local_map = {}
         self.global_map = {}
-        self.rhs_map = {}
+        self.function_map = {}
         import string
         self.ident_chars = set('_' + string.ascii_letters + string.digits)
 
     def filter_name(self, var):
-        return ''.join(map(lambda c: c if c in self.ident_chars else '', var))
+        result = ''.join(map(lambda c: c if c in self.ident_chars else '_', var))
+        while result and result[0] == "_":
+            result = result[1:]
+        if not result:
+            result = "leap_var"
+
+        return result
 
     def name_global(self, var):
         """Return the identifier for a global variable."""
@@ -66,39 +73,35 @@ class FortranNameManager(object):
             return self.global_map[var]
         except KeyError:
             if var == '<t>':
-                named_global = 'self.t'
+                named_global = 'leap_t'
             elif var == '<dt>':
-                named_global = 'self.dt'
+                named_global = 'leap_dt'
             else:
-                base = 'self.global_' + self.filter_name(var)
+                base = self.filter_name(var)
                 named_global = get_unique_name(base, self.global_map)
             self.global_map[var] = named_global
             return named_global
 
-    def clear_locals(self):
-        self.local_map.clear()
-
     def name_local(self, var):
         """Return the identifier for a local variable."""
-        base = 'local_' + self.filter_name(var)
-        return get_unique_name(base, self.local_map)
+        return get_unique_name(self.filter_name(var), self.local_map)
 
-    def name_rhs(self, var):
-        """Return the identifier for an RHS."""
+    def name_function(self, var):
+        """Return the identifier for a function."""
         try:
-            return self.rhs_map[var]
+            return self.function_map[var]
         except KeyError:
-            base = 'self.rhs_' + self.filter_name(var)
-            named_rhs = get_unique_name(base, self.rhs_map)
-            self.rhs_map[var] = named_rhs
-            return named_rhs
+            base = self._filter_name(var.name)
+            named_func = get_unique_name(base, self.function_map)
+            self.function_map[var] = named_func
+            return named_func
 
     def __getitem__(self, name):
         """Provide an interface to PythonExpressionMapper to look up
         the name of a local or global variable.
         """
         if is_state_variable(name):
-            return self.name_global(name)
+            return 'leap_state%'+self.name_global(name)
         else:
             return self.name_local(name)
 
@@ -107,23 +110,31 @@ class FortranNameManager(object):
 
 # {{{ custom emitters
 
+class FortranEmitter(FortranEmitterBase):
+    def incorporate(self, sub_generator):
+        for line in sub_generator.code:
+            self(line)
+
+
 class FortranBlockEmitter(FortranEmitter):
-    def __init__(self, what):
+    def __init__(self, what, code_generator=None):
         super(FortranBlockEmitter, self).__init__()
         self.what = what
 
+        self.code_generator = code_generator
+
     def __enter__(self):
+        if self.code_generator is not None:
+            self.code_generator.emitters.append(self)
         self.indent()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.dedent()
+        if self.code_generator is not None:
+            self.code_generator.emitters.pop()
         self('end {what}'.format(what=self.what))
         self('')
-
-    def incorporate(self, sub_generator):
-        for line in sub_generator.code:
-            self(line)
 
 
 class FortranModuleEmitter(FortranBlockEmitter):
@@ -134,8 +145,8 @@ class FortranModuleEmitter(FortranBlockEmitter):
 
 
 class FortranSubblockEmitter(FortranBlockEmitter):
-    def __init__(self, parent_emitter, what):
-        super(FortranSubblockEmitter, self).__init__(what)
+    def __init__(self, parent_emitter, what, code_generator=None):
+        super(FortranSubblockEmitter, self).__init__(what, code_generator)
         self.parent_emitter = parent_emitter
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -146,8 +157,9 @@ class FortranSubblockEmitter(FortranBlockEmitter):
 
 
 class FortranIfEmitter(FortranSubblockEmitter):
-    def __init__(self, parent_emitter, expr):
-        super(FortranIfEmitter, self).__init__(parent_emitter, "if")
+    def __init__(self, parent_emitter, expr, code_generator=None):
+        super(FortranIfEmitter, self).__init__(
+                parent_emitter, "if", code_generator)
         self("if ({expr}) then".format(expr=expr))
 
     def emit_else(self):
@@ -157,31 +169,71 @@ class FortranIfEmitter(FortranSubblockEmitter):
 
 
 class FortranDoEmitter(FortranSubblockEmitter):
-    def __init__(self, parent_emitter, expr):
-        super(FortranDoEmitter, self).__init__(parent_emitter, "do")
+    def __init__(self, parent_emitter, expr, code_generator=None):
+        super(FortranDoEmitter, self).__init__(
+                parent_emitter, "do", code_generator)
         self("do while ({expr})".format(expr=expr))
 
 
 class FortranSubroutineEmitter(FortranSubblockEmitter):
-    def __init__(self, parent_emitter, name, args):
+    def __init__(self, parent_emitter, name, args, code_generator=None):
         super(FortranSubroutineEmitter, self).__init__(
-                parent_emitter, 'subroutine')
+                parent_emitter, 'subroutine', code_generator)
         self.name = name
 
         self('subroutine %s(%s)' % (name, ", ".join(args)))
 
 
 class FortranTypeEmitter(FortranSubblockEmitter):
-    def __init__(self, parent_emitter, type_name):
-        super(FortranTypeEmitter, self).__init__(parent_emitter, 'type')
+    def __init__(self, parent_emitter, type_name, code_generator=None):
+        super(FortranTypeEmitter, self).__init__(
+                parent_emitter, 'type', code_generator)
         self('type {type_name}'.format(type_name=type_name))
 
 # }}}
 
 
+class FortranCallCode(object):
+    def __init__(self, template):
+        from mako.template import Template
+
+        self.template = Template(template, strict_undefined=True)
+
+    def __call__(self, assignee, function, arg_dict,
+            get_new_identifier, add_declaration):
+        from leap.vm.codegen.utils import (
+                chop_common_indentation,
+                remove_redundant_blank_lines)
+
+        args = function.resolve_args(arg_dict)
+        return remove_redundant_blank_lines(
+                chop_common_indentation(
+                    self.template.render(
+                        assignee=assignee,
+                        get_new_identifier=get_new_identifier,
+                        add_declaration=add_declaration,
+                        **dict(zip(function.arg_names, args)))))
+
+
+class FortranType(object):
+    """
+    .. attribute:: base_type
+    .. attribute:: dimension
+
+        A tuple of ``'200'``, ``'-5:5'``, or some such.
+        Entries may be numeric, too.
+    """
+
+    def __init__(self, base_type, dimension):
+        self.base_type = base_type
+        if dimension:
+            dimension = tuple(str(d) for d in dimension)
+        self.dimension = dimension
+
+
 # {{{ code generator
 
-class _FunctionDescriptor(Record):
+class _IRFunctionDescriptor(Record):
     """
     .. attribute:: name
     .. attribute:: function
@@ -190,31 +242,46 @@ class _FunctionDescriptor(Record):
 
 
 class FortranCodeGenerator(StructuredCodeGenerator):
+    language = "fortran"
 
-    def __init__(self, module_name, time_kind="8",
-            rhs_id_to_component_id=None):
+    def __init__(self, module_name,
+            ode_component_type_map,
+            function_registry=None,
+            module_preamble=None,
+            real_scalar_kind="8",
+            complex_scalar_kind="8",
+            use_complex_scalars=True):
         """
         :arg rhs_id_to_component_id: a function to map
             :attr:`leap.vm.expression.RHSEvaluation.rhs_id`
             to an ODE component whose right hand side it
             computes. Identity if not given.
+        :arg ode_component_type_map: a map from ODE component_id names
+            to :class:`FortranType` instances
         """
+        if function_registry is None:
+            from leap.vm.function_registry import base_function_registry
+            function_registry = base_function_registry
 
         self.module_name = module_name
-        self.time_kind = time_kind
+        self.function_registry = function_registry
+        self.ode_component_type_map = ode_component_type_map
+
+        from leap.vm.codegen.utils import chop_common_indentation
+        self.module_preamble = chop_common_indentation(module_preamble)
+
+        self.real_scalar_kind = real_scalar_kind
+        self.complex_scalar_kind = complex_scalar_kind
+        self.use_complex_scalars = use_complex_scalars
 
         self.name_manager = FortranNameManager()
-        self.expr_mapper = FortranExpressionMapper(self.name_manager)
+        self.expr_mapper = FortranExpressionMapper(
+                self.name_manager)
 
         self.module_emitter = FortranModuleEmitter(module_name)
         self.module_emitter.__enter__()
 
         self.emitters = [self.module_emitter]
-
-        if rhs_id_to_component_id is None:
-            rhs_id_to_component_id = lambda name: name
-
-        self.rhs_id_to_component_id = rhs_id_to_component_id
 
     @property
     def emitter(self):
@@ -231,13 +298,9 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         for wrapped_line in wrap_line(line, level):
             self.emitter(wrapped_line)
 
-    def __call__(self, dag, rhs_id_to_component_id, optimize=True):
-        from .analysis import (
-                verify_code,
-                collect_function_names_from_dag)
+    def __call__(self, dag, optimize=True):
+        from .analysis import verify_code
         verify_code(dag)
-
-        func_names = collect_function_names_from_dag(dag)
 
         from .codegen_base import NewTimeIntegratorCode
         dag = NewTimeIntegratorCode.from_old(dag)
@@ -263,7 +326,7 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             control_tree = extract_structure(function)
 
             fdescrs.append(
-                    _FunctionDescriptor(
+                    _IRFunctionDescriptor(
                         name=stage_name,
                         function=function,
                         control_tree=control_tree))
@@ -272,91 +335,171 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
         from leap.vm.codegen.data import SymbolKindFinder
 
-        sym_kind_table = SymbolKindFinder(self.rhs_id_to_component_id)([
+        self.sym_kind_table = SymbolKindFinder(self.function_registry)([
             fd.function for fd in fdescrs])
 
         self.begin_emit(dag)
         for fdescr in fdescrs:
-            code = dag_extractor(dag.instructions, dependencies)
-            function = assembler(stage_name, code, dependencies)
-            if self.optimize:
-                function = optimizer(function)
-            control_tree = extract_structure(function)
-            self.lower_function(stage_name, control_tree)
-
+            self.lower_function(fdescr.name, fdescr.control_tree)
         self.finish_emit(dag)
+
+        del self.sym_kind_table
 
         return self.get_code()
 
     def lower_function(self, function_name, control_tree):
+        self.current_function = function_name
+
         self.emit_def_begin(function_name)
         self.lower_node(control_tree)
         self.emit_def_end()
 
+        self.current_function = None
+
     def begin_emit(self, dag):
+        if self.module_preamble:
+            for l in self.module_preamble:
+                self.emit(l)
+            self.emit('')
+
+        from .analysis import collect_time_ids_from_dag
+        for i, time_id in enumerate(collect_time_ids_from_dag(dag)):
+            self.emit("parameter (leap_time_{time_id} = {i})".format(
+                time_id=time_id, i=i))
+        self.emit('')
+
         for i, stage in enumerate(dag.stages):
-            self.emit("parameter (stage_{stage_name} = {i})".format(
+            self.emit("parameter (leap_stage_{stage_name} = {i})".format(
                 stage_name=stage, i=i))
 
         self.emit('')
 
         with FortranTypeEmitter(
                 self.emitter,
-                'stepper_state') as emit:
-            emit("integer stage")
-            emit("real kind({time_kind}) t".format(time_kind=self.time_kind))
-            emit("real kind({time_kind}) dt".format(time_kind=self.time_kind))
+                'leap_state_type',
+                self) as emit:
+            emit('integer leap_stage')
+            emit('')
 
-    def emit_constructor(self):
+            for identifier, sym_kind in six.iteritems(
+                    self.sym_kind_table.global_table):
+                self.emit_variable_decl(
+                        self.name_manager.name_global(identifier),
+                        sym_kind)
+
+        self.emit('contains')
+        self.emit('')
+
+    def emit_variable_decl(self, fortran_name, sym_kind,
+            is_argument=False, other_specifiers=()):
+        from leap.vm.codegen.data import Boolean, Scalar, ODEComponent
+
+        type_specifiers = other_specifiers
+
+        if isinstance(sym_kind, Boolean):
+            type_name = 'logical'
+
+        elif isinstance(sym_kind, Scalar):
+            if sym_kind.is_real_valued or not self.use_complex_scalars:
+                type_name = 'real (kind=%s)' % self.real_scalar_kind
+            else:
+                type_name = 'complex (kind=%s)' % self.complex_scalar_kind
+
+        elif isinstance(sym_kind, ODEComponent):
+            comp_type = self.ode_component_type_map[sym_kind.component_id]
+            type_name = comp_type.base_type
+
+            if not is_argument:
+                type_specifiers = type_specifiers + ('allocatable',)
+
+            if comp_type.dimension:
+                if is_argument:
+                    type_specifiers += (
+                            "dimension(%s)" % ",".join(comp_type.dimension),)
+                else:
+                    type_specifiers += (
+                            "dimension(%s)"
+                            % ",".join(len(comp_type.dimension)*":"),)
+
+        else:
+            raise ValueError("unknown variable kind: %s" % type(sym_kind).__name__)
+
+        if type_specifiers:
+            self.emit('{type_name}, {type_specifier_list} :: {id}'.format(
+                type_name=type_name,
+                type_specifier_list=", ".join(type_specifiers),
+                id=fortran_name))
+        else:
+            self.emit('{type_name} {id}'.format(
+                type_name=type_name,
+                id=fortran_name))
+
+    def emit_initialize(self):
+        from leap.vm.codegen.data import ODEComponent
+
+        args = ('leap_state',) + tuple(
+                self.name_manager.name_global(sym)
+                for sym in self.sym_kind_table.global_table)
+
         with FortranSubroutineEmitter(
                 self.emitter,
-                'initialize', ('self', 'rhs_map')) as emit:
-            rhs_map = self.name_manager.rhs_map
+                'initialize', args, self):
 
-            for rhs_id, rhs in rhs_map.iteritems():
-                emit('{rhs} = rhs_map["{rhs_id}"]'.format(rhs=rhs, rhs_id=rhs_id))
-            emit('return')
+            self.emit('implicit none')
+            self.emit('')
+            self.emit('type(leap_state_type), pointer :: leap_state')
+            self.emit('integer leap_ierr')
+            self.emit('')
 
-    def emit_set_up(self):
-        with FortranSubroutineEmitter(
-                self.emitter,
-                'set_up',
-                ('self', 't_start', 'dt_start', 'state')) as emit:
-            emit('self.t = t_start')
-            emit('self.dt = dt_start')
-            # Save all the state components.
-            global_map = self.name_manager.global_map
-            for component_id, component in global_map.iteritems():
-                if not component_id.startswith('<state>'):
-                    continue
-                component_id = component_id[7:]
-                emit('{component} = state["{component_id}"]'.format(
-                    component=component, component_id=component_id))
+            for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
+                fortran_name = self.name_manager.name_global(sym)
 
-    def emit_run(self):
+                self.emit_variable_decl(
+                        fortran_name,
+                        sym_kind, is_argument=True,
+                        other_specifiers=("optional",))
+            self.emit('')
+
+            for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
+                tgt_fortran_name = self.name_manager[sym]
+                fortran_name = self.name_manager.name_global(sym)
+
+                with FortranIfEmitter(
+                        self.emitter, 'present(%s)' % fortran_name, self):
+                    if isinstance(sym_kind, ODEComponent):
+                        self.emit_allocation_check(
+                                tgt_fortran_name, sym_kind.component_id)
+
+                    self.emit("{name} = {arg}"
+                            .format(
+                                name=tgt_fortran_name,
+                                arg=fortran_name))
+
+    def emit_run_step(self):
         """Emit the run() method."""
         with FortranSubroutineEmitter(
                 self.emitter,
-                'run', ('self', '**kwargs')) as emit:
+                'run', ('leap_state', 't_end'), self) as emit:
             emit('t_end = kwargs["t_end"]')
             emit('last_step = False')
+
             # STAGE_HACK: This implementation of staging support should be replaced
             # so that the stages are not hard-coded.
             emit('next_stages = { "initialization": "primary", ' +
                  '"primary": "primary" }')
             emit('current_stage = "initialization"')
 
-            with FortranDoEmitter(emit, ".true.") as d_emit:
+            with FortranDoEmitter(emit, ".true.", self):
                 with FortranIfEmitter(
-                        d_emit, 'self.t + self.dt >= t_end') as emit_over:
-                    emit_over('assert self.t <= t_end')
-                    emit_over('self.dt = t_end - self.t')
-                    emit_over('last_step = True')
+                        self.emitter, 'self.t + self.dt >= t_end', self):
+                    self.emit('assert self.t <= t_end')
+                    self.emit('self.dt = t_end - self.t')
+                    self.emit('last_step = True')
 
                 d_emit('stage_function = getattr(self, "stage_" + current_stage)')
                 emit('result = stage_function()')
 
-                with FortranIfEmitter(d_emit, 'result') as emit_res:
+                with FortranIfEmitter(self.emitter, 'result') as emit_res:
                     emit_res('result = dict(result)')
                     emit_res('t = result["time"]')
                     emit_res('time_id = result["time_id"]')
@@ -371,14 +514,9 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                         emit_ls('exit')
                 d_emit('current_stage = next_stages[current_stage]')
 
-    def emit_initialize(self):
-        pass
-
     def finish_emit(self, dag):
-        self.emit_constructor()
-        self.emit_set_up()
         self.emit_initialize()
-        self.emit_run()
+        # self.emit_run()
 
         self.module_emitter.__exit__(None, None, None)
 
@@ -387,16 +525,46 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
     # {{{ called by superclass
 
-    def emit_def_begin(self, name):
-        # The current function is handled by self.emit
-        self.emitters.append(FortranSubroutineEmitter(
+    def emit_def_begin(self, func_id):
+
+        self.declaration_emitter = FortranEmitter()
+
+        FortranSubroutineEmitter(
                 self.emitter,
-                'stage_' + name, ('self',)))
-        self.emitter.__enter__()
+                'leap_stage_func_' + func_id, ('leap_state',),
+                self).__enter__()
+
+        self.declaration_emitter('implicit none')
+        self.declaration_emitter('')
+        self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
+        self.declaration_emitter('integer leap_ierr')
+        self.declaration_emitter('')
+
+        body_emitter = FortranEmitter()
+        self.emitters.append(body_emitter)
+
+        count = 0
+        for identifier, sym_kind in \
+                six.iteritems(
+                        self.sym_kind_table.per_function_table.get(func_id, {})):
+            self.emit_variable_decl(
+                    self.name_manager.name_local(identifier),
+                    sym_kind)
+            count += 1
+
+        if count:
+            self.emit('')
 
     def emit_def_end(self):
+        self.emitters[-2].incorporate(self.declaration_emitter)
+
+        body_emitter = self.emitters.pop()
+        self.emitter.incorporate(body_emitter)
+
+        # body emitter
         self.emitter.__exit__(None, None, None)
-        self.emitters.pop()
+
+        del self.declaration_emitter
 
     def emit_while_loop_begin(self, expr):
         self.emitter = FortranDoEmitter(
@@ -418,18 +586,79 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
     emit_else_end = emit_def_end
 
+    def emit_allocation_check(self, fortran_name, component_id):
+        with FortranIfEmitter(
+                self.emitter, '.not.allocated(%s)' % fortran_name, self):
+            comp_type = self.ode_component_type_map[component_id]
+
+            if comp_type.dimension:
+                dimension = '(%s)' % ', '.join(
+                        str(dim_axis) for dim_axis in comp_type.dimension)
+            else:
+                dimension = ""
+
+            self.emit('allocate({name}{dimension}, stat=leap_ierr)'.format(
+                name=fortran_name,
+                dimension=dimension))
+            with FortranIfEmitter(self.emitter, 'leap_ierr.ne.0', self):
+                self.emit("write(*,*) 'failed to allocate {name}'".format(
+                    name=fortran_name))
+
     def emit_assign_expr(self, name, expr):
+        from leap.vm.codegen.data import ODEComponent
+
         if expr is not None:
-            self.emit(
-                    "{name} = {expr}"
-                    .format(
-                        name=self.name_manager[name],
-                        expr=self.expr(expr)))
+            fortran_name = self.name_manager[name]
+
+            if name == 'retval':
+                # FIXME
+                return
+
+            sym_kind = self.sym_kind_table.get(
+                    self.current_function, name)
+
+            if isinstance(sym_kind, ODEComponent):
+                self.emit_allocation_check(fortran_name, sym_kind.component_id)
+
+            if isinstance(expr, (Call, CallWithKwargs)):
+                function = self.function_registry[expr.function.name]
+                codegen = function.get_codegen(self.language)
+
+                # TODO: get_new_identifier
+
+                def add_declaration(decl):
+                    self.declaration_emitter.emit(decl)
+
+                arg_strs_dict = {}
+                for i, arg in enumerate(expr.parameters):
+                    arg_strs_dict[i] = "(%s)" % self.expr(arg)
+                if isinstance(expr, CallWithKwargs):
+                    for arg_name, arg in expr.kw_parameters.items():
+                        arg_strs_dict[arg_name] = "(%s)" % self.expr(arg)
+
+                lines = codegen(
+                        assignee=fortran_name,
+                        function=function,
+                        arg_dict=arg_strs_dict,
+                        get_new_identifier=None,  # FIXME
+                        add_declaration=add_declaration)
+
+                for l in lines:
+                    self.emit(l)
+
+            else:
+                self.emit(
+                        "{name} = {expr}"
+                        .format(
+                            name=fortran_name,
+                            expr=self.expr(expr)))
         else:
             self.emit(
                     "! unimplemented: {name} = None"
                     .format(
                         name=self.name_manager[name]))
+
+        self.emit('')
 
     def emit_assign_rhs(self, name, rhs, time, arg):
         kwargs = ', '.join('{name}={expr}'.format(name=name,
@@ -438,8 +667,11 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                 name=self.name_manager[name], rhs=self.rhs(rhs),
                 t=self.expr(time), kwargs=kwargs))
 
-    def emit_return(self, expr):
-        self.emit('return {expr}'.format(expr=self.expr(expr)))
+    def emit_return(self):
+        self.emit('return')
+
+    def emit_yield(self, expr):
+        self.emit('yield {expr}'.format(expr=self.expr(expr)))
 
     # }}}
 

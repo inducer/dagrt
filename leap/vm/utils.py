@@ -89,3 +89,37 @@ def show_dot_graph(dot):
 
 class TODO(NotImplementedError):
     pass
+
+
+def resolve_args(arg_names, default_dict, arg_dict):
+    """Resolve positional and keyword arguments to a single argument
+    list.
+
+    :arg arg_dict: a dictionary mapping numbers (for positional arguments)
+        or identifiers (for keyword arguments) to values
+    :arg default_dict: a dictionary mapping argument names to default
+        values
+    :arg arg_names: names of the positional arguments
+    """
+
+    arg_dict = arg_dict.copy()
+    args = []
+    for i, name in enumerate(arg_names):
+        if i in arg_dict:
+            args.append(arg_dict.pop(i))
+            if name in arg_dict:
+                raise TypeError("argument '%d' specified both "
+                        "positionally and by keyword" % arg_names[i])
+        elif name in arg_dict:
+            args.append(arg_dict.pop(name))
+        else:
+            if name in default_dict:
+                args.append(default_dict[name])
+            else:
+                raise TypeError("argument '%s' not specified" % arg_names[i])
+
+    if arg_dict:
+        raise TypeError("leftover arguments after argument resolution: "
+                + ", ".join(arg_dict))
+
+    return args

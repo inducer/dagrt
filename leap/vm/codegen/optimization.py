@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from .ir import AssignInst, BranchInst, JumpInst, ReturnInst
+from .ir import AssignInst, BranchInst, JumpInst, YieldInst, TerminatorInst
 from .analysis import ReachingDefinitions
 from pytools import one
 
@@ -206,20 +206,16 @@ class AggressiveDeadCodeElimination(object):
         return insts
 
     def _is_trivially_essential(self, inst):
-        if isinstance(inst, ReturnInst):
-            # All return instructions are essential.
+        if isinstance(inst, TerminatorInst):
+            # All terminator instructions are essential.
             return True
-        elif isinstance(inst, BranchInst) or isinstance(inst, JumpInst):
-            # All control flow instructions are essential. This is a
-            # pessimistic assumption and may be improved upon if the
-            # worklist algorithm used control dependence to discover
-            # the set of essential control flow instructions.
+        elif isinstance(inst, YieldInst):
+            # All instructions that yield data are essential.
             return True
         elif isinstance(inst, AssignInst):
-            symbol_table = inst.block.symbol_table
             # All assignments to state variables are essential.
+            symbol_table = inst.block.symbol_table
             for assignee in inst.get_defined_variables():
                 if symbol_table[assignee].is_global:
                     return True
-        else:
-            return False
+        return False

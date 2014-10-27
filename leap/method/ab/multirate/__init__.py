@@ -387,8 +387,8 @@ class MRABCodeEmitter(MRABProcessor):
         # Compute the new RHS
         assignments += self.cbuild.add_and_get_ids(
             AssignExpression(assignee=hist[0].name,
-                expression=rhs(t=t, u=self.context[insn.fast_arg],
-                               v=self.context[insn.slow_arg]),
+                expression=rhs(t=t, f=self.context[insn.fast_arg],
+                               s=self.context[insn.slow_arg]),
                 depends_on=self.last_step + assignments))
 
         self.last_step = assignments
