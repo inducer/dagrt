@@ -32,7 +32,6 @@ __doc__ = """
 .. autoclass:: ODE45TimeStepper
 """
 
-
 # {{{ Embedded Runge-Kutta schemes base class
 
 class EmbeddedRungeKuttaMethod(Method):
@@ -49,6 +48,134 @@ class EmbeddedRungeKuttaMethod(Method):
 
         self.max_dt_growth = max_dt_growth
         self.min_dt_shrinkage = min_dt_shrinkage
+
+    def add_ret_state_and_increment_t(self, cbuild, state, time_update,
+                                      dependencies):
+        return cbuild.add_and_get_ids(
+            YieldState(
+                id="ret_state",
+                time_id="final",
+                time=time_update,
+                component_id=component_id,
+                expression=state,
+                depends_on=dependencies),
+            AssignExpression(
+                "<t>", time_update,
+                id="increment_t",
+                depends_on=["ret_state"])
+            )
+
+    def adapt_step_size(self, cbuild, state, t, dt, low_order_end_state,
+                        high_order_end_state, last_step_work_ids,
+                        limiter):
+        """
+        :arg cbuild: The CodeBuilder
+
+        :arg state: The state variable
+
+        :arg low_order_end_state: The low order updated state variable
+        
+        :arg high_order_end_state: The high order updated state variable
+
+        :arg last_step_work_ids: Instruction ids for instructions that
+        finish the work of the timestep
+
+        :arg limiter: The limiter function
+        """
+        from leap.method import TimeStepUnderflow    
+        from pymbolic.primitives import Min, Max, Comparison, LogicalOr
+
+        self.add_ret_state_and_increment_t(cbuild, state, t + dt,
+                                           ["update_state"])
+
+        cbuild.add_and_get_ids(
+            AssignNorm("norm_start_state", state,
+                       id="compute_state_norm"),
+            AssignNorm("norm_end_state", var("low_order_end_state")),
+            AssignNorm("rel_error_raw",
+                    (high_order_end_state - low_order_end_state) / (
+                    var("<builtin>len")(state) ** 0.5
+                    *
+                    (self.atol + self.rtol * Max((
+                                var("norm_start_state"),
+                                var("norm_end_state"))))
+                    )
+                ),
+            If(
+                condition=Comparison(var("rel_error_raw"), "==", 0),
+                then_depends_on=["rel_err_zero"],
+                else_depends_on=["rel_err_nonzero"],
+                id="rel_error_zero_check"),
+            # then
+            AssignExpression("rel_error", var("rel_error_raw"),
+                             id="rel_err_nonzero"),
+            # else
+            AssignExpression("rel_error", 1e-14,
+                             id="rel_err_zero"),
+            # endif
+
+            If(
+                condition=LogicalOr((
+                        Comparison(var("rel_error"), ">", 1),
+                        var("<builtin>isnan")(var("rel_error"))
+                        )),
+                then_depends_on=["rej_step"],
+                else_depends_on=["acc_adjust_dt", "ret_state",
+                                 "increment_t"] + last_step_work_ids,
+                depends_on=["rel_error_zero_check"],
+                id="reject_check"),
+            # then
+            # reject step
+            
+            If(
+                condition=var("<builtin>isnan")(var("rel_error")),
+                then_depends_on=["min_adjust_dt"],
+                else_depends_on=["rej_adjust_dt"],
+                depends_on=["rel_error_zero_check"],
+                id="adjust_dt"),
+            # then
+            AssignExpression("<dt>",
+                self.min_dt_shrinkage * dt,
+                id="min_adjust_dt"),
+            # else
+            AssignExpression("<dt>",
+                 Max((0.9 * dt * var("rel_error")
+                      ** (-1 / self.low_order),
+                 self.min_dt_shrinkage * dt)),
+                 id="rej_adjust_dt"),
+            # endif
+            
+            If(
+                condition=Comparison(t + dt, "==", t),
+                then_depends_on=["tstep_underflow"],
+                else_depends_on=[],
+                id="check_underflow",
+                depends_on=["adjust_dt"]),
+            # then
+            Raise(TimeStepUnderflow, id="tstep_underflow"),
+            # endif
+            
+            FailStep(
+                id="rej_step",
+                depends_on=["check_underflow"]),
+            
+            # else
+            # accept step
+            
+            AssignExpression("<dt>",
+                Min((0.9 * dt *
+                     var("rel_error") ** (-1 / self.high_order),
+                     self.max_dt_growth * dt)),
+                id="acc_adjust_dt",
+                depends_on=["increment_t"]),
+            AssignExpression(
+                state.name, limiter(high_order_end_state),
+                id="update_state",
+                depends_on=["compute_state_norm"] + last_step_work_ids)
+            # endif
+            )
+
+        return ["reject_check"]
 
 
 class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
@@ -140,50 +267,34 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
             else:
                 coeffs = self.low_order_coeffs
 
-            add_and_get_ids(
-                    AssignExpression(
-                        state.name, limiter(
-                            state + sum(
-                                dt * coeff * rhss[j]
-                                for j, coeff in enumerate(coeffs))),
-                        id="update_state",
-                        # don't change state before all RHSs are done using it
-                        depends_on=all_rhs_eval_ids),
-
-                    YieldState(
-                        id="ret_state",
-                        time_id="final",
-                        time=t + dt,
-                        component_id=component_id,
-                        expression=state,
-                        depends_on=["update_state"]),
-
-                    AssignExpression(
-                        "<t>", t + dt,
-                        id="increment_t",
-                        depends_on=["update_state", "ret_state"],
-                        ),
-                    )
-
-            cbuild.infer_single_writer_dependencies(exclude=dep_inf_exclude_names)
+            update_state_ids = add_and_get_ids(
+                AssignExpression(
+                    state.name, limiter(
+                        state + sum(
+                            dt * coeff * rhss[j]
+                            for j, coeff in enumerate(coeffs))),
+                    id="update_state",
+                    # don't change state before all RHSs are done using
+                    # it
+                    depends_on=all_rhs_eval_ids)
+                )
+            
+            self.add_ret_state_and_increment_t(cbuild, state, t + dt,
+                                               update_state_ids)
+            cbuild.infer_single_writer_dependencies(
+                exclude=dep_inf_exclude_names)
             cbuild.commit()
 
             return TimeIntegratorCode(
                     instructions=cbuild.instructions,
                     initialization_dep_on=initialization_dep_on,
-                    step_dep_on=[
-                        "ret_state",
-                        last_rhs_assignment_id,
-                        "increment_t"],
+                    step_dep_on=["ret_state", "increment_t"],
                     step_before_fail=False)
 
         else:
             # {{{ step size adaptation
 
-            from leap.method import TimeStepUnderflow
-
-            from pymbolic.primitives import Min, Max, Comparison, LogicalOr
-            add_and_get_ids(
+            compute_estimate_ids = add_and_get_ids(
                     AssignExpression(
                         "high_order_end_state", state + sum(
                                 dt * coeff * rhss[j]
@@ -193,111 +304,17 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                         "low_order_end_state", state + sum(
                                 dt * coeff * rhss[j]
                                 for j, coeff in enumerate(self.low_order_coeffs)),
-                        id="compute_les"),
-                    AssignNorm("norm_start_state", state,
-                        id="compute_state_norm"),
-                    AssignNorm("norm_end_state", var("low_order_end_state")),
-                    AssignNorm(
-                        "rel_error_raw", (
-                            var("high_order_end_state") - var("low_order_end_state")
-                            ) / (
-                                var("<builtin>len")(state)**0.5
-                                *
-                                (self.atol + self.rtol * Max((
-                                    var("norm_start_state"),
-                                    var("norm_end_state"))))
-                                )
-                            ),
-                    If(
-                        condition=Comparison(var("rel_error_raw"), "==", 0),
-                        then_depends_on=["rel_err_zero"],
-                        else_depends_on=["rel_err_nonzero"],
-                        id="rel_error_zero_check"),
-                    # then
-                    AssignExpression("rel_error", var("rel_error_raw"),
-                        id="rel_err_nonzero"),
-                    # else
-                    AssignExpression("rel_error", 1e-14,
-                        id="rel_err_zero"),
-                    # endif
-
-                    If(
-                        condition=LogicalOr((
-                            Comparison(var("rel_error"), ">", 1),
-                            var("<builtin>isnan")(var("rel_error"))
-                            )),
-                        then_depends_on=["rej_step"],
-                        else_depends_on=["acc_adjust_dt", last_rhs_assignment_id,
-                            "ret_state", "increment_t"],
-                        depends_on=["rel_error_zero_check"],
-                        id="reject_check"),
-                    # then
-                    # reject step
-
-                    If(
-                        condition=var("<builtin>isnan")(var("rel_error")),
-                        then_depends_on=["min_adjust_dt"],
-                        else_depends_on=["rej_adjust_dt"],
-                        depends_on=["rel_error_zero_check"],
-                        id="adjust_dt"),
-                    # then
-                    AssignExpression("<dt>",
-                        self.min_dt_shrinkage*dt,
-                        id="min_adjust_dt"),
-                    # else
-                    AssignExpression("<dt>",
-                        Max((
-                            0.9 * dt * var("rel_error")**(-1/self.low_order),
-                            self.min_dt_shrinkage * dt)),
-                        id="rej_adjust_dt"),
-                    # endif
-
-                    If(
-                        condition=Comparison(t + dt, "==", t),
-                        then_depends_on=["tstep_underflow"],
-                        else_depends_on=[],
-                        id="check_underflow",
-                        depends_on=["adjust_dt"]),
-                    # then
-                    Raise(TimeStepUnderflow, id="tstep_underflow"),
-                    # endif
-
-                    FailStep(
-                        id="rej_step",
-                        depends_on=["check_underflow"]),
-
-                    # else
-                    # accept step
-
-                    AssignExpression("<dt>",
-                        Min((
-                            0.9 * dt * var("rel_error")**(-1/self.high_order),
-                            self.max_dt_growth * dt)),
-                        id="acc_adjust_dt",
-                        depends_on=["increment_t"],
-                        ),
-                    AssignExpression(
-                        state.name, limiter(var("high_order_end_state")),
-                        id="update_state",
-                        depends_on=["compute_les", "compute_hes",
-                            "compute_state_norm"]),
-
-                    YieldState(
-                        id="ret_state",
-                        time_id="final",
-                        time=t + dt,
-                        component_id=component_id,
-                        expression=state,
-                        depends_on=["update_state"]),
-
-                    AssignExpression(
-                        "<t>", t + dt,
-                        id="increment_t",
-                        depends_on=["ret_state"]),
-                    # endif
+                        id="compute_les")
                     )
 
-            cbuild.infer_single_writer_dependencies(exclude=dep_inf_exclude_names)
+            self.adapt_step_size(cbuild, state, t, dt,
+                                 var("low_order_end_state"),
+                                 var("high_order_end_state"),
+                                 compute_estimate_ids,
+                                 limiter)
+
+            cbuild.infer_single_writer_dependencies(
+                    exclude=dep_inf_exclude_names)
             cbuild.commit()
 
             return TimeIntegratorCode(

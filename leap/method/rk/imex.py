@@ -2,7 +2,10 @@
 
 from __future__ import division
 
-__copyright__ = "Copyright (C) 2010, 2013 Andreas Kloeckner"
+__copyright__ = """
+Copyright (C) 2010, 2013 Andreas Kloeckner
+Copyright (C) 2014 Matt Wala
+"""
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -25,10 +28,15 @@ THE SOFTWARE.
 """
 
 
-from leap.method.rk import EmbeddedRungeKuttaTimeStepperBase
+from leap.vm.utils import TODO
+from leap.method.rk import EmbeddedRungeKuttaMethod
+from pymbolic import var
+from pymbolic.primitives import CallWithKwargs
+from leap.vm.language import (AssignExpression, AssignSolvedRHS, CodeBuilder,
+                              ReturnState, TimeIntegratorCode)
 
 
-class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaTimeStepperBase):
+class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
     """
     Christopher A. Kennedy, Mark H. Carpenter. Additive Runge-Kutta
     schemes for convection-diffusion-reaction equations.
@@ -37,128 +45,234 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaTimeStepperBase):
     http://dx.doi.org/10.1016/S0168-9274(02)00138-1
     """
 
-    def __call__(self, y, t, dt, rhs_expl, rhs_impl, reject_hook=None):
+    def _emit_initialization(self, cbuild):
+        """Add code to drive the initialization. Return the list of instruction
+        ids."""
+
+        initialization_deps = self._update_rhs_values(cbuild, depends_on=[])
+        cbuild.commit()
+
+        return initialization_deps
+
+    def _update_rhs_values(self, cbuild, depends_on):
+        """Add code to assign to the explicit and implicit RHSs. Return the
+        list of instruction ids."""
+
+        return cbuild.add_and_get_ids(
+            AssignExpression(
+                assignee=self._rhs_expl.name,
+                expression=CallWithKwargs(
+                    function=self._rhs_expl_function,
+                    parameters=(),
+                    kw_parameters={
+                        't': self._t,
+                        self._component_id: self._state
+                    }),
+                depends_on=depends_on
+                ),
+            AssignExpression(
+                assignee=self._rhs_impl.name,
+                expression=CallWithKwargs(
+                    function=self._rhs_impl_function,
+                    parameters=(),
+                    kw_parameters={
+                        't': self._t,
+                        self._component_id: self._state
+                    }),
+                depends_on=depends_on
+                )
+            )
+
+    def _finish_solution(self, cbuild, dest, coeffs, explicit_rhss,
+                         implicit_rhss, dependencies):
+        """Add code to build the final component in the primary stage. Return
+        the list of instruction ids.
+
+        :arg cbuild: The CodeBuilder
+
+        :arg dest: The variable to assign the state to
+
+        :arg coeffs: The coefficients for the linear combination
+
+        :arg explicit_rhss: The list of explicit RHS stage values
+
+        :arg implicit_rhss: The list of implicit RHS stage values
+
+        :arg dependencies: The dependency list for the computation
         """
-        :arg rhs_impl: for a signature of (t, y0, alpha), returns
-          a value of *k* satisfying
 
-          .. math::
+        assert (len(coeffs) == len(explicit_rhss) == len(implicit_rhss))
+        args = [(1, self._state)] + [(self._dt * coeff, erhs)
+                                     for coeff, erhs in zip(coeffs + coeffs,
+                                         explicit_rhss + implicit_rhss)
+                                     if coeff]
 
-              k = f(t, y_0 + \alpha*k)
+        return cbuild.add_and_get_ids(
+            AssignExpression(
+                assignee=dest.name,
+                expression=sum(arg[0] * arg[1] for arg in args),
+                depends_on=dependencies
+                )
+            )
 
-          where *f* is the right-hand side function.
+    def _emit_primary(self, cbuild):
+        """Add code to drive the primary stage. Return the list of instruction
+        ids."""
 
-          .. note::
-            For a linear *f*, the relationship above may be
-            rewritten as
+        explicit_rhss = []
+        implicit_rhss = []
+        last_dependencies = []
 
-            .. math::
+        # Stage loop
 
-                (Id-\alpha A)k = A y_0.
-        """
+        for c, coeffs_expl, coeffs_impl in \
+                zip(self.c, self.a_explicit, self.a_implicit):
 
-        from hedge.tools import count_dofs
-
-        # {{{ preparation, linear combiners
-
-        self.first_rhs_expl = rhs_expl(t, y)
-        self.first_rhs_impl = rhs_impl(t, y, 0.)
-        try:
-            self.norm
-        except AttributeError:
-            self.dof_count = count_dofs(self.first_rhs_expl)
-
-            if self.adaptive:
-                self.norm = self.vector_primitive_factory \
-                        .make_maximum_norm(self.first_rhs_expl)
+            if len(coeffs_expl) == 0:
+                assert c == 0
+                assert len(coeffs_impl) == 0
+                this_rhs_expl = self._rhs_expl
+                this_rhs_impl = self._rhs_impl
             else:
-                self.norm = None
+                assert len(coeffs_expl) == len(explicit_rhss)
+                assert len(coeffs_impl) == len(implicit_rhss)
 
-        # }}}
+                args = [(1, self._state)] + [
+                    (self._dt * coeff, erhs)
+                    for coeff, erhs in zip(
+                        coeffs_expl + coeffs_impl,
+                        explicit_rhss + implicit_rhss)
+                    if coeff]
 
-        while True:
-            explicit_rhss = []
-            implicit_rhss = []
+                sub_y = sum(arg[0] * arg[1] for arg in args)
 
-            # {{{ stage loop
+                # Compute the next implicit right hand side.
+                # TODO: Compute a guess parameter using stage value predictors.
+                this_rhs_impl = var(cbuild.fresh_var_name('rhs_impl'))
+                solve_component = var('rhs_impl*')
+                last_dependencies = cbuild.add_and_get_ids(
+                    AssignSolvedRHS(
+                        assignees=(this_rhs_impl.name,),
+                        solve_components=(solve_component,),
+                        expressions=[
+                            solve_component -
+                            CallWithKwargs(
+                                function=self._rhs_impl_function,
+                                parameters=(),
+                                kw_parameters={
+                                    't': self._t + c * self._dt,
+                                    self._component_id: sub_y +
+                                    self.gamma * self._dt * solve_component
+                                    })
+                            ],
+                        solver_parameters={
+                            'initial_guess': implicit_rhss[-1]
+                            },
+                        solver_id=self._solver_id,
+                        depends_on=last_dependencies
+                        )
+                    )
 
-            for c, coeffs_expl, coeffs_impl in zip(
-                    self.c, self.a_explicit, self.a_implicit):
-                if len(coeffs_expl) == 0:
-                    assert c == 0
-                    assert len(coeffs_impl) == 0
-                    this_rhs_expl = self.first_rhs_expl
-                    this_rhs_impl = self.first_rhs_impl
-                else:
-                    sub_timer = self.timer.start_sub_timer()
+                last_dependencies = []
 
-                    assert len(coeffs_expl) == len(explicit_rhss)
-                    assert len(coeffs_impl) == len(implicit_rhss)
+                # Compute the next explicit right hand side.
+                this_rhs_expl = var(cbuild.fresh_var_name('rhs_expl'))
+                last_dependencies = cbuild.add_and_get_ids(
+                    AssignExpression(
+                        assignee=this_rhs_expl.name,
+                        expression=CallWithKwargs(
+                            function=self._rhs_expl_function,
+                            parameters=(),
+                            kw_parameters={
+                                't': self._t + c * self._dt,
+                                self._component_id: sub_y +
+                                self.gamma * self._dt * this_rhs_impl
+                                }),
+                        depends_on=last_dependencies)
+                    )
 
-                    args = [(1, y)] + [
-                            (dt*coeff, erhs)
-                            for coeff, erhs in zip(
-                                coeffs_expl + coeffs_impl,
-                                explicit_rhss + implicit_rhss)
-                            if coeff]
-                    sub_y = self.get_linear_combiner(
-                            len(args), this_rhs_expl)(*args)
+                last_dependencies = []
 
-                    this_rhs_impl = rhs_impl(t + c*dt, sub_y,
-                            self.gamma*dt)
-                    args = [(1, sub_y)] + [(self.gamma*dt, this_rhs_impl)]
-                    sub_y = self.get_linear_combiner(
-                            len(args), this_rhs_expl)(*args)
-                    this_rhs_expl = rhs_expl(t + c*dt, sub_y)
-                    sub_timer.stop().submit()
+            explicit_rhss.append(this_rhs_expl)
+            implicit_rhss.append(this_rhs_impl)
 
-                explicit_rhss.append(this_rhs_expl)
-                implicit_rhss.append(this_rhs_impl)
+        # TODO: Adapt the step size.
 
-            # }}}
+        if not self.adaptive:
+            solution_deps = self._finish_solution(cbuild,
+                self._state, self.high_order_coeffs if
+                self.use_high_order else self.low_order_coeffs,
+                explicit_rhss, implicit_rhss, [])
+        else:
+            """
+            high_order_end_state = \
+                var(cbuild.fresh_var_name('high_order_end_state'))
+            low_order_end_state = \
+                var(cbuild.fresh_var_name('low_order_end_state'))
+        
+            adaptive_ids = set(self._finish_solution(cbuild,
+                high_order_end_state, self.high_order_coeffs,
+                explicit_rhss, implicit_rhss, last_dependencies))
 
-            def finish_solution(coeffs):
-                assert (len(coeffs) == len(explicit_rhss)
-                        == len(implicit_rhss))
+            adaptive_ids |= set(self._finish_solution(cbuild,
+                low_order_end_state, self.low_order_coeffs,
+                explicit_rhss, implicit_rhss, last_dependencies))
 
-                args = [(1, y)] + [
-                        (dt*coeff, erhs)
-                        for coeff, erhs in zip(
-                                coeffs + coeffs,
-                                explicit_rhss + implicit_rhss)
-                        if coeff]
+            self.adapt_step_size(self._t, self._dt, self._state,
+                                 high_order_end_state,
+                                 low_order_end_state,
+            """
+            pass
 
-                return self.get_linear_combiner(
-                        len(args), this_rhs_expl)(*args)
+        exclude_names = [self._state.name]
+        cbuild.infer_single_writer_dependencies(exclude=exclude_names)
 
-            if not self.adaptive:
-                if self.use_high_order:
-                    y = finish_solution(self.high_order_coeffs)
-                else:
-                    y = finish_solution(self.low_order_coeffs)
+        rhs_update_ids = self._update_rhs_values(cbuild, solution_deps)
 
-                return y
-            else:
-                # {{{ step size adaptation
-                high_order_end_y = finish_solution(self.high_order_coeffs)
-                low_order_end_y = finish_solution(self.low_order_coeffs)
+        step_finish_ids = cbuild.add_and_get_ids(
+            ReturnState(
+                time_id='final',
+                time=self._t + self._dt,
+                component_id=self._component_id,
+                expression=self._state,
+                depends_on=step_deps,
+                id='return_state'),
+            AssignExpression(
+                assignee=self._t.name,
+                expression=self._t + self._dt,
+                depends_on=['return_state']
+                )
+            )
 
-                from hedge.timestep.runge_kutta import adapt_step_size
-                accept_step, next_dt, rel_err = adapt_step_size(
-                        t, dt, y, high_order_end_y, low_order_end_y,
-                        self, self.get_linear_combiner(2, this_rhs_expl), self.norm)
+        cbuild.commit()
+        
+        return step_finish_ids
 
-                if not accept_step:
-                    if reject_hook:
-                        y = reject_hook(dt, rel_err, t, y)
+    def __call__(self, component_id, solver_id):
+        self._dt = var('<dt>')
+        self._t = var('<t>')
+        self._state = var('<state>' + component_id)
+        self._component_id = component_id
+        self._solver_id = solver_id
 
-                    dt = next_dt
-                    # ... and go back to top of loop
-                else:
-                    # finish up
+        # Saved implicit and explicit right hand sides
+        self._rhs_expl = var('<p>rhs_expl')
+        self._rhs_impl = var('<p>rhs_impl')
 
-                    return high_order_end_y, t+dt, dt, next_dt
-                # }}}
+        # Implicit and explicit right hand side functions
+        self._rhs_expl_function = var('<func>expl_' + self._component_id)
+        self._rhs_impl_function = var('<func>impl_' + self._component_id)
+
+        cbuild = CodeBuilder()
+
+        initialization_deps = self._emit_initialization(cbuild)
+        primary_deps = self._emit_primary(cbuild)
+
+        return TimeIntegratorCode(
+            instructions=cbuild.instructions,
+            initialization_dep_on=initialization_deps,
+            step_dep_on=primary_deps,
+            step_before_fail=True)
 
 
 class KennedyCarpenterIMEXARK4(KennedyCarpenterIMEXRungeKuttaBase):

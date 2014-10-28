@@ -259,15 +259,23 @@ class AssignSolvedRHS(Instruction):
         return frozenset(self.assignees)
 
     def get_read_variables(self):
-        raise TODO()
+        # Variables can be read by:
+        #  1. expressions (except for the solve_component)
+        #  2. expressions in solver_parameters
+        variables = set()
+        for expression in self.expressions:
+            variables |= get_variables(expression)
+        variables -= set(self.solve_components)
+        # TODO: Implement #2.
+        return variables
 
     def __str__(self):
         lines = []
-        lines.append('{assignee} <- {solve_component} such that'.format(
+        lines.append('{assignee} <- {solve_component} such that\n'.format(
                 assignee=self.assignees[0],
                 solve_component=self.solve_components[0]))
         for expression in self.expressions:
-            lines.append('\t{expression}=0'.format(expression=expression))
+            lines.append('  {expression} = 0'.format(expression=expression))
         return "\n".join(lines)
 
 
@@ -641,6 +649,9 @@ class CodeBuilder(object):
         one variable.
         """
 
+        for element in exclude:
+            assert isinstance(element, str)
+
         var_to_writers = {}
         for insn in self.build_group:
             for wvar in insn.get_assignees():
@@ -667,6 +678,8 @@ class CodeBuilder(object):
             for v in insn.get_read_variables() & single_writer_vars:
                 var_writer, = var_to_writers[v]
                 new_deps.append(var_writer.id)
+
+            print(insn.id, insn.depends_on, frozenset(new_deps))
 
             new_build_group.append(
                     insn.copy(
@@ -758,7 +771,7 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
         for insn_2 in dep_graph.get(insn_1, set()):
             lines.append("%s -> %s" % (insn_2, insn_1))
 
-    for (insn_1, insn_2), annot in annotation_dep_graph.iteritems():
+    for (insn_1, insn_2), annot in six.iteritems(annotation_dep_graph):
             lines.append(
                     "%s -> %s  [label=\"%s\", style=dashed]"
                     % (insn_2, insn_1, annot))
