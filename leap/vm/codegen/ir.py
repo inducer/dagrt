@@ -164,13 +164,17 @@ class YieldStateInst(Inst):
 
     @memoize_method
     def get_used_variables(self):
-        return get_variables(self.expression)
+        return get_variables(self.expression) | get_variables(self.time)
 
     def get_jump_targets(self):
         return frozenset()
 
     def __str__(self):
-        return 'yield ' + string_mapper(self.expression)
+        return 'yield {expr} for {component_id} as {time_id} at t={time}'.format(
+                expr=self.expression,
+                component_id=self.component_id,
+                time_id=self.time_id,
+                time=self.time)
 
 
 class TerminatorInst(Inst):
