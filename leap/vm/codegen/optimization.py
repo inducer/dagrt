@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from .ir import AssignInst, BranchInst, JumpInst, YieldInst, TerminatorInst
+from .ir import AssignInst, BranchInst, JumpInst, YieldStateInst, TerminatorInst
 from .analysis import ReachingDefinitions
 from pytools import one
 
@@ -209,7 +209,7 @@ class AggressiveDeadCodeElimination(object):
         if isinstance(inst, TerminatorInst):
             # All terminator instructions are essential.
             return True
-        elif isinstance(inst, YieldInst):
+        elif isinstance(inst, YieldStateInst):
             # All instructions that yield data are essential.
             return True
         elif isinstance(inst, AssignInst):

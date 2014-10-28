@@ -71,12 +71,59 @@ following special variable names are supported:
     This variable contains persistent state.
     (that survives from one step to the next)
 
+``<ret_time_id>COMPONENT_ID``
+``<ret_time>COMPONENT_ID``
+``<ret_state>COMPONENT_ID``
+    For targets that are incapable of returning state mid-step, these variables
+    are used to store computed state.
+
 The latter two serve to separate the name space used by the method from that
 under the control of the user.
 
 See :module:`leap.vm.function_registry` for interpretation of function names.
 The function namespace and the variable namespace are distinct. No user-defined
 identifiers should start with `leap_`.
+
+Instructions
+~~~~~~~~~~~~
+.. autoclass:: Instruction
+
+Assignment Instructions
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autoclass:: AssignRHS
+
+.. autoclass:: AssignSolvedRHS
+
+.. autoclass:: AssignExpression
+
+.. autoclass:: AssignNorm
+
+.. autoclass:: AssignDotProduct
+
+State Instructions
+^^^^^^^^^^^^^^^^^^
+
+.. autoclass:: YieldState
+
+.. autoclass:: Raise
+
+.. autoclass:: FailStep
+
+.. autoclass:: If
+
+Code Container
+~~~~~~~~~~~~~~
+
+.. autoclass:: TimeIntegratorCode
+
+Visualization
+~~~~~~~~~~~~~
+
+.. autofunction:: get_dot_dependency_graph
+
+.. autofunction:: show_dependency_graph
+
 """
 
 
@@ -289,7 +336,7 @@ def AssignDotProduct(
 # }}}
 
 
-class ReturnState(Instruction):
+class YieldState(Instruction):
     """
     .. attribute:: time_id
     .. attribute:: time
@@ -316,7 +363,7 @@ class ReturnState(Instruction):
                 self.time_id,
                 self.component_id)
 
-    exec_method = six.moves.intern("exec_ReturnState")
+    exec_method = six.moves.intern("exec_YieldState")
 
 
 class Raise(Instruction):
@@ -429,7 +476,7 @@ class TimeIntegratorCode(RecordWithoutPickling):
     .. attribute:: step_before_fail
 
         Whether the described method may generate state updates (using
-        :class:`ReturnState`) for a time step it later decides to fail
+        :class:`YieldState`) for a time step it later decides to fail
         (using :class:`FailStep`).
     """
 

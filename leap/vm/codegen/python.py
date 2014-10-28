@@ -187,13 +187,13 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         extract_structure = StructuralExtractor()
 
         self.begin_emit(dag)
-        for stage_name, dependencies in six.iteritems(dag.stages):
+        for state_name, dependencies in six.iteritems(dag.states):
             code = dag_extractor(dag.instructions, dependencies)
-            function = assembler(stage_name, code, dependencies)
+            function = assembler(state_name, code, dependencies)
             if optimize:
                 function = optimizer(function)
             control_tree = extract_structure(function)
-            self.lower_function(stage_name, control_tree)
+            self.lower_function(state_name, control_tree)
 
         self.finish_emit(dag)
 
@@ -270,11 +270,11 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         emit = PythonFunctionEmitter('run', ('self', '**kwargs'))
         emit('t_end = kwargs["t_end"]')
         emit('last_step = False')
-        # STAGE_HACK: This implementation of staging support should be replaced
-        # so that the stages are not hard-coded.
-        emit('next_stages = { "initialization": "primary", ' +
+        # STATE_HACK: This implementation of staging support should be replaced
+        # so that the states are not hard-coded.
+        emit('next_states = { "initialization": "primary", ' +
              '"primary": "primary" }')
-        emit('current_stage = "initialization"')
+        emit('current_state = "initialization"')
         emit('while True:')
         with Indentation(emit):
             emit('if self.t + self.dt >= t_end:')
@@ -282,28 +282,22 @@ class PythonCodeGenerator(StructuredCodeGenerator):
                 emit('assert self.t <= t_end')
                 emit('self.dt = t_end - self.t')
                 emit('last_step = True')
-            emit('stage = getattr(self, "stage_" + current_stage)()')
+            emit('state = getattr(self, "state_" + current_state)()')
             emit('try:')
             with Indentation(emit):
                 emit('while True:')
                 with Indentation(emit):
-                    emit('result = next(stage)')
-                    emit('t = result[0][1]')
-                    emit('time_id = result[1][1]')
-                    emit('component_id = result[2][1]')
-                    emit('state_component = result[3][1]')
-                    emit('yield self.StateComputed(t=t, time_id=time_id, \\')
-                    emit('    component_id=component_id, ' +
-                         'state_component=state_component)')
+                    emit('yield next(state)')
+
             emit('except StopIteration:')
             with Indentation(emit):
                 emit('pass')
-            # STAGE_HACK: Ensure that the primary stage has a chance to run.
-            emit('if last_step and current_stage == "primary":')
+            # STATE_HACK: Ensure that the primary state has a chance to run.
+            emit('if last_step and current_state == "primary":')
             with Indentation(emit):
                 emit('yield self.StepCompleted(t=self.t)')
                 emit('raise StopIteration()')
-            emit('current_stage = next_stages[current_stage]')
+            emit('current_state = next_states[current_state]')
         emit("")
         self._class_emitter.incorporate(emit)
 
@@ -326,7 +320,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         return self._class_emitter.get()
 
     def emit_def_begin(self, name):
-        self._emitter = PythonFunctionEmitter('stage_' + name, ('self',))
+        self._emitter = PythonFunctionEmitter('state_' + name, ('self',))
 
     def emit_def_end(self):
         self._emit("")
@@ -370,5 +364,9 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         # awkward syntax.
         self._emit('yield')
 
-    def emit_yield(self, expr):
-        self._emit('yield {expr}'.format(expr=self._expr(expr)))
+    def emit_yield_state(self, inst):
+        self._emit('yield self.StateComputed(')
+        self._emit('    t=%s,' % self._expr(inst.time))
+        self._emit('    time_id=%r,' % inst.time_id)
+        self._emit('    component_id=%r,' % inst.component_id)
+        self._emit('    state_component=%s)' % self._expr(inst.expression))

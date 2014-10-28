@@ -27,8 +27,7 @@ THE SOFTWARE.
 import sys
 import pytest
 
-from leap.vm.language import AssignExpression, AssignNorm, AssignRHS, If, \
-    ReturnState
+from leap.vm.language import YieldState
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
 from leap.vm.codegen.fortran import (
         FortranCodeGenerator, FortranType, FortranCallCode)
@@ -43,15 +42,17 @@ def test_basic_codegen():
     generated method always returns 0."""
     cbuild = CodeBuilder()
     cbuild.add_and_get_ids(
-        ReturnState(id='return', time=0, time_id='final',
-                    expression=0, component_id='<state>',
+        YieldState(id='return', time=0, time_id='final',
+                    expression=0, component_id='state',
         depends_on=[]))
     cbuild.commit()
     code = TimeIntegratorCode(initialization_dep_on=[],
         instructions=cbuild.instructions, step_dep_on=['return'],
         step_before_fail=False)
     codegen = FortranCodeGenerator("simple",
-            ode_component_type_map={})
+            ode_component_type_map={
+                "state": FortranType('real (kind=8)', (200,))
+                })
     print(codegen(code))
 
 

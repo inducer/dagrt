@@ -195,7 +195,7 @@ class NumpyInterpreter(object):
         else:
             raise ValueError('Unknown solver id: ' + str(insn.solver_id))
 
-    def exec_ReturnState(self, insn):
+    def exec_YieldState(self, insn):
         return self.StateComputed(
                     t=self.eval_mapper(insn.time),
                     time_id=insn.time_id,

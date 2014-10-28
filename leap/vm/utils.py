@@ -39,7 +39,12 @@ def is_state_variable(var):
     """Check if the given name corresponds to a state variable."""
     if var == '<t>' or var == '<dt>':
         return True
-    elif var.startswith('<state>') or var.startswith('<p>'):
+    elif (var.startswith('<state>')
+            or var.startswith('<p>')
+            or var.startswith("<ret_time_id>")
+            or var.startswith("<ret_time>")
+            or var.startswith("<ret_state>")
+            ):
         return True
     else:
         return False

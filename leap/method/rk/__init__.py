@@ -26,6 +26,12 @@ THE SOFTWARE.
 
 from leap.method import Method
 
+__doc__ = """
+.. autoclass:: ODE23TimeStepper
+
+.. autoclass:: ODE45TimeStepper
+"""
+
 
 # {{{ Embedded Runge-Kutta schemes base class
 
@@ -53,7 +59,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         """
         from leap.vm.language import (
                 AssignNorm, AssignExpression,
-                ReturnState, If, Raise, FailStep,
+                YieldState, If, Raise, FailStep,
                 TimeIntegratorCode,
                 CodeBuilder)
 
@@ -144,7 +150,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                         # don't change state before all RHSs are done using it
                         depends_on=all_rhs_eval_ids),
 
-                    ReturnState(
+                    YieldState(
                         id="ret_state",
                         time_id="final",
                         time=t + dt,
@@ -276,7 +282,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                         depends_on=["compute_les", "compute_hes",
                             "compute_state_norm"]),
 
-                    ReturnState(
+                    YieldState(
                         id="ret_state",
                         time_id="final",
                         time=t + dt,

@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 from pytools import memoize_method
 from pymbolic.mapper import Collector
-from leap.vm.language import Instruction, If, ReturnState
+from leap.vm.language import Instruction, If, YieldState
 from .graphs import InstructionDAGIntGraph
 import six
 
@@ -177,8 +177,22 @@ def collect_time_ids_from_dag(dag):
     result = set()
 
     for insn in dag.instructions:
-        if isinstance(insn, ReturnState):
+        if isinstance(insn, YieldState):
             result.add(insn.time_id)
+
+    return result
+
+# }}}
+
+
+# {{{ collect ODE component names from DAG
+
+def collect_ode_component_names_from_dag(dag):
+    result = set()
+
+    for insn in dag.instructions:
+        if isinstance(insn, YieldState):
+            result.add(insn.component_id)
 
     return result
 

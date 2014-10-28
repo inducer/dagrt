@@ -37,6 +37,11 @@ from leap.method.ab.multirate.methods import HIST_NAMES
 from leap.method.ab.multirate.processors import MRABProcessor
 
 
+__doc__ = """
+.. autoclass:: TwoRateAdamsBashforthTimeStepper
+"""
+
+
 class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
     """Simultaneously timesteps two parts of an ODE system,
     the first with a small timestep, the second with a large timestep.

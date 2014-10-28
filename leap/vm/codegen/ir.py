@@ -137,28 +137,44 @@ class AssignInst(Inst):
         raise TODO('Implement string representation for all assignment types')
 
 
-class YieldInst(Inst):
-    """Generates a value.
+class YieldStateInst(Inst):
+    """Make :attr:`expression` available as an intermediate result
+    to the user code.
 
+    .. attribute:: time_id
+    .. attribute:: time
+
+        A :mod:`pymbolic` expression representing the time at which the
+        state returned is valid.
+
+    .. attribute:: component_id
     .. attribute:: expression
-       A pymbolic expression for the generated value.
     """
 
-    def __init__(self, expression, block=None):
-        super(YieldInst, self).__init__(expression=expression, block=block)
+    def __init__(self, time_id, time, component_id, expression, block=None):
+        super(YieldStateInst, self).__init__(
+                time_id=time_id,
+                time=time,
+                component_id=component_id,
+                expression=expression,
+                block=block)
 
     def get_defined_variables(self):
         return frozenset()
 
     @memoize_method
     def get_used_variables(self):
-        return get_variables(self.expression)
+        return get_variables(self.expression) | get_variables(self.time)
 
     def get_jump_targets(self):
         return frozenset()
 
     def __str__(self):
-        return 'yield ' + string_mapper(self.expression)
+        return 'yield {expr} for {component_id} as {time_id} at t={time}'.format(
+                expr=self.expression,
+                component_id=self.component_id,
+                time_id=self.time_id,
+                time=self.time)
 
 
 class TerminatorInst(Inst):
@@ -348,10 +364,17 @@ class BasicBlock(object):
         """Append a return instruction to the block."""
         self.add_instruction(ReturnInst())
 
-    def add_yield(self, expr):
+    def add_bogus_yield_state(self):
+        self.add_yield_state(
+                time_id=0,
+                time=0,
+                component_id="x",
+                expression=0)
+
+    def add_yield_state(self, **kwargs):
         """Append a yield instruction to the block with the given
         expression."""
-        self.add_instruction(YieldInst(expr))
+        self.add_instruction(YieldStateInst(**kwargs))
 
     def __str__(self):
         lines = []

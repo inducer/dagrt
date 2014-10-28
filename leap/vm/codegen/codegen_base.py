@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 from .structured_ir import SingleNode, IfThenNode, IfThenElseNode, BlockNode, \
     UnstructuredIntervalNode
-from .ir import AssignInst, JumpInst, BranchInst, ReturnInst, YieldInst
+from .ir import AssignInst, JumpInst, BranchInst, ReturnInst, YieldStateInst
 from leap.vm.language import AssignExpression
 from leap.vm.utils import TODO
 
@@ -41,14 +41,14 @@ class NewTimeIntegratorCode(RecordWithoutPickling):
         is a list of Instruction instances, in no particular
         order
 
-    .. attribute:: stages
+    .. attribute:: states
 
-        is a map from stage names to lists of ids corresponding to
-        execution dependencies
+        is a map from time integrator state names to lists of ids
+        corresponding to execution dependencies
 
-    .. attribute:: initial_stage
+    .. attribute:: initial_state
 
-        the name of the starting stage
+        the name of the starting state
 
     .. attribute:: step_before_fail
 
@@ -59,16 +59,16 @@ class NewTimeIntegratorCode(RecordWithoutPickling):
 
     @classmethod
     def from_old(cls, code):
-        stages = {}
-        stages['initialization'] = code.initialization_dep_on
-        stages['primary'] = code.step_dep_on
-        return cls(code.instructions, stages, 'initialization',
+        states = {}
+        states['initialization'] = code.initialization_dep_on
+        states['primary'] = code.step_dep_on
+        return cls(code.instructions, states, 'initialization',
                    code.step_before_fail)
 
-    def __init__(self, instructions, stages, initial_stage, step_before_fail):
+    def __init__(self, instructions, states, initial_state, step_before_fail):
         RecordWithoutPickling.__init__(self, instructions=instructions,
-                                       stages=stages,
-                                       initial_stage=initial_stage,
+                                       states=states,
+                                       initial_state=initial_state,
                                        step_before_fail=step_before_fail)
 
 
@@ -117,15 +117,17 @@ class StructuredCodeGenerator(object):
                 self.emit_assign_expr(assignment.assignee,
                                       assignment.expression)
             else:
-                raise TODO('Lower all assignment types')
+                raise ValueError("unrecognized assignment type '%s'"
+                        % type(inst.assignment).__name__)
+
         elif isinstance(inst, JumpInst):
             pass
         elif isinstance(inst, BranchInst):
             self.emit_if_begin(inst.condition)
         elif isinstance(inst, ReturnInst):
             self.emit_return()
-        elif isinstance(inst, YieldInst):
-            self.emit_yield(inst.expression)
+        elif isinstance(inst, YieldStateInst):
+            self.emit_yield_state(inst)
 
     # Emit routines (to be implemented by subclass)
 
@@ -165,7 +167,7 @@ class StructuredCodeGenerator(object):
     def emit_return(self):
         raise NotImplementedError()
 
-    def emit_yield(self, expr):
+    def emit_yield_state(self, expr):
         raise NotImplementedError()
 
 # }}}

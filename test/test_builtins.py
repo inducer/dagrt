@@ -28,7 +28,7 @@ import numpy as np
 import pytest
 import sys
 
-from leap.vm.language import AssignExpression, ReturnState
+from leap.vm.language import AssignExpression, YieldState
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
 from pymbolic import var
 
@@ -46,7 +46,7 @@ class BuiltinsTestBase(object):
         cbuild.add_and_get_ids(
             AssignExpression(id='assign_1', assignee='x',
                              expression=var('<builtin>len')(test_vector)),
-            ReturnState(id='return', time=0, time_id='final',
+            YieldState(id='return', time=0, time_id='final',
                         expression=var('x'), component_id='<state>',
                         depends_on=['assign_1']))
         cbuild.commit()
@@ -63,7 +63,7 @@ class BuiltinsTestBase(object):
         cbuild.add_and_get_ids(
             AssignExpression(id='assign_1', assignee='x',
                              expression=var('<builtin>isnan')(value)),
-            ReturnState(id='return', time=0, time_id='final',
+            YieldState(id='return', time=0, time_id='final',
                         expression=var('x'), component_id='<state>',
                         depends_on=['assign_1']))
         cbuild.commit()
@@ -85,7 +85,7 @@ class BuiltinsTestBase(object):
                              expression=var('<builtin>norm')(var('x'),
                                                              ord=order),
                              depends_on=['assign_1']),
-            ReturnState(id='return', time=0, time_id='final',
+            YieldState(id='return', time=0, time_id='final',
                         expression=var('n'), component_id='<state>',
                         depends_on=['assign_2']))
         cbuild.commit()
@@ -104,7 +104,7 @@ class BuiltinsTestBase(object):
         cbuild.add_and_get_ids(
             AssignExpression(id='assign_1', assignee='x',
                              expression=var('<builtin>dot_product')(x, y)),
-            ReturnState(id='return', time=0, time_id='final',
+            YieldState(id='return', time=0, time_id='final',
                         expression=var('x'), component_id='<state>',
                         depends_on=['assign_1']))
         cbuild.commit()

@@ -95,7 +95,7 @@ class SymbolKindTable(object):
                 }
         self.per_function_table = {}
 
-    def _set(self, func_name, name, kind):
+    def set(self, func_name, name, kind):
         if is_state_variable(name):
             tbl = self.global_table
         else:
@@ -346,7 +346,7 @@ class SymbolKindFinder(object):
                         insn_queue_push_buffer.append((func_name, insn))
                     else:
                         made_progress = True
-                        result._set(
+                        result.set(
                                 func_name, insn.assignment.assignee,
                                 kind=kind)
 
