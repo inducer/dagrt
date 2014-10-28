@@ -41,14 +41,14 @@ class NewTimeIntegratorCode(RecordWithoutPickling):
         is a list of Instruction instances, in no particular
         order
 
-    .. attribute:: stages
+    .. attribute:: states
 
-        is a map from stage names to lists of ids corresponding to
-        execution dependencies
+        is a map from time integrator state names to lists of ids
+        corresponding to execution dependencies
 
-    .. attribute:: initial_stage
+    .. attribute:: initial_state
 
-        the name of the starting stage
+        the name of the starting state
 
     .. attribute:: step_before_fail
 
@@ -59,16 +59,16 @@ class NewTimeIntegratorCode(RecordWithoutPickling):
 
     @classmethod
     def from_old(cls, code):
-        stages = {}
-        stages['initialization'] = code.initialization_dep_on
-        stages['primary'] = code.step_dep_on
-        return cls(code.instructions, stages, 'initialization',
+        states = {}
+        states['initialization'] = code.initialization_dep_on
+        states['primary'] = code.step_dep_on
+        return cls(code.instructions, states, 'initialization',
                    code.step_before_fail)
 
-    def __init__(self, instructions, stages, initial_stage, step_before_fail):
+    def __init__(self, instructions, states, initial_state, step_before_fail):
         RecordWithoutPickling.__init__(self, instructions=instructions,
-                                       stages=stages,
-                                       initial_stage=initial_stage,
+                                       states=states,
+                                       initial_state=initial_state,
                                        step_before_fail=step_before_fail)
 
 

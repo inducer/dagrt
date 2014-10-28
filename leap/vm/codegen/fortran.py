@@ -324,16 +324,16 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         optimizer = Optimizer()
         extract_structure = StructuralExtractor()
 
-        for stage_name, dependencies in six.iteritems(dag.stages):
+        for state_name, dependencies in six.iteritems(dag.states):
             code = dag_extractor(dag.instructions, dependencies)
-            function = assembler(stage_name, code, dependencies)
+            function = assembler(state_name, code, dependencies)
             if optimize:
                 function = optimizer(function)
             control_tree = extract_structure(function)
 
             fdescrs.append(
                     _IRFunctionDescriptor(
-                        name=stage_name,
+                        name=state_name,
                         function=function,
                         control_tree=control_tree))
 
@@ -390,9 +390,9 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                 time_id=time_id, i=i))
         self.emit('')
 
-        for i, stage in enumerate(dag.stages):
-            self.emit("parameter (leap_stage_{stage_name} = {i})".format(
-                stage_name=stage, i=i))
+        for i, state in enumerate(dag.states):
+            self.emit("parameter (leap_state_{state_name} = {i})".format(
+                state_name=state, i=i))
 
         self.emit('')
 
@@ -400,7 +400,7 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                 self.emitter,
                 'leap_state_type',
                 self) as emit:
-            emit('integer leap_stage')
+            emit('integer leap_state')
             emit('')
 
             for identifier, sym_kind in six.iteritems(
@@ -643,11 +643,11 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             emit('t_end = kwargs["t_end"]')
             emit('last_step = False')
 
-            # STAGE_HACK: This implementation of staging support should be replaced
-            # so that the stages are not hard-coded.
-            emit('next_stages = { "initialization": "primary", ' +
+            # STATE_HACK: This implementation of staging support should be replaced
+            # so that the states are not hard-coded.
+            emit('next_states = { "initialization": "primary", ' +
                  '"primary": "primary" }')
-            emit('current_stage = "initialization"')
+            emit('current_state = "initialization"')
 
             with FortranDoEmitter(emit, ".true.", self):
                 with FortranIfEmitter(
@@ -656,8 +656,8 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                     self.emit('self.dt = t_end - self.t')
                     self.emit('last_step = True')
 
-                d_emit('stage_function = getattr(self, "stage_" + current_stage)')
-                emit('result = stage_function()')
+                d_emit('state_function = getattr(self, "state_" + current_state)')
+                emit('result = state_function()')
 
                 with FortranIfEmitter(self.emitter, 'result') as emit_res:
                     emit_res('result = dict(result)')
@@ -672,7 +672,7 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                     with FortranIfEmitter(emit_res, 'last_step') as emit_ls:
                         emit_ls('yield self.StepCompleted(t=self.t)')
                         emit_ls('exit')
-                d_emit('current_stage = next_stages[current_stage]')
+                d_emit('current_state = next_states[current_state]')
 
     def finish_emit(self, dag):
         self.emit_initialize()
@@ -691,7 +691,7 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
         FortranSubroutineEmitter(
                 self.emitter,
-                'leap_stage_func_' + func_id, ('leap_state',),
+                'leap_state_func_' + func_id, ('leap_state',),
                 self).__enter__()
 
         self.declaration_emitter('implicit none')
