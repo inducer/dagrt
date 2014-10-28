@@ -163,7 +163,7 @@ class NumpyInterpreter(object):
 
     # {{{ execution methods
 
-    def exec_ReturnState(self, insn):
+    def exec_YieldState(self, insn):
         return self.StateComputed(
                     t=self.eval_mapper(insn.time),
                     time_id=insn.time_id,

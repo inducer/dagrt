@@ -28,7 +28,7 @@ import sys
 import pytest
 import numpy as np
 
-from leap.vm.language import AssignExpression, If, ReturnState
+from leap.vm.language import AssignExpression, If, YieldState
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
 from leap.vm.codegen import PythonCodeGenerator
 from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
@@ -40,7 +40,7 @@ def test_basic_codegen():
     generated method always returns 0."""
     cbuild = CodeBuilder()
     cbuild.add_and_get_ids(
-        ReturnState(id='return', time=0, time_id='final',
+        YieldState(id='return', time=0, time_id='final',
                     expression=0, component_id='<state>',
         depends_on=[]))
     cbuild.commit()
@@ -67,7 +67,7 @@ def test_basic_conditional_codegen():
         AssignExpression(id='else_branch', assignee='<state>y', expression=0),
         If(id='branch', condition=True, then_depends_on=['then_branch'],
             else_depends_on=['else_branch']),
-        ReturnState(id='return', time=0, time_id='final',
+        YieldState(id='return', time=0, time_id='final',
             expression=var('<state>y'), component_id='<state>',
         depends_on=['branch']))
     cbuild.commit()
@@ -99,7 +99,7 @@ def test_basic_assign_rhs_codegen():
                          assignee='<state>y',
                          expression=var('yy')(t=var('<t>'), y=var('<state>y')),
                          depends_on=['assign_rhs1']),
-        ReturnState(id='return', time=0, time_id='final',
+        YieldState(id='return', time=0, time_id='final',
             expression=var('<state>y'), component_id='<state>',
             depends_on=['assign_rhs2'])
         )
@@ -138,7 +138,7 @@ def test_complex_dependency_codegen():
            else_depends_on=[], depends_on=[]),
         If(id='branch2', condition=True, then_depends_on=['incr'],
            else_depends_on=[], depends_on=[]),
-        ReturnState(id='return', time=0, time_id='final',
+        YieldState(id='return', time=0, time_id='final',
             expression=var('<state>y'), component_id='<state>',
             depends_on=['branch1', 'branch2']))
     cbuild.commit()

@@ -8,54 +8,12 @@ Description Language
 
 .. automodule:: leap.vm.language
 
-Instructions
-~~~~~~~~~~~~
-.. autoclass:: Instruction
-
-Assignment Instructions
-^^^^^^^^^^^^^^^^^^^^^^^
-
-.. autoclass:: AssignRHS
-
-.. autoclass:: AssignSolvedRHS
-
-.. autoclass:: AssignExpression
-
-.. autoclass:: AssignNorm
-
-.. autoclass:: AssignDotProduct
-
-State Instructions
-^^^^^^^^^^^^^^^^^^
-
-.. autoclass:: ReturnState
-
-.. autoclass:: Raise
-
-.. autoclass:: FailStep
-
-.. autoclass:: If
-
-Code Container
-~~~~~~~~~~~~~~
-
-.. autoclass:: TimeIntegratorCode
-
-Visualization
-~~~~~~~~~~~~~
-
-.. autofunction:: get_dot_dependency_graph
-
-.. autofunction:: show_dependency_graph
-
 Methods
 -------
 
 .. automodule:: leap.method.rk
-
-.. autoclass:: ODE23TimeStepper
-
-.. autoclass:: ODE45TimeStepper
+.. automodule:: leap.method.ab
+.. automodule:: leap.method.ab.multirate
 
 Execution
 ---------

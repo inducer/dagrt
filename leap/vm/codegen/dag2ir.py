@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 from leap.vm.language import (
         Instruction, AssignExpression, AssignSolvedRHS,
-        If, ReturnState, Raise, FailStep)
+        If, YieldState, Raise, FailStep)
 from leap.vm.utils import TODO
 from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import get_unique_name, is_state_variable
@@ -491,12 +491,12 @@ class ControlFlowGraphAssembler(object):
                 flag_tracker = then_flag_tracker & else_flag_tracker
                 main_bb = then_else_merge_bb
 
-            elif isinstance(instruction, ReturnState):
-                yield_value = (('time', instruction.time),
-                               ('time_id', instruction.time_id),
-                               ('component_id', instruction.component_id),
-                               ('expression', instruction.expression))
-                main_bb.add_yield(yield_value)
+            elif isinstance(instruction, YieldState):
+                main_bb.add_yield_state(
+                        time=instruction.time,
+                        time_id=instruction.time_id,
+                        component_id=instruction.component_id,
+                        expression=instruction.expression)
 
             elif isinstance(instruction, (AssignExpression, AssignSolvedRHS)):
                 main_bb.add_assignment(instruction)

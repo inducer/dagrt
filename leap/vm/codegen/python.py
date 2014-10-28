@@ -287,14 +287,8 @@ class PythonCodeGenerator(StructuredCodeGenerator):
             with Indentation(emit):
                 emit('while True:')
                 with Indentation(emit):
-                    emit('result = next(stage)')
-                    emit('t = result[0][1]')
-                    emit('time_id = result[1][1]')
-                    emit('component_id = result[2][1]')
-                    emit('state_component = result[3][1]')
-                    emit('yield self.StateComputed(t=t, time_id=time_id, \\')
-                    emit('    component_id=component_id, ' +
-                         'state_component=state_component)')
+                    emit('yield next(stage)')
+
             emit('except StopIteration:')
             with Indentation(emit):
                 emit('pass')
@@ -370,5 +364,9 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         # awkward syntax.
         self._emit('yield')
 
-    def emit_yield(self, expr):
-        self._emit('yield {expr}'.format(expr=self._expr(expr)))
+    def emit_yield_state(self, inst):
+        self._emit('yield self.StateComputed(')
+        self._emit('    t=%s,' % self._expr(inst.time))
+        self._emit('    time_id=%r,' % inst.time_id)
+        self._emit('    component_id=%r,' % inst.component_id)
+        self._emit('    state_component=%s)' % self._expr(inst.expression))

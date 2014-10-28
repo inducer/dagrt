@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 from .structured_ir import SingleNode, IfThenNode, IfThenElseNode, BlockNode, \
     UnstructuredIntervalNode
-from .ir import AssignInst, JumpInst, BranchInst, ReturnInst, YieldInst
+from .ir import AssignInst, JumpInst, BranchInst, ReturnInst, YieldStateInst
 from leap.vm.language import AssignExpression
 from leap.vm.utils import TODO
 
@@ -117,15 +117,17 @@ class StructuredCodeGenerator(object):
                 self.emit_assign_expr(assignment.assignee,
                                       assignment.expression)
             else:
-                raise TODO('Lower all assignment types')
+                raise ValueError("unrecognized assignment type '%s'"
+                        % type(inst.assignment).__name__)
+
         elif isinstance(inst, JumpInst):
             pass
         elif isinstance(inst, BranchInst):
             self.emit_if_begin(inst.condition)
         elif isinstance(inst, ReturnInst):
             self.emit_return()
-        elif isinstance(inst, YieldInst):
-            self.emit_yield(inst.expression)
+        elif isinstance(inst, YieldStateInst):
+            self.emit_yield_state(inst)
 
     # Emit routines (to be implemented by subclass)
 
@@ -165,7 +167,7 @@ class StructuredCodeGenerator(object):
     def emit_return(self):
         raise NotImplementedError()
 
-    def emit_yield(self, expr):
+    def emit_yield_state(self, expr):
         raise NotImplementedError()
 
 # }}}

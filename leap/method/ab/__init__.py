@@ -33,6 +33,10 @@ from leap.method.ab.utils import make_ab_coefficients
 from leap.method import Method
 from pymbolic.primitives import CallWithKwargs
 
+__doc__ = """
+.. autoclass:: AdamsBashforthTimeStepper
+"""
+
 
 class AdamsBashforthTimeStepperBase(Method):
 
@@ -59,10 +63,10 @@ class AdamsBashforthTimeStepperBase(Method):
     def emit_epilogue(self, cbuild, return_val, component_id, depends_on=[]):
         """Add code that runs at the end of the timestep."""
 
-        from leap.vm.language import ReturnState, AssignExpression
+        from leap.vm.language import YieldState, AssignExpression
         from pymbolic import var
 
-        return cbuild.add_and_get_ids(ReturnState(
+        return cbuild.add_and_get_ids(YieldState(
             id='ret', time_id='final',
             time=var('<t>') + var('<dt>'),
             component_id=component_id,
