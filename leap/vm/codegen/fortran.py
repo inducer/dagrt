@@ -42,7 +42,7 @@ def pad_fortran(line, width):
     line += '&'
     return line
 
-wrap_line = partial(wrap_line_base, pad_fortran)
+wrap_line = partial(wrap_line_base, pad_func=pad_fortran)
 
 
 # {{{ name manager

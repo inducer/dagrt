@@ -22,20 +22,24 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import re
+import functools
+import shlex
 
 
-def wrap_line_base(pad_func, line, level=0, width=80, indentation='    '):
-    """The input is a line of Python code at the given indentation
-    level. Return the list of lines that results from wrapping the line to the
-    given width. Lines subsequent to the first line in the returned list are
-    padded with extra indentation. The initial indentation level is not
-    included in the input or output lines.
-
-    Note: This code does not correctly handle Python lexical elements that
-    contain whitespace.
+def wrap_line_base(line, level=0, width=80, indentation='    ',
+                   pad_func=lambda string, amount: string,
+                   lex_func=functools.partial(shlex.split, posix=False)):
     """
-    tokens = re.split('\s+', line)
+    The input is a line of code at the given indentation level. Return the list
+    of lines that results from wrapping the line to the given width. Lines
+    subsequent to the first line in the returned list are padded with extra
+    indentation. The initial indentation level is not included in the input or
+    output lines.
+
+    The `pad_func` argument is a function that adds line continuations. The
+    `lex_func` argument returns the list of tokens in the line.
+    """
+    tokens = lex_func(line)
     resulting_lines = []
     at_line_start = True
     indentation_len = len(level * indentation)

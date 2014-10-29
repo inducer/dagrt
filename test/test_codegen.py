@@ -356,6 +356,16 @@ def test_python_line_wrapping():
                       '    y +  \\', '    zzzzzzzzz)']
 
 
+def test_line_wrapping_line_with_string():
+    """Check that the line wrapper doesn't break up strings."""
+    from leap.vm.codegen.fortran import wrap_line
+    line = "write(*,*) 'failed to allocate leap_state%leap_refcnt_p_last_rhs_y'"
+    result = wrap_line(line, width=60)
+    assert result == \
+        ["write(*,*)                                                 &",
+         "    'failed to allocate leap_state%leap_refcnt_p_last_rhs_y'"]
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])
