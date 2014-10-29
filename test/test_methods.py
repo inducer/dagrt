@@ -131,25 +131,9 @@ def test_adaptive_timestep(method, show_dag=False, plot=False):
         from leap.vm.language import show_dependency_graph
         show_dependency_graph(code)
 
-    class VanDerPolOscillator:
-        def __init__(self, mu=30):
-            self.mu = mu
-            self.t_start = 0
-            self.t_end = 100
-
-        def ic(self):
-            return np.array([2, 0], dtype=np.float64)
-
-        def __call__(self, t, y):
-            u1 = y[0]
-            u2 = y[1]
-            return np.array([
-                u2,
-                -self.mu*(u1**2-1)*u2-u1],
-                dtype=np.float64)
-
-    example = VanDerPolOscillator()
-    y = example.ic()
+    from stiff_test_systems import VanDerPolProblem
+    example = VanDerPolProblem()
+    y = example.initial()
 
     from leap.vm.exec_numpy import NumpyInterpreter
 

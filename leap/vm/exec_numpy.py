@@ -192,7 +192,7 @@ class NumpyInterpreter(object):
         if insn.solver_id == 'newton':
             guess = self.eval_mapper(insn.solver_parameters['initial_guess'])
             self.state[insn.assignees[0]] = scipy.optimize.newton(func, guess)
-        elif insn.solver_id == 'root':
+        elif insn.solver_id == 'broyden':
             guess = self.eval_mapper(insn.solver_parameters['initial_guess'])
             result = scipy.optimize.root(func, guess, method='broyden1')
             assert result.success

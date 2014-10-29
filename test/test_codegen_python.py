@@ -230,7 +230,7 @@ def test_multirate_codegen():
     codegen = PythonCodeGenerator(class_name='MRABMethod')
     MRABMethod = codegen.get_class(code)
 
-    from ode_systems import Basic
+    from multirate_test_systems import Basic
     import numpy
 
     ode = Basic()

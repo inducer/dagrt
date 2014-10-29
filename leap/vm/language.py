@@ -679,8 +679,6 @@ class CodeBuilder(object):
                 var_writer, = var_to_writers[v]
                 new_deps.append(var_writer.id)
 
-            print(insn.id, insn.depends_on, frozenset(new_deps))
-
             new_build_group.append(
                     insn.copy(
                         depends_on=insn.depends_on | frozenset(new_deps)))

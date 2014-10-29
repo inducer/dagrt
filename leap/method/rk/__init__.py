@@ -25,6 +25,10 @@ THE SOFTWARE.
 """
 
 from leap.method import Method
+from leap.vm.language import (AssignNorm, AssignExpression, YieldState,
+                              If, Raise, FailStep, TimeIntegratorCode,
+                              CodeBuilder)
+from pymbolic import var
 
 __doc__ = """
 .. autoclass:: ODE23TimeStepper
@@ -33,6 +37,7 @@ __doc__ = """
 """
 
 # {{{ Embedded Runge-Kutta schemes base class
+
 
 class EmbeddedRungeKuttaMethod(Method):
     def __init__(self, use_high_order=True,
@@ -49,8 +54,8 @@ class EmbeddedRungeKuttaMethod(Method):
         self.max_dt_growth = max_dt_growth
         self.min_dt_shrinkage = min_dt_shrinkage
 
-    def add_ret_state_and_increment_t(self, cbuild, state, time_update,
-                                      dependencies):
+    def add_ret_state_and_increment_t(self, cbuild, state, component_id,
+                                      time_update, dependencies):
         return cbuild.add_and_get_ids(
             YieldState(
                 id="ret_state",
@@ -65,16 +70,16 @@ class EmbeddedRungeKuttaMethod(Method):
                 depends_on=["ret_state"])
             )
 
-    def adapt_step_size(self, cbuild, state, t, dt, low_order_end_state,
-                        high_order_end_state, last_step_work_ids,
-                        limiter):
+    def adapt_step_size(self, cbuild, state, component_id, t, dt,
+                        low_order_end_state, high_order_end_state,
+                        last_step_work_ids, limiter):
         """
         :arg cbuild: The CodeBuilder
 
         :arg state: The state variable
 
         :arg low_order_end_state: The low order updated state variable
-        
+
         :arg high_order_end_state: The high order updated state variable
 
         :arg last_step_work_ids: Instruction ids for instructions that
@@ -82,25 +87,26 @@ class EmbeddedRungeKuttaMethod(Method):
 
         :arg limiter: The limiter function
         """
-        from leap.method import TimeStepUnderflow    
+        from leap.method import TimeStepUnderflow
         from pymbolic.primitives import Min, Max, Comparison, LogicalOr
 
-        self.add_ret_state_and_increment_t(cbuild, state, t + dt,
-                                           ["update_state"])
+        self.add_ret_state_and_increment_t(cbuild, state, component_id,
+                                           t + dt, ["update_state"])
+
+        last_step_work_ids = list(last_step_work_ids)
 
         cbuild.add_and_get_ids(
             AssignNorm("norm_start_state", state,
                        id="compute_state_norm"),
-            AssignNorm("norm_end_state", var("low_order_end_state")),
+            AssignNorm("norm_end_state", low_order_end_state),
             AssignNorm("rel_error_raw",
-                    (high_order_end_state - low_order_end_state) / (
-                    var("<builtin>len")(state) ** 0.5
-                    *
-                    (self.atol + self.rtol * Max((
-                                var("norm_start_state"),
-                                var("norm_end_state"))))
-                    )
-                ),
+                       (high_order_end_state - low_order_end_state) / (
+                           var("<builtin>len")(state) ** 0.5
+                           *
+                           (self.atol + self.rtol * Max((
+                                    var("norm_start_state"),
+                                    var("norm_end_state")))))
+                       ),
             If(
                 condition=Comparison(var("rel_error_raw"), "==", 0),
                 then_depends_on=["rel_err_zero"],
@@ -126,7 +132,7 @@ class EmbeddedRungeKuttaMethod(Method):
                 id="reject_check"),
             # then
             # reject step
-            
+
             If(
                 condition=var("<builtin>isnan")(var("rel_error")),
                 then_depends_on=["min_adjust_dt"],
@@ -144,7 +150,7 @@ class EmbeddedRungeKuttaMethod(Method):
                  self.min_dt_shrinkage * dt)),
                  id="rej_adjust_dt"),
             # endif
-            
+
             If(
                 condition=Comparison(t + dt, "==", t),
                 then_depends_on=["tstep_underflow"],
@@ -154,14 +160,14 @@ class EmbeddedRungeKuttaMethod(Method):
             # then
             Raise(TimeStepUnderflow, id="tstep_underflow"),
             # endif
-            
+
             FailStep(
                 id="rej_step",
                 depends_on=["check_underflow"]),
-            
+
             # else
             # accept step
-            
+
             AssignExpression("<dt>",
                 Min((0.9 * dt *
                      var("rel_error") ** (-1 / self.high_order),
@@ -184,23 +190,15 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         :arg component_id: an identifier to be used for the single state component
             supported.
         """
-        from leap.vm.language import (
-                AssignNorm, AssignExpression,
-                YieldState, If, Raise, FailStep,
-                TimeIntegratorCode,
-                CodeBuilder)
-
         from pymbolic.primitives import CallWithKwargs
 
         cbuild = CodeBuilder()
 
         add_and_get_ids = cbuild.add_and_get_ids
 
-        from pymbolic import var
-
         dt = var("<dt>")
         t = var("<t>")
-        last_rhs = var("<p>last_rhs_"+component_id)
+        last_rhs = var("<p>last_rhs_" + component_id)
         local_last_rhs = var('last_rhs_' + component_id)
         state = var("<state>"+component_id)
 
@@ -278,17 +276,22 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                     # it
                     depends_on=all_rhs_eval_ids)
                 )
-            
-            self.add_ret_state_and_increment_t(cbuild, state, t + dt,
+
+            self.add_ret_state_and_increment_t(cbuild, state,
+                                               component_id, t + dt,
                                                update_state_ids)
+
             cbuild.infer_single_writer_dependencies(
                 exclude=dep_inf_exclude_names)
+
             cbuild.commit()
 
             return TimeIntegratorCode(
                     instructions=cbuild.instructions,
                     initialization_dep_on=initialization_dep_on,
-                    step_dep_on=["ret_state", "increment_t"],
+                    step_dep_on=["ret_state",
+                                 last_rhs_assignment_id,
+                                 "increment_t"],
                     step_before_fail=False)
 
         else:
@@ -307,10 +310,11 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                         id="compute_les")
                     )
 
-            self.adapt_step_size(cbuild, state, t, dt,
+            self.adapt_step_size(cbuild, state, component_id, t, dt,
                                  var("low_order_end_state"),
                                  var("high_order_end_state"),
-                                 compute_estimate_ids,
+                                 compute_estimate_ids +
+                                 [last_rhs_assignment_id],
                                  limiter)
 
             cbuild.infer_single_writer_dependencies(

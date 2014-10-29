@@ -28,12 +28,11 @@ THE SOFTWARE.
 """
 
 
-from leap.vm.utils import TODO
 from leap.method.rk import EmbeddedRungeKuttaMethod
 from pymbolic import var
 from pymbolic.primitives import CallWithKwargs
 from leap.vm.language import (AssignExpression, AssignSolvedRHS, CodeBuilder,
-                              ReturnState, TimeIntegratorCode)
+                              TimeIntegratorCode)
 
 
 class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
@@ -84,7 +83,7 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
             )
 
     def _finish_solution(self, cbuild, dest, coeffs, explicit_rhss,
-                         implicit_rhss, dependencies):
+                         implicit_rhss):
         """Add code to build the final component in the primary stage. Return
         the list of instruction ids.
 
@@ -97,8 +96,6 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
         :arg explicit_rhss: The list of explicit RHS stage values
 
         :arg implicit_rhss: The list of implicit RHS stage values
-
-        :arg dependencies: The dependency list for the computation
         """
 
         assert (len(coeffs) == len(explicit_rhss) == len(implicit_rhss))
@@ -110,8 +107,7 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
         return cbuild.add_and_get_ids(
             AssignExpression(
                 assignee=dest.name,
-                expression=sum(arg[0] * arg[1] for arg in args),
-                depends_on=dependencies
+                expression=sum(arg[0] * arg[1] for arg in args)
                 )
             )
 
@@ -196,57 +192,48 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
             explicit_rhss.append(this_rhs_expl)
             implicit_rhss.append(this_rhs_impl)
 
-        # TODO: Adapt the step size.
-
         if not self.adaptive:
-            solution_deps = self._finish_solution(cbuild,
+            state_update_ids = self._finish_solution(cbuild,
                 self._state, self.high_order_coeffs if
                 self.use_high_order else self.low_order_coeffs,
-                explicit_rhss, implicit_rhss, [])
+                explicit_rhss, implicit_rhss)
+            last_work_ids = self.add_ret_state_and_increment_t(
+                cbuild, self._state, self._component_id,
+                self._t + self._dt, state_update_ids)
         else:
-            """
             high_order_end_state = \
                 var(cbuild.fresh_var_name('high_order_end_state'))
             low_order_end_state = \
                 var(cbuild.fresh_var_name('low_order_end_state'))
-        
+
             adaptive_ids = set(self._finish_solution(cbuild,
                 high_order_end_state, self.high_order_coeffs,
-                explicit_rhss, implicit_rhss, last_dependencies))
+                explicit_rhss, implicit_rhss))
 
             adaptive_ids |= set(self._finish_solution(cbuild,
                 low_order_end_state, self.low_order_coeffs,
-                explicit_rhss, implicit_rhss, last_dependencies))
+                explicit_rhss, implicit_rhss))
 
-            self.adapt_step_size(self._t, self._dt, self._state,
-                                 high_order_end_state,
-                                 low_order_end_state,
-            """
-            pass
+            if self.limiter_name is not None:
+                limiter = var("<func>" + self.limiter_name)
+            else:
+                limiter = lambda x: x
 
-        exclude_names = [self._state.name]
+            last_work_ids = self.adapt_step_size(cbuild, self._state,
+                                                 self._component_id,
+                                                 self._t, self._dt,
+                                                 high_order_end_state,
+                                                 low_order_end_state,
+                                                 adaptive_ids, limiter)
+
+        exclude_names = [self._state.name, self._rhs_expl.name,
+                         self._rhs_impl.name, self._t.name,
+                         self._dt.name]
         cbuild.infer_single_writer_dependencies(exclude=exclude_names)
-
-        rhs_update_ids = self._update_rhs_values(cbuild, solution_deps)
-
-        step_finish_ids = cbuild.add_and_get_ids(
-            ReturnState(
-                time_id='final',
-                time=self._t + self._dt,
-                component_id=self._component_id,
-                expression=self._state,
-                depends_on=step_deps,
-                id='return_state'),
-            AssignExpression(
-                assignee=self._t.name,
-                expression=self._t + self._dt,
-                depends_on=['return_state']
-                )
-            )
-
+        rhs_update_ids = self._update_rhs_values(cbuild, last_work_ids)
         cbuild.commit()
-        
-        return step_finish_ids
+
+        return rhs_update_ids
 
     def __call__(self, component_id, solver_id):
         self._dt = var('<dt>')

@@ -25,7 +25,7 @@ THE SOFTWARE.
 """
 
 from leap.method import Method
-from leap.vm.language import (AssignExpression, AssignSolvedRHS, ReturnState,
+from leap.vm.language import (AssignExpression, AssignSolvedRHS, YieldState,
                               TimeIntegratorCode, CodeBuilder)
 from pymbolic import var
 from pymbolic.primitives import CallWithKwargs
@@ -72,7 +72,7 @@ class ImplicitEulerMethod(Method):
                 solver_parameters={'initial_guess': self._state},
                 solver_id='newton',
                 id='step'),
-            ReturnState(
+            YieldState(
                 time_id='final',
                 time=self._t + self._dt,
                 component_id=self._component_id,
