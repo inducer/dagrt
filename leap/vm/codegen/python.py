@@ -73,6 +73,9 @@ class StepFailed(namedtuple("StepFailed", ["t"])):
 class TimeStepUnderflow(RuntimeError):
     pass
 
+class FailStepException(RuntimeError):
+    pass
+
 class _function_symbol_container(object):
     pass
 
@@ -271,10 +274,13 @@ class PythonCodeGenerator(StructuredCodeGenerator):
                 emit('while True:')
                 with Indentation(emit):
                     emit('yield next(state)')
-
             emit('except StopIteration:')
             with Indentation(emit):
                 emit('pass')
+            emit('except self.FailStepException:')
+            with Indentation(emit):
+                emit('yield self.StepFailed(t=self.t)')
+                emit('continue')
             # STATE_HACK: Ensure that the primary state has a chance to run.
             emit('if last_step and current_state == "primary":')
             with Indentation(emit):
@@ -356,7 +362,11 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         self._emit('    state_component=%s)' % self._expr(inst.expression))
 
     def emit_raise(self, error_condition, error_message):
-        raise TODO('Raise() for python')
+        self._emit('raise self.{condition}("{message}")'.format(
+                   condition=error_condition.__name__,
+                   message=error_message))
+        self._emit('yield')
 
     def emit_fail_step(self):
-        raise TODO('FailStep() for python')
+        self._emit('raise self.FailStepException()')
+        self._emit('yield')
