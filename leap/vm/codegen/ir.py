@@ -81,10 +81,7 @@ class AssignInst(Inst):
                 pymbolic expression.
             - One of the following :class:`leap.vm.language.Instruction` types:
                 - AssignExpression
-                - AssignRHS
                 - AssignSolvedRHS
-                - AssignDotProduct
-                - AssignNorm
     """
 
     def __init__(self, assignment, block=None):
@@ -237,6 +234,46 @@ class JumpInst(TerminatorInst):
         return 'goto block ' + str(self.dest.number)
 
 
+class RaiseInst(TerminatorInst):
+    """Raises an error condition."""
+
+    def __init__(self, instruction, block=None):
+        super(RaiseInst, self).__init__(instruction=instruction,
+                                        block=block)
+
+    def get_defined_variables(self):
+        return frozenset()
+
+    def get_used_variables(self):
+        return frozenset()
+
+    def get_jump_targets(self):
+        return frozenset()
+
+    def __str__(self):
+        return 'raise ' + str(self.error_condition) + \
+            ': ' + str(self.error_message)
+
+
+class FailStepInst(TerminatorInst):
+    """Indicates that the current timestep has failed."""
+
+    def __init__(self, block=None):
+        super(FailStepInst, self).__init__(block=block)
+
+    def get_defined_variables(self):
+        return frozenset()
+
+    def get_used_variables(self):
+        return frozenset()
+
+    def get_jump_targets(self):
+        return frozenset()
+
+    def __str__(self):
+        return 'raise FailStep'
+
+
 class ReturnInst(TerminatorInst):
     """Returns from the function."""
 
@@ -375,6 +412,13 @@ class BasicBlock(object):
         """Append a yield instruction to the block with the given
         expression."""
         self.add_instruction(YieldStateInst(**kwargs))
+
+    def add_raise(self, inst):
+        """Append a raise instruction to the block."""
+        self.add_instruction(RaiseInst(inst))
+
+    def add_fail_step(self):
+        self.add_instruction(FailStepInst())
 
     def __str__(self):
         lines = []

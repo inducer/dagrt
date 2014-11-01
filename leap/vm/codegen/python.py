@@ -28,7 +28,7 @@ from pytools.py_codegen import (
         PythonCodeGenerator as PythonEmitter,
         PythonFunctionGenerator as PythonFunctionEmitter,
         Indentation)
-from leap.vm.utils import is_state_variable, get_unique_name
+from leap.vm.utils import is_state_variable, get_unique_name, TODO
 from leap.vm.codegen.utils import wrap_line_base, exec_in_new_namespace
 from functools import partial
 import six
@@ -68,6 +68,9 @@ class StepFailed(namedtuple("StepFailed", ["t"])):
 
         Floating point number.
     """
+
+class TimeStepUnderflow(RuntimeError):
+    pass
 
 class _function_symbol_container(object):
     pass
@@ -370,3 +373,9 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         self._emit('    time_id=%r,' % inst.time_id)
         self._emit('    component_id=%r,' % inst.component_id)
         self._emit('    state_component=%s)' % self._expr(inst.expression))
+
+    def emit_raise(self, error_condition, error_message):
+        raise TODO('Raise() for python')
+
+    def emit_fail_step(self):
+        raise TODO('FailStep() for python')

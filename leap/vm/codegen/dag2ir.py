@@ -25,7 +25,6 @@ THE SOFTWARE.
 from leap.vm.language import (
         Instruction, AssignExpression, AssignSolvedRHS,
         If, YieldState, Raise, FailStep)
-from leap.vm.utils import TODO
 from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import get_unique_name, is_state_variable
 import leap.vm.codegen.ir as ir
@@ -502,10 +501,10 @@ class ControlFlowGraphAssembler(object):
                 main_bb.add_assignment(instruction)
 
             elif isinstance(instruction, Raise):
-                raise TODO('Implement IR lowering for Raise instructions.')
+                main_bb.add_raise(instruction)
 
             elif isinstance(instruction, FailStep):
-                raise TODO('Implement IR lowering for FailStep instructions.')
+                main_bb.add_fail_step()
 
         if not main_bb.terminated:
             main_bb.add_assignment((flag, True))

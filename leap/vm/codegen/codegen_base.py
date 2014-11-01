@@ -24,7 +24,8 @@ THE SOFTWARE.
 
 from .structured_ir import SingleNode, IfThenNode, IfThenElseNode, BlockNode, \
     UnstructuredIntervalNode
-from .ir import AssignInst, JumpInst, BranchInst, ReturnInst, YieldStateInst
+from .ir import AssignInst, JumpInst, BranchInst, ReturnInst, YieldStateInst, \
+    RaiseInst, FailStepInst
 from leap.vm.language import AssignExpression
 from leap.vm.utils import TODO
 
@@ -128,6 +129,12 @@ class StructuredCodeGenerator(object):
             self.emit_return()
         elif isinstance(inst, YieldStateInst):
             self.emit_yield_state(inst)
+        elif isinstance(inst, RaiseInst):
+            leap_instruction = inst.instruction
+            self.emit_raise(leap_instruction.error_condition,
+                            leap_instruction.error_message)
+        elif isinstance(inst, FailStepInst):
+            self.emit_fail_step()
 
     # Emit routines (to be implemented by subclass)
 
@@ -167,7 +174,13 @@ class StructuredCodeGenerator(object):
     def emit_return(self):
         raise NotImplementedError()
 
-    def emit_yield_state(self, expr):
+    def emit_yield_state(self, int):
+        raise NotImplementedError()
+
+    def emit_raise(self, error_condition, error_message):
+        raise NotImplementedError()
+
+    def emit_fail_step(self):
         raise NotImplementedError()
 
 # }}}
