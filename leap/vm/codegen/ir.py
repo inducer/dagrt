@@ -271,7 +271,7 @@ class FailStepInst(TerminatorInst):
         return frozenset()
 
     def __str__(self):
-        return 'raise FailStep'
+        return 'fail step'
 
 
 class ReturnInst(TerminatorInst):

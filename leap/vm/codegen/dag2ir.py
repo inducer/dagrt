@@ -502,9 +502,11 @@ class ControlFlowGraphAssembler(object):
 
             elif isinstance(instruction, Raise):
                 main_bb.add_raise(instruction)
+                break
 
             elif isinstance(instruction, FailStep):
                 main_bb.add_fail_step()
+                break
 
         if not main_bb.terminated:
             main_bb.add_assignment((flag, True))
