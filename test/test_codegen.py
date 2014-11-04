@@ -366,6 +366,17 @@ def test_line_wrapping_line_with_string():
          "    'failed to allocate leap_state%leap_refcnt_p_last_rhs_y'"]
 
 
+def test_KeyToUniqueNameMap():
+    from leap.vm.codegen.utils import KeyToUniqueNameMap
+
+    map_prefilled = KeyToUniqueNameMap(start={'a': 'b'})
+    assert map_prefilled.get_or_make_name_for_key('a') == 'b'
+    assert map_prefilled.get_or_make_name_for_key('b') != 'b'
+
+    map_with_prefix = KeyToUniqueNameMap(forced_prefix='prefix')
+    assert map_with_prefix.get_or_make_name_for_key('a') == 'prefixa'
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])

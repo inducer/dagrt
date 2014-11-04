@@ -24,6 +24,8 @@ THE SOFTWARE.
 
 import functools
 import shlex
+import six
+from pytools import UniqueNameGenerator
 
 
 def wrap_line_base(line, level=0, width=80, indentation='    ',
@@ -124,3 +126,57 @@ def remove_redundant_blank_lines(lines):
             result.append(l)
 
     return result
+
+
+from string import ascii_letters, digits
+
+
+_ident_chars = set('_' + ascii_letters + digits)
+
+
+def make_identifier_from_name(name, default_identifier="leap_var"):
+    result = "".join(map(lambda c: c if c in _ident_chars else "_", name))
+    result = result.lstrip("_")
+    if not result:
+        result = default_identifier
+    return result
+
+
+class _KeyTranslatingingUniqueNameGeneratorWrapper(object):
+
+    def __init__(self, generator, translate):
+        self._generator = generator
+        self._translate = translate
+
+    def __call__(self, key):
+        return self._generator(self._translate(key))
+
+
+class KeyToUniqueNameMap(object):
+    """Maps keys to unique names that are created on-the-fly.
+
+    Before a unique name is created, a base name is first created. The base name
+    consists of a forced prefix followed by a string that results from
+    translating the key with a supplied function. The mapped value is then
+    created from the base name.
+    """
+
+    def __init__(self, start={}, forced_prefix="",
+                 key_translate_func=make_identifier_from_name):
+        self._dict = dict(start)
+        existing_names = set(self._dict.values())
+        generator = UniqueNameGenerator(forced_prefix=forced_prefix,
+            existing_names=existing_names)
+        self._generator = _KeyTranslatingingUniqueNameGeneratorWrapper(generator,
+            key_translate_func)
+
+    def get_or_make_name_for_key(self, name):
+        try:
+            return self._dict[name]
+        except KeyError:
+            new_name = self._generator(name)
+            self._dict[name] = new_name
+            return new_name
+
+    def __iter__(self):
+        return six.iterkeys(self._dict)

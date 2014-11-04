@@ -24,12 +24,12 @@ THE SOFTWARE.
 
 from .expressions import FortranExpressionMapper
 from .codegen_base import StructuredCodeGenerator
-from leap.vm.utils import is_state_variable, get_unique_name
+from leap.vm.utils import is_state_variable
 from pytools.py_codegen import (
         # It's the same code. So sue me.
         PythonCodeGenerator as FortranEmitterBase)
 from pymbolic.primitives import Call, CallWithKwargs, Variable
-from .utils import wrap_line_base
+from .utils import wrap_line_base, KeyToUniqueNameMap
 from functools import partial
 import re  # noqa
 import six
@@ -52,49 +52,22 @@ class FortranNameManager(object):
     """
 
     def __init__(self):
-        self.local_map = {}
-        self.global_map = {}
+        self.local_map = KeyToUniqueNameMap()
+        self.global_map = KeyToUniqueNameMap(start={
+                '<t>': 'leap_t', '<dt>': 'leap_dt'})
         self.function_map = {}
-        import string
-        self.ident_chars = set('_' + string.ascii_letters + string.digits)
-
-    def filter_name(self, var):
-        result = ''.join(map(lambda c: c if c in self.ident_chars else '_', var))
-        while result and result[0] == "_":
-            result = result[1:]
-        if not result:
-            result = "leap_var"
-
-        return result
 
     def name_global(self, var):
         """Return the identifier for a global variable."""
-        try:
-            return self.global_map[var]
-        except KeyError:
-            if var == '<t>':
-                named_global = 'leap_t'
-            elif var == '<dt>':
-                named_global = 'leap_dt'
-            else:
-                base = self.filter_name(var)
-                named_global = get_unique_name(base, self.global_map)
-            self.global_map[var] = named_global
-            return named_global
+        return self.global_map.get_or_make_name_for_key(var)
 
     def name_local(self, var):
         """Return the identifier for a local variable."""
-        return get_unique_name(self.filter_name(var), self.local_map)
+        return self.local_map.get_or_make_name_for_key(var)
 
     def name_function(self, var):
         """Return the identifier for a function."""
-        try:
-            return self.function_map[var]
-        except KeyError:
-            base = self._filter_name(var.name)
-            named_func = get_unique_name(base, self.function_map)
-            self.function_map[var] = named_func
-            return named_func
+        return self.function_map.get_or_make_name_for_key(var)
 
     def __getitem__(self, name):
         """Provide an interface to PythonExpressionMapper to look up
