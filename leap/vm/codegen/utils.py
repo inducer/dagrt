@@ -170,12 +170,12 @@ class KeyToUniqueNameMap(object):
         self._generator = _KeyTranslatingingUniqueNameGeneratorWrapper(generator,
             key_translate_func)
 
-    def get_or_make_name_for_key(self, name):
+    def get_or_make_name_for_key(self, key):
         try:
-            return self._dict[name]
+            return self._dict[key]
         except KeyError:
-            new_name = self._generator(name)
-            self._dict[name] = new_name
+            new_name = self._generator(key)
+            self._dict[key] = new_name
             return new_name
 
     def __iter__(self):
