@@ -145,7 +145,7 @@ class PythonExpressionMapper(StringifyMapper):
                     for name, val in kwargs.items()]
 
             return 'self._functions.{rhs}({args})'.format(
-                    rhs=self._name_manager.name_function(symbol),
+                    rhs=self._name_manager.name_function(symbol.name),
                     args=", ".join(args_strs))
 
         else:

@@ -304,6 +304,78 @@ class TestBuiltinsWithPythonCodeGenerator(BuiltinsTestBase):
         return events[0].state_component
 
 
+def test_local_name_distinctness():
+    """Test whether the code generator gives locals distinct names."""
+    cbuild = CodeBuilder()
+    cbuild.add_and_get_ids(
+        AssignExpression(id='assign_y^', assignee='y^', expression=1),
+        AssignExpression(id='assign_y*', assignee='y*', expression=0),
+        YieldState(id='return', time=0, time_id='final',
+            expression=var('y^') + var('y*'),
+            component_id='y', depends_on=['assign_y^', 'assign_y*']))
+    cbuild.commit()
+    code = TimeIntegratorCode(initialization_dep_on=[],
+        instructions=cbuild.instructions, step_dep_on=['return'],
+        step_before_fail=False)
+    codegen = PythonCodeGenerator(class_name='Method')
+    Method = codegen.get_class(code)
+    method = Method({})
+    method.set_up(t_start=0, dt_start=0, state={})
+    method.initialize()
+    hist = list(method.run(t_end=0))
+    assert len(hist) == 2
+    assert isinstance(hist[0], method.StateComputed)
+    assert hist[0].state_component == 1
+
+
+def test_global_name_distinctness():
+    """Test whether the code generator gives globals distinct names."""
+    cbuild = CodeBuilder()
+    cbuild.add_and_get_ids(
+        AssignExpression(id='assign_y^', assignee='<p>y^', expression=1),
+        AssignExpression(id='assign_y*', assignee='<p>y*', expression=0),
+        YieldState(id='return', time=0, time_id='final',
+            expression=var('<p>y^') + var('<p>y*'),
+            component_id='y', depends_on=['assign_y^', 'assign_y*']))
+    cbuild.commit()
+    code = TimeIntegratorCode(initialization_dep_on=[],
+        instructions=cbuild.instructions, step_dep_on=['return'],
+        step_before_fail=False)
+    codegen = PythonCodeGenerator(class_name='Method')
+    Method = codegen.get_class(code)
+    method = Method({})
+    method.set_up(t_start=0, dt_start=0, state={})
+    method.initialize()
+    hist = list(method.run(t_end=0))
+    assert len(hist) == 2
+    assert isinstance(hist[0], method.StateComputed)
+    assert hist[0].state_component == 1
+
+
+def test_function_name_distinctness():
+    """Test whether the code generator gives functions distinct names."""
+    cbuild = CodeBuilder()
+    cbuild.add_and_get_ids(
+        YieldState(id='return', time=0, time_id='final',
+            expression=var('<func>y^')() + var('<func>y*')(),
+            component_id='y'))
+    cbuild.commit()
+    code = TimeIntegratorCode(initialization_dep_on=[],
+        instructions=cbuild.instructions, step_dep_on=['return'],
+        step_before_fail=False)
+    codegen = PythonCodeGenerator(class_name='Method')
+    print(codegen(code))
+    Method = codegen.get_class(code)
+    method = Method({'<func>y^': lambda: 0,
+                     '<func>y*': lambda: 1})
+    method.set_up(t_start=0, dt_start=0, state={})
+    method.initialize()
+    hist = list(method.run(t_end=0))
+    assert len(hist) == 2
+    assert isinstance(hist[0], method.StateComputed)
+    assert hist[0].state_component == 1
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])
