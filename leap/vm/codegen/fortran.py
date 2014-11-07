@@ -33,6 +33,7 @@ from .utils import wrap_line_base
 from functools import partial
 import re  # noqa
 import six
+import string
 
 from pytools import Record
 
@@ -260,7 +261,8 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             module_preamble=None,
             real_scalar_kind="8",
             complex_scalar_kind="8",
-            use_complex_scalars=True):
+            use_complex_scalars=True,
+            trace=False):
         """
         :arg ode_component_type_map: a map from ODE component_id names
             to :class:`FortranType` instances
@@ -272,6 +274,8 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         self.module_name = module_name
         self.function_registry = function_registry
         self.ode_component_type_map = ode_component_type_map
+
+        self.trace = trace
 
         from leap.vm.codegen.utils import chop_common_indentation
         self.module_preamble = chop_common_indentation(module_preamble)
@@ -303,6 +307,14 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         level = sum(em.level for em in self.emitters)
         for wrapped_line in wrap_line(line, level):
             self.emitter(wrapped_line)
+
+    def emit_traceable(self, line):
+        self.emit_trace(line)
+        self.emit(line)
+
+    def emit_trace(self, line):
+        if self.trace:
+            self.emit("write(*,*) '%s'" % line)
 
     def __call__(self, dag, optimize=True):
         from .analysis import verify_code
@@ -471,7 +483,7 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
         from leap.vm.codegen.data import ODEComponent
         if isinstance(sym_kind, ODEComponent):
-            self.emit("nullify(%s)" % fortran_name)
+            self.emit_traceable("nullify(%s)" % fortran_name)
 
     def emit_variable_deinit(self, name, sym_kind):
         fortran_name = self.name_manager[name]
@@ -486,13 +498,14 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             with FortranIfEmitter(
                     self.emitter, '{refcnt}.eq.1'.format(refcnt=refcnt_name), self) \
                             as if_emit:
-                self.emit('deallocate({id})'.format(id=fortran_name))
-                self.emit('deallocate({refcnt})'.format(refcnt=refcnt_name))
-                self.emit('nullify({id})'.format(id=fortran_name))
+                self.emit_traceable('deallocate({id})'.format(id=fortran_name))
+                self.emit_traceable(
+                        'deallocate({refcnt})'.format(refcnt=refcnt_name))
+                self.emit_traceable('nullify({id})'.format(id=fortran_name))
 
                 if_emit.emit_else()
 
-                self.emit(
+                self.emit_traceable(
                         '{refcnt} = {refcnt} - 1'
                         .format(refcnt=refcnt_name))
 
@@ -516,7 +529,7 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         if not isinstance(sym_kind, ODEComponent):
             return
 
-        self.emit('allocate({name}{dimension}, stat=leap_ierr)'.format(
+        self.emit_traceable('allocate({name}{dimension}, stat=leap_ierr)'.format(
             name=fortran_name,
             dimension=dimension))
         with FortranIfEmitter(self.emitter, 'leap_ierr.ne.0', self):
@@ -524,14 +537,14 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                 name=fortran_name))
             self.emit("stop")
 
-        self.emit('allocate({name}, stat=leap_ierr)'.format(
+        self.emit_traceable('allocate({name}, stat=leap_ierr)'.format(
             name=refcnt_name))
         with FortranIfEmitter(self.emitter, 'leap_ierr.ne.0', self):
             self.emit("write(*,*) 'failed to allocate {name}'".format(
                 name=refcnt_name))
             self.emit("stop")
 
-        self.emit('{refcnt} = 1'.format(refcnt=refcnt_name))
+        self.emit_traceable('{refcnt} = 1'.format(refcnt=refcnt_name))
 
     def emit_allocation_check(self, sym, sym_kind):
         fortran_name = self.name_manager[sym]
@@ -551,7 +564,7 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                     self.emitter,
                     '{refcnt}.ne.1'.format(refcnt=refcnt_name),
                     self) as emit_if:
-                self.emit(
+                self.emit_traceable(
                         '{refcnt} = {refcnt} - 1'
                         .format(refcnt=refcnt_name))
 
@@ -606,7 +619,7 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                         self.emitter, 'present(%s)' % fortran_name, self):
                     self.emit_allocation(sym, sym_kind)
 
-                    self.emit("{name} = {arg}"
+                    self.emit_traceable("{name} = {arg}"
                             .format(
                                 name=tgt_fortran_name,
                                 arg=fortran_name))
@@ -633,6 +646,8 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                             'associated({id})'.format(id=fortran_name), self):
                         self.emit("write(*,*) 'leaked reference in {name}'".format(
                             name=fortran_name))
+                        self.emit("write(*,*) '  remaining refcount ', {name}"
+                                .format(name=self.name_manager.name_refcount(sym)))
                         self.emit('stop')
 
     def emit_run_step(self):
@@ -710,6 +725,9 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         if sym_table:
             self.emit('')
 
+        self.emit_trace('================================================')
+        self.emit_trace('enter %s' % func_id)
+
         for identifier, sym_kind in six.iteritems(sym_table):
             self.emit_variable_init(identifier, sym_kind)
 
@@ -760,17 +778,17 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             if isinstance(expr, Variable):
                 self.emit_variable_deinit(assignee_sym, sym_kind)
 
-                self.emit(
+                self.emit_traceable(
                     "{name} => {expr}"
                     .format(
                         name=fortran_name,
                         expr=self.name_manager[expr.name]))
-                self.emit(
+                self.emit_traceable(
                     "{tgt_refcnt} => {refcnt}"
                     .format(
                         tgt_refcnt=self.name_manager.name_refcount(assignee_sym),
                         refcnt=self.name_manager.name_refcount(expr.name)))
-                self.emit(
+                self.emit_traceable(
                     "{tgt_refcnt} = {tgt_refcnt} + 1"
                     .format(
                         tgt_refcnt=self.name_manager.name_refcount(assignee_sym)))
@@ -780,6 +798,11 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             self.emit_allocation_check(assignee_sym, sym_kind)
 
         if isinstance(expr, (Call, CallWithKwargs)):
+            self.emit_trace("rhs eval {assignee_sym} = {expr}..."
+                    .format(
+                        assignee_sym=assignee_sym,
+                        expr=str(expr)[:50]))
+
             function = self.function_registry[expr.function.name]
             codegen = function.get_codegen(self.language)
 
@@ -806,6 +829,10 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                 self.emit(l)
 
         else:
+            self.emit_trace("{assignee_sym} = {expr}..."
+                    .format(
+                        assignee_sym=assignee_sym,
+                        expr=str(expr)[:50]))
             self.emit(
                     "{name} = {expr}"
                     .format(
@@ -824,6 +851,8 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             self.emit_variable_deinit(identifier, sym_kind)
 
         # }}}
+
+        self.emit_trace('leave %s' % self.current_function)
 
         self.emit('return')
 
