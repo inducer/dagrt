@@ -142,11 +142,14 @@ def make_identifier_from_name(name, default_identifier="leap_var"):
     return result
 
 
-class _KeyTranslatingingUniqueNameGeneratorWrapper(object):
+class _KeyTranslatingUniqueNameGeneratorWrapper(object):
 
     def __init__(self, generator, translate):
         self._generator = generator
         self._translate = translate
+
+    def add_name(self, name):
+        return self._generator.add_name(name)
 
     def __call__(self, key):
         return self._generator(self._translate(key))
@@ -162,12 +165,21 @@ class KeyToUniqueNameMap(object):
     """
 
     def __init__(self, start={}, forced_prefix="",
-                 key_translate_func=make_identifier_from_name):
+                 key_translate_func=make_identifier_from_name,
+                 name_generator=None):
         self._dict = dict(start)
-        existing_names = set(self._dict.values())
-        generator = UniqueNameGenerator(forced_prefix=forced_prefix,
-            existing_names=existing_names)
-        self._generator = _KeyTranslatingingUniqueNameGeneratorWrapper(generator,
+
+        if name_generator is None:
+            name_generator = UniqueNameGenerator(forced_prefix=forced_prefix)
+        else:
+            if forced_prefix:
+                raise TypeError("passing 'forced_prefix' is not allowed when "
+                        "passing a pre-existing name generator")
+
+        for existing_name in six.itervalues(start):
+            name_generator.add_name(existing_name)
+
+        self._generator = _KeyTranslatingUniqueNameGeneratorWrapper(name_generator,
             key_translate_func)
 
     def get_or_make_name_for_key(self, key):
@@ -177,6 +189,9 @@ class KeyToUniqueNameMap(object):
             new_name = self._generator(key)
             self._dict[key] = new_name
             return new_name
+
+    def get_mapped_identifier_without_key(self, name):
+        return self._generator(name)
 
     def __iter__(self):
         return six.iterkeys(self._dict)
