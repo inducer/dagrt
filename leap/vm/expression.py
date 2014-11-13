@@ -26,9 +26,6 @@ THE SOFTWARE.
 """
 
 from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
-from pymbolic.mapper.differentiator import DifferentiationMapper as \
-    DifferentiationMapperBase
-
 from pymbolic.mapper.dependency import DependencyMapper
 
 import logging
@@ -78,21 +75,6 @@ class EvaluationMapper(EvaluationMapperBase):
     def map_call_with_kwargs(self, expr):
         return self.map_generic_call(expr.function.name, expr.parameters,
                                      expr.kw_parameters)
-
-
-class DifferentiationMapperWithContext(DifferentiationMapperBase):
-
-    def __init__(self, variable, functions, context):
-        DifferentiationMapperBase.__init__(self, variable, None)
-        self.context = context
-        self.functions = functions
-
-    def map_call(self, expr):
-        raise NotImplementedError
-
-    def map_variable(self, expr):
-        return self.context[expr.name] if expr.name in self.context else \
-            DifferentiationMapperBase.map_variable(self, expr)
 
 # }}}
 
