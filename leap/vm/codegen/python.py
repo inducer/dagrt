@@ -26,6 +26,7 @@ from .expressions import PythonExpressionMapper
 from .codegen_base import StructuredCodeGenerator
 from .utils import (wrap_line_base, exec_in_new_namespace,
                     KeyToUniqueNameMap)
+from .ir import YieldStateInst
 from pytools.py_codegen import (
         PythonCodeGenerator as PythonEmitter,
         PythonFunctionGenerator as PythonFunctionEmitter,
@@ -178,12 +179,21 @@ class PythonCodeGenerator(StructuredCodeGenerator):
             function = assembler(state_name, code, dependencies)
             if optimize:
                 function = optimizer(function)
+            self._pre_lower(function)
             control_tree = extract_structure(function)
             self.lower_function(state_name, control_tree)
 
         self.finish_emit(dag)
 
         return self.get_code()
+
+    def _pre_lower(self, function):
+        self._has_yield_inst = False
+        for block in function:
+            for inst in block:
+                if isinstance(inst, YieldStateInst):
+                    self._has_yield_inst = True
+                    return
 
     def lower_function(self, function_name, control_tree):
         self.emit_def_begin(function_name)
@@ -352,21 +362,26 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         #
         # TODO: Python 3.3+ has "yield from ()" which results in slightly less
         # awkward syntax.
-        self._emit('yield')
+        if not self._has_yield_inst:
+            self._emit('yield')
 
     def emit_yield_state(self, inst):
-        self._emit('yield self.StateComputed(')
-        self._emit('    t=%s,' % self._expr(inst.time))
-        self._emit('    time_id=%r,' % inst.time_id)
-        self._emit('    component_id=%r,' % inst.component_id)
-        self._emit('    state_component=%s)' % self._expr(inst.expression))
+        self._emit('yield self.StateComputed(t={t}, time_id={time_id}, '
+                   'component_id={component_id}, '
+                   'state_component={state_component})'.format(
+                       t=self._expr(inst.time),
+                       time_id=repr(inst.time_id),
+                       component_id=repr(inst.component_id),
+                       state_component=self._expr(inst.expression)))
 
     def emit_raise(self, error_condition, error_message):
         self._emit('raise self.{condition}("{message}")'.format(
                    condition=error_condition.__name__,
                    message=error_message))
-        self._emit('yield')
+        if not self._has_yield_inst:
+            self._emit('yield')
 
     def emit_fail_step(self):
         self._emit('raise self.FailStepException()')
-        self._emit('yield')
+        if not self._has_yield_inst:
+            self._emit('yield')
