@@ -172,7 +172,7 @@ class IfThenElseNode(ControlNode):
         self.predecessors |= if_node.predecessors
         self.update_predecessors(if_node)
 
-        self.successors |= then_node.successors
+        self.successors |= then_node.successors | else_node.successors
         self.update_successors(then_node)
         self.update_successors(else_node)
 
