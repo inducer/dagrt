@@ -1,0 +1,2 @@
+1. NameManager should use UniqueNameManager. Update Fortran NameManager as well.
+2. Write tests for naming conflicts.

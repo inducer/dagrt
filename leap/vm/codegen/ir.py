@@ -251,8 +251,8 @@ class RaiseInst(TerminatorInst):
         return frozenset()
 
     def __str__(self):
-        return 'raise ' + str(self.error_condition) + \
-            ': ' + str(self.error_message)
+        return 'raise ' + str(self.instruction.error_condition) + \
+            ': ' + str(self.instruction.error_message)
 
 
 class FailStepInst(TerminatorInst):
@@ -373,7 +373,7 @@ class BasicBlock(object):
                     self.terminated = False
                     for successor in self.successors:
                         successor.predecessors.remove(self)
-                    self.succesors = set()
+                    self.successors.clear()
         self.code = new_code
 
     def add_successor(self, successor):

@@ -69,6 +69,9 @@ class ControlNode(RecordWithoutPickling):
             successor.predecessors -= {old_predecessor}
             successor.predecessors.add(self)
 
+    # RecordWithoutPickling.__repr__() is really slow on control trees.
+    __repr__ = object.__repr__
+
 
 class SingleNode(ControlNode):
     """Represents a single basic block.
@@ -145,10 +148,10 @@ class IfThenElseNode(ControlNode):
     """Represents an if-then-else control structure.
 
     Distinct nodes A, B, C form an if-then-else control structure if
-    there exists another distinct node D such that
 
       (i) A has exactly two successors B and C
-      (ii) B and C are single entry single exit with successor D
+      (ii) B and C are single entry, and the union of B and C's successors
+           is empty or consists of a single distinct node D
 
     Note that D is not part of the control structure.
 

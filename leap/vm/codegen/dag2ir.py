@@ -349,7 +349,14 @@ class ControlFlowGraphAssembler(object):
         end_bb, flag_tracker = self._process_block(exit_block, entry_bb,
                                                    flag_tracker)
 
+        if not end_bb.terminated:
+            end_bb.add_return()
+
         self._function.assign_entry_block(entry_bb)
+        for block in self._function:
+            if not block.terminated:
+                print(block)
+                assert False
         return self._function
 
     def _new_basic_block(self):
@@ -483,8 +490,10 @@ class ControlFlowGraphAssembler(object):
                 main_bb.add_branch(instruction.condition, then_bb, else_bb)
 
                 # Emit branches to merge point.
-                end_then_bb.add_jump(then_else_merge_bb)
-                end_else_bb.add_jump(then_else_merge_bb)
+                if not end_then_bb.terminated:
+                    end_then_bb.add_jump(then_else_merge_bb)
+                if not end_else_bb.terminated:
+                    end_else_bb.add_jump(then_else_merge_bb)
 
                 # Set the current basic block to be the merge point.
                 flag_tracker = then_flag_tracker & else_flag_tracker

@@ -82,10 +82,12 @@ def _check_for_if_then_else_node(node):
         return None
 
     # Check for a common merge point of then and else.
-    if then_node.successors != else_node.successors or \
-            len(then_node.successors) != 1:
+    merge_node = None
+    successors = then_node.successors | else_node.successors
+    if len(successors) > 1:
         return None
-    merge_node = one(then_node.successors)
+    if successors:
+        merge_node = one(successors)
 
     # Check for block distinctness.
     if not distinct(node, then_node, else_node, merge_node):
