@@ -30,7 +30,7 @@ from pytools.py_codegen import (
         PythonCodeGenerator as PythonEmitter,
         PythonFunctionGenerator as PythonFunctionEmitter,
         Indentation)
-from leap.vm.utils import is_state_variable, TODO
+from leap.vm.utils import is_state_variable
 from functools import partial
 import six
 
