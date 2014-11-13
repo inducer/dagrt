@@ -34,6 +34,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+from leap.vm.codegen import PythonCodeGenerator
+
+
 # Run example with
 # python test_methods.py "test_rk_accuracy(ODE45TimeStepper(), 5)"
 
@@ -45,7 +48,8 @@ logger = logging.getLogger(__name__)
     (ODE45TimeStepper(use_high_order=False), 4),
     (ODE45TimeStepper(use_high_order=True), 5),
     ])
-def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False):
+def test_rk_accuracy(python_method_impl, method, expected_order,
+                     show_dag=False, plot_solution=False):
     # Use "DEBUG" to trace execution
     logging.basicConfig(level=logging.INFO)
 
@@ -55,8 +59,6 @@ def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False
     if show_dag:
         from leap.vm.language import show_dependency_graph
         show_dependency_graph(code)
-
-    from leap.vm.exec_numpy import NumpyInterpreter
 
     def rhs(t, y):
         u, v = y
@@ -78,7 +80,7 @@ def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False
         y = np.array([1, 3], dtype=np.float64)
         final_t = 10
 
-        interp = NumpyInterpreter(code, function_map={component_id: rhs})
+        interp = python_method_impl(code, function_map={component_id: rhs})
         interp.set_up(t_start=t, dt_start=dt, state={component_id: y})
         interp.initialize()
 
@@ -120,7 +122,8 @@ def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False
     ODE23TimeStepper(rtol=1e-6),
     ODE45TimeStepper(rtol=1e-6),
     ])
-def test_adaptive_timestep(method, show_dag=False, plot=False):
+def test_adaptive_timestep(python_method_impl, method, show_dag=False,
+                           plot=False):
     # Use "DEBUG" to trace execution
     logging.basicConfig(level=logging.INFO)
 
@@ -151,9 +154,11 @@ def test_adaptive_timestep(method, show_dag=False, plot=False):
     example = VanDerPolOscillator()
     y = example.ic()
 
-    from leap.vm.exec_numpy import NumpyInterpreter
+    codegen = PythonCodeGenerator(class_name="Method")
 
-    interp = NumpyInterpreter(code, function_map={component_id: example})
+    print(codegen(code))
+
+    interp = python_method_impl(code, function_map={component_id: example})
     interp.set_up(t_start=example.t_start, dt_start=1e-5, state={component_id: y})
     interp.initialize()
 

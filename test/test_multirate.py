@@ -35,13 +35,13 @@ from pytools import memoize_method
 class MultirateTimestepperAccuracyChecker(object):
     """Check that the multirate timestepper has the advertised accuracy."""
 
-    def __init__(self, method, order, step_ratio, ode, use_interpreter=True,
+    def __init__(self, method, order, step_ratio, ode, method_impl,
                  display_dag=False, display_solution=False):
         self.method = method
         self.order = order
         self.step_ratio = step_ratio
         self.ode = ode
-        self.use_interpreter = use_interpreter
+        self.method_impl = method_impl
         self.display_dag = display_dag
         self.display_solution = display_solution
 
@@ -63,20 +63,13 @@ class MultirateTimestepperAccuracyChecker(object):
                     s2s(*args)),)
             return coupled
 
-        rhs_map = {'<func>f2f': self.ode.f2f_rhs,
+        function_map = {'<func>f2f': self.ode.f2f_rhs,
             '<func>s2f': self.ode.s2f_rhs, '<func>f2s': self.ode.f2s_rhs,
             '<func>s2s': self.ode.s2s_rhs, '<func>coupled': make_coupled(
                 self.ode.f2f_rhs, self.ode.s2f_rhs, self.ode.f2s_rhs,
                 self.ode.s2s_rhs)}
 
-        if self.use_interpreter:
-            from leap.vm.exec_numpy import NumpyInterpreter
-            method = NumpyInterpreter(self.get_code(), rhs_map)
-        else:
-            from leap.vm.codegen import PythonCodeGenerator
-            codegen = PythonCodeGenerator(class_name='MRABMethod')
-            MRABMethod = codegen.get_class(self.get_code())
-            method = MRABMethod(rhs_map)
+        method = self.method_impl(self.get_code(), function_map=function_map)
 
         t = self.ode.t_start
         y = self.ode.initial_values
@@ -155,7 +148,7 @@ class MultirateTimestepperAccuracyChecker(object):
 
 @pytest.mark.slowtest
 @pytest.mark.parametrize("order", [1, 3])
-def test_all_multirate_accuracy(order, use_interpreter=True):
+def test_all_multirate_accuracy(python_method_impl, order):
     """Check that the multirate timestepper has the advertised accuracy"""
 
     from leap.method.ab.multirate.methods import methods
@@ -172,7 +165,7 @@ def test_all_multirate_accuracy(order, use_interpreter=True):
             print("------------------------------------------------------")
             MultirateTimestepperAccuracyChecker(
                     methods[name], order, step_ratio, ode=system(),
-                    use_interpreter=use_interpreter)()
+                    method_impl=python_method_impl)()
 
 
 if __name__ == "__main__":
