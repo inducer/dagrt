@@ -33,13 +33,6 @@ import numpy as np
 import logging
 logger = logging.getLogger(__name__)
 
-
-from leap.vm.codegen import PythonCodeGenerator
-
-
-# Run example with
-# python test_methods.py "test_rk_accuracy(ODE45TimeStepper(), 5)"
-
 # {{{ non-adaptive test
 
 @pytest.mark.parametrize(("method", "expected_order"), [
@@ -153,10 +146,6 @@ def test_adaptive_timestep(python_method_impl, method, show_dag=False,
 
     example = VanDerPolOscillator()
     y = example.ic()
-
-    codegen = PythonCodeGenerator(class_name="Method")
-
-    print(codegen(code))
 
     interp = python_method_impl(code, function_map={component_id: example})
     interp.set_up(t_start=example.t_start, dt_start=1e-5, state={component_id: y})
