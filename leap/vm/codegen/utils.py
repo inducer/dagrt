@@ -177,7 +177,8 @@ class KeyToUniqueNameMap(object):
                         "passing a pre-existing name generator")
 
         for existing_name in six.itervalues(start):
-            name_generator.add_name(existing_name)
+            if existing_name.startswith(name_generator.forced_prefix):
+                name_generator.add_name(existing_name)
 
         self._generator = _KeyTranslatingUniqueNameGeneratorWrapper(name_generator,
             key_translate_func)
