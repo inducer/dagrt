@@ -33,6 +33,7 @@ import numpy as np
 import logging
 logger = logging.getLogger(__name__)
 
+
 # {{{ non-adaptive test
 
 @pytest.mark.parametrize(("method", "expected_order"), [
