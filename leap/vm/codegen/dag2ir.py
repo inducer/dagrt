@@ -355,7 +355,6 @@ class ControlFlowGraphAssembler(object):
         self._function.assign_entry_block(entry_bb)
         for block in self._function:
             if not block.terminated:
-                print(block)
                 assert False
         return self._function
 
