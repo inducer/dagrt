@@ -135,7 +135,7 @@ _ident_chars = set('_' + ascii_letters + digits)
 
 
 def make_identifier_from_name(name, default_identifier="leap_var"):
-    result = "".join(map(lambda c: c if c in _ident_chars else "_", name))
+    result = "".join([c if c in _ident_chars else "_" for c in name])
     result = result.lstrip("_")
     if not result:
         result = default_identifier
