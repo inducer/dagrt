@@ -222,7 +222,6 @@ def test_function_name_distinctness():
         instructions=cbuild.instructions, step_dep_on=['return'],
         step_before_fail=False)
     codegen = PythonCodeGenerator(class_name='Method')
-    print(codegen(code))
     Method = codegen.get_class(code)
     method = Method({'<func>y^': lambda: 0,
                      '<func>y*': lambda: 1})
