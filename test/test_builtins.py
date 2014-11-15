@@ -33,22 +33,6 @@ from leap.vm.language import CodeBuilder, TimeIntegratorCode
 from pymbolic import var
 
 
-@pytest.fixture()
-def execute_and_return_single_result(python_method_impl):
-
-    def run(code):
-        interpreter = python_method_impl(code, function_map={})
-        interpreter.set_up(t_start=0, dt_start=0, state={})
-        interpreter.initialize()
-        events = [event for event in interpreter.run(t_end=0)]
-        assert len(events) == 2
-        assert isinstance(events[0], interpreter.StateComputed)
-        assert isinstance(events[1], interpreter.StepCompleted)
-        return events[0].state_component
-
-    return run
-
-
 @pytest.mark.parametrize(('len_'), [0, 1, 2])
 def test_len(execute_and_return_single_result, len_):
     test_vector = np.ones(len_)
