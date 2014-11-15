@@ -261,7 +261,6 @@ class AssignExpression(Instruction):
     .. attribute:: expression
     """
     def __init__(self, assignee, expression, id=None, depends_on=frozenset()):
-        assert isinstance(assignee, str)
         Instruction.__init__(self,
                 assignee=assignee,
                 expression=expression,
@@ -675,7 +674,6 @@ class CodeBuilder(object):
                     "build group is uncommitted")
 
         return self._instructions
-
 
 # }}}
 
