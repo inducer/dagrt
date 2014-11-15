@@ -186,10 +186,11 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         from pymbolic import var
         from pymbolic.primitives import Comparison
 
-        steps = self.max_order * self.substep_count
+        initialization_steps = self.max_order - 1
+        total_substeps = initialization_steps * self.substep_count
 
-        make_step_history = \
-            lambda prefix: [var(prefix + str(i)) for i in range(steps)]
+        make_step_history = lambda prefix: \
+            [var(prefix + str(i)) for i in range(total_substeps)]
 
         rk_rhs_history = {
             HIST_F2F: make_step_history('<p>rk_f2f_'),
@@ -199,7 +200,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
             }
 
         with SimpleCodeBuilder(cbuild) as builder:
-            for i in range(self.max_order):
+            for i in range(initialization_steps):
                 # Add code to run the current step.
                 with builder.condition(Comparison(self.step, "==", i)):
                     # Add code to run the current substep.
@@ -220,7 +221,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
             # method, the saved RK components are mapped to the appropriate
             # AB components.
             with builder.condition(Comparison(
-                    self.step, "==", self.max_order - 1)):
+                    self.step, "==", initialization_steps)):
                 for component in HIST_NAMES:
                     history = rk_rhs_history[component] + \
                         [self.rk_rhss[component]]
@@ -242,7 +243,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         codegen.run()
         return codegen.get_instructions()
 
-    def emit_main_branch(self, cbuild, startup, main_code):
+    def emit_main_branches(self, cbuild, startup, main_code):
         """Add code that determines whether to perform initialization or step into
         the main method."""
 
@@ -251,11 +252,15 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         incr_step = cbuild.add_and_get_ids(
             AssignExpression(self.step.name, self.step + 1))
-        branch = cbuild.add_and_get_ids(If(condition=Comparison(self.step,
-            "<", self.max_order), then_depends_on=startup + incr_step,
-            else_depends_on=main_code))
+        branches = cbuild.add_and_get_ids(
+            If(condition=Comparison(self.step, "<", self.max_order),
+               then_depends_on=startup + incr_step,
+               else_depends_on=[], id='rk_branch'),
+            If(condition=Comparison(self.step, "==", self.max_order),
+               then_depends_on=main_code, else_depends_on=[],
+               depends_on=['rk_branch']))
         cbuild.commit()
-        return branch
+        return branches
 
     @memoize_method
     def get_coefficients(self, for_fast_history, hist_head_time_level,
@@ -287,8 +292,8 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         cbuild = CodeBuilder()
         initialization = self.emit_initialization(cbuild)
         startup = self.emit_startup(cbuild)
-        ab_method = self.emit_ab_method(cbuild)
-        glue = self.emit_main_branch(cbuild, startup, ab_method)
+        main_code = self.emit_ab_method(cbuild)
+        glue = self.emit_main_branches(cbuild, startup, main_code)
         epilogue = self.emit_epilogue(cbuild, glue)
 
         return TimeIntegratorCode(instructions=cbuild.instructions,
