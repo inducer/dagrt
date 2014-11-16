@@ -1,4 +1,3 @@
-
 """Adams-Bashforth ODE solvers."""
 
 from __future__ import division
@@ -31,7 +30,9 @@ THE SOFTWARE.
 import numpy
 from leap.method.ab.utils import make_ab_coefficients
 from leap.method import Method
-from pymbolic.primitives import CallWithKwargs
+from pymbolic import var
+from pymbolic.primitives import CallWithKwargs, Comparison
+from leap.vm.language import SimpleCodeBuilder
 
 __doc__ = """
 .. autoclass:: AdamsBashforthTimeStepper
@@ -60,98 +61,6 @@ class AdamsBashforthTimeStepperBase(Method):
             raise ValueError('Unsupported order: %s' % order)
         return (rk_tableau, rk_coeffs)
 
-    def emit_epilogue(self, cbuild, return_val, component_id, depends_on=[]):
-        """Add code that runs at the end of the timestep."""
-
-        from leap.vm.language import YieldState, AssignExpression
-        from pymbolic import var
-
-        return cbuild.add_and_get_ids(YieldState(
-            id='ret', time_id='final',
-            time=var('<t>') + var('<dt>'),
-            component_id=component_id,
-            expression=return_val,
-            depends_on=depends_on,
-            ),
-            AssignExpression('<t>', var('<t>') + var('<dt>'), id='increment_t',
-                             depends_on=depends_on + ['ret']))
-
-    def emit_rk_body(self, cbuild, component_id, order, state, rhs,
-                     t, dt, depends_on=[], label=''):
-        """Emits the code for a Runge-Kutta method
-
-        Inputs
-            cbuild:     the CodeBuilder
-            component_id:   the function to call
-            order:      the order of accuracy for the method
-            state:      the state to use / update
-            rhs:        the RHS to use / update
-            t:          the time variable
-            dt:         the timestep value
-            depends_on: any instructions to execute before
-            label:      the label to prefix names with
-
-        Returns a pair [y, rhs] of instruction names that compute the new value
-        of y and the rhs at t + dt."""
-
-        from leap.vm.language import AssignExpression
-        from pymbolic import var
-
-        add_and_get_ids = cbuild.add_and_get_ids
-
-        rk_tableau, rk_coeffs = self.get_rk_tableau_and_coeffs(order)
-
-        # Stage loop (taken from EmbeddedButcherTableauMethod)
-
-        rhss = []
-
-        all_rhs_eval_ids = []
-
-        for (istage, (c, coeffs)) in enumerate(rk_tableau):
-            if len(coeffs) == 0:
-                assert c == 0
-                this_rhs = rhs
-            else:
-                stage_state = state + sum(dt * coeff * rhss[j] for (j,
-                        coeff) in enumerate(coeffs))
-
-                rhs_id = cbuild.fresh_var_name(label + ('_rhs%d' % istage) + "_")
-                rhs_insn_id = cbuild.fresh_insn_id(label+('_ev_rhs%d' % istage)+"_")
-
-                add_and_get_ids(AssignExpression(
-                        assignee=rhs_id,
-                        expression=var(component_id)(t=t + c * dt,
-                                                     y=stage_state),
-                        depends_on=depends_on + all_rhs_eval_ids,
-                        id=rhs_insn_id))
-
-                all_rhs_eval_ids.append(rhs_insn_id)
-                this_rhs = var(rhs_id)
-            rhss.append(this_rhs)
-
-        update_state_id = cbuild.fresh_insn_id(label + '_update_state')
-
-        # Merge the values of the RHSs
-
-        merged_rhss = var(label + '_merged_rhss')
-
-        merge_id, = add_and_get_ids(AssignExpression(merged_rhss.name,
-                        (sum(coeff * rhss[j] for (j, coeff) in
-                        enumerate(rk_coeffs))), depends_on=all_rhs_eval_ids))
-
-        # Assign the value of the new state
-
-        add_and_get_ids(AssignExpression(state.name, state + dt * merged_rhss,
-                        id=update_state_id, depends_on=[merge_id]))
-
-        # Assign the value of the new RHS
-
-        update_rhs_id, = \
-            add_and_get_ids(AssignExpression(rhs.name, this_rhs,
-                            depends_on=[update_state_id]))
-
-        return [update_state_id, update_rhs_id]
-
 
 class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
@@ -160,129 +69,111 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         self.order = order
         self.coeffs = numpy.asarray(make_ab_coefficients(order))[::-1]
 
-    def rk_bootstrap(self, cbuild, component_id):
-        """Initialize the timestepper with an RK method."""
-
-        from leap.vm.language import AssignExpression, If
-
-        add_and_get_ids = cbuild.add_and_get_ids
-        from pymbolic import var
-
-        step = var('<p>step')
-        fvals = [var('<p>last_rhs_%d' % i) for i in
-                 range(self.order - 1, 0, -1)]
-        state = var('<state>' + component_id)
-        t = var('<t>')
-        dt = var('<dt>')
-        last_rhs = var('<p>last_rhs_' + component_id)
-
-        # Save the current RHS to the AB history
-
-        condition_ids = []
-
-        for (i, fval) in enumerate(fvals):
-            from pymbolic.primitives import Comparison
-            assign_id, = add_and_get_ids(AssignExpression(fval.name, last_rhs))
-            condition_id, = \
-                add_and_get_ids(If(condition=Comparison(step, '==', i),
-                                then_depends_on=[assign_id],
-                                else_depends_on=[]))
-            condition_ids.append(condition_id)
-
-        # Compute the new value of the state and RHS
-
-        rk = self.emit_rk_body(cbuild, component_id, self.order,
-                               state, last_rhs, t, dt, depends_on=condition_ids)
-
-        return rk
-
     def __call__(self, component_id):
-        from leap.vm.language import AssignExpression, If, \
-            TimeIntegratorCode, CodeBuilder
+        from leap.vm.language import If, TimeIntegratorCode, CodeBuilder
 
         cbuild = CodeBuilder()
-        add_and_get_ids = cbuild.add_and_get_ids
 
         from pymbolic import var
 
+        self.component_id = component_id
+
         # Declare variables
+        self.step = var('<p>step')
+        self.rhs = var('<p>f_n')
+        self.history = [var('<p>f_n_minus_' + str(i))
+                        for i in range(self.order - 1, 0, -1)]
+        self.state = var('<state>' + component_id)
+        self.t = var('<t>')
+        self.dt = var('<dt>')
 
-        step = var('<p>step')
-        fvals = [var('<p>last_rhs_%d' % i) for i in
-                 range(self.order - 1, 0, -1)]
-        state = var('<state>' + component_id)
-        t = var('<t>')
-        dt = var('<dt>')
-        last_rhs = var('<p>last_rhs_' + component_id)
-        curr_rhs = var('curr_rhs')
+        # Initialization stage
+        with SimpleCodeBuilder(cbuild) as builder:
+            builder.assign(self.step, 0)
+            builder.assign(self.rhs, self.eval_rhs(self.t, self.state))
 
-        dep_inf_exclude_names = ['<t>', '<dt>', state.name, last_rhs.name,
-            step.name]
-
-        # Initialize variables
-
-        initialization_dep_on = \
-            add_and_get_ids(AssignExpression(step.name, 0),
-                            AssignExpression(assignee=last_rhs.name,
-                                expression=CallWithKwargs(
-                                    function=var(component_id),
-                                    parameters=(), kw_parameters={'t': t,
-                                    component_id: state})))
-        cbuild.commit()
-
-        # RK bootstrap stage
-
-        bootstrap_ids = self.rk_bootstrap(cbuild, component_id)
-
-        add_and_get_ids(AssignExpression(step.name, step + 1,
-                        id='increment_step'))
-
-        cbuild.infer_single_writer_dependencies(exclude=dep_inf_exclude_names)
-        cbuild.commit()
+        initialization_dep_on = builder.last_added_instruction_id
 
         # AB stage
+        with SimpleCodeBuilder(cbuild) as builder:
+            ab_comb = sum(self.coeffs[i] * self.history[i]
+                          for i in range(0, self.order - 1))
+            ab_comb += self.rhs * self.coeffs[-1]
+            builder.assign(self.state, self.state + self.dt * ab_comb)
 
-        add_and_get_ids(
-            AssignExpression(assignee=curr_rhs.name,
-                expression=CallWithKwargs(function=var(component_id),
-                    parameters=(),
-                    kw_parameters={'t': t, component_id: state}),
-                id='compute_curr_rhs'),
-            AssignExpression(state.name, state + dt *
-                (sum(self.coeffs[i] * fvals[i] for i in range(0, self.order-1))
-                 + curr_rhs * self.coeffs[-1]), id='ab_update_state',
-                depends_on=['compute_curr_rhs'])
-            )
+            # Rotate history
+            for i in range(len(self.history)):
+                next_val = self.history[i + 1] \
+                    if (i + 1) < len(self.history) else self.rhs
+                builder.assign(self.history[i], next_val)
 
-        cbuild.commit()
+            builder.assign(self.rhs,
+                           self.eval_rhs(self.t + self.dt, self.state))
 
-        # Update AB history
+        ab_dep_on = builder.last_added_instruction_id
 
-        last_dep_id = 'ab_update_state'
+        # Bootstrap stage
+        with SimpleCodeBuilder(cbuild) as builder:
+            self.rk_bootstrap(builder)
+            builder.assign(self.step, self.step + 1)
 
-        for i, fval in enumerate(fvals):
-            next_fval = fvals[i + 1] if i + 1 < len(fvals) else curr_rhs
-            last_dep_id, = add_and_get_ids(AssignExpression(fval.name,
-                            next_fval, depends_on=[last_dep_id]))
+        bootstrap_dep_on = builder.last_added_instruction_id
 
-        # The branch to decide whether the current step is an initialization
-        # step or an AB timestepping step
-
-        from pymbolic.primitives import Comparison
-
-        main_branch_id, = \
-            add_and_get_ids(If(condition=Comparison(step, '<',
-                            self.order - 1), then_depends_on=bootstrap_ids +
-                            ['increment_step'], else_depends_on=[last_dep_id]))
-
-        # Increment t and return the state
-
-        epilogue = self.emit_epilogue(cbuild, state, component_id,
-                                      [main_branch_id])
+        # Main branch
+        main_branch = cbuild.add_and_get_ids(
+            If(condition=Comparison(self.step, "<", self.order - 1),
+               then_depends_on=bootstrap_dep_on,
+               else_depends_on=ab_dep_on))
 
         cbuild.commit()
+
+        # Update and return
+        with SimpleCodeBuilder(cbuild, main_branch) as builder:
+            builder.yield_state(self.state, component_id,
+                                self.t + self.dt, "final")
+            builder.assign(self.t, self.t + self.dt)
+
+        step_dep_on = builder.last_added_instruction_id
 
         return TimeIntegratorCode(instructions=cbuild.instructions,
                                   initialization_dep_on=initialization_dep_on,
-                                  step_dep_on=epilogue,
-                                  step_before_fail=False)
+                                  step_dep_on=step_dep_on,
+                                  step_before_fail=True)
+
+    def eval_rhs(self, t, y):
+        """Return a node that evaluates the RHS at the given time and
+        component value."""
+        return CallWithKwargs(function=var(self.component_id),
+                              parameters=(),
+                              kw_parameters={"t": t, self.component_id: y})
+
+    def rk_bootstrap(self, builder):
+        """Initialize the timestepper with an RK method."""
+
+        # Save the current RHS to the AB history
+        for i in range(len(self.history)):
+            with builder.condition(Comparison(self.step, "==", i)):
+                builder.assign(self.history[i], self.rhs)
+
+        rk_tableau, rk_coeffs = self.get_rk_tableau_and_coeffs(self.order)
+
+        # Stage loop (taken from EmbeddedButcherTableauMethod)
+        rhss = [var("rk_rhs_" + str(i)) for i in range(len(rk_tableau))]
+        for stage_number, (c, coeffs) in enumerate(rk_tableau):
+            if len(coeffs) == 0:
+                assert c == 0
+                builder.assign(rhss[stage_number], self.rhs)
+            else:
+                stage_state = self.state + sum(self.dt * coeff * rhss[j]
+                                               for (j, coeff)
+                                               in enumerate(coeffs))
+
+                builder.assign(rhss[stage_number], self.eval_rhs(
+                        self.t + c * self.dt, stage_state))
+
+        # Merge the values of the RHSs.
+        merged = sum(coeff * rhss[j] for j, coeff in enumerate(rk_coeffs))
+        # Assign the value of the new state.
+        builder.assign(self.state, self.state + self.dt * merged)
+        # Assign the value of the new RHS,
+        builder.assign(self.rhs, self.eval_rhs(self.t + self.dt, self.state))
