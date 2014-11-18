@@ -40,16 +40,6 @@ class ControlNode(RecordWithoutPickling):
         kwargs.update({'successors': set(), 'predecessors': set()})
         super(ControlNode, self).__init__(**kwargs)
 
-    def get_entry_block(self):
-        """Return basic block that represents the entry block of the node."""
-        raise NotImplementedError()
-
-    def get_exit_block(self):
-        """Return the basic block that represents the exit block of the
-        node.
-        """
-        raise NotImplementedError()
-
     # The update_* methods are used to inform the predecessor /
     # successor nodes when the current node is updated.
 
