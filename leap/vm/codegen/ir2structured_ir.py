@@ -112,8 +112,13 @@ def _check_for_block_node(node):
         current_node = one(current_node.successors)
         successor_nodes.append(current_node)
 
-    # Check if a block has been detected.
+    # Check if a sequence has been detected.
     if not predecessor_nodes and not successor_nodes:
+        return None
+
+    # Check if the sequence is single-exit.
+    last_node = successor_nodes[-1] if successor_nodes else node
+    if not hasattr(last_node, "exit_block"):
         return None
 
     # Construct the block.
