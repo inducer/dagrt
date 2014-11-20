@@ -25,7 +25,6 @@ THE SOFTWARE.
 from leap.vm.language import (
         Instruction, AssignExpression, AssignSolvedRHS,
         If, YieldState, Raise, FailStep)
-from leap.vm.utils import TODO
 from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import get_unique_name, is_state_variable
 import leap.vm.codegen.ir as ir
@@ -350,7 +349,13 @@ class ControlFlowGraphAssembler(object):
         end_bb, flag_tracker = self._process_block(exit_block, entry_bb,
                                                    flag_tracker)
 
+        if not end_bb.terminated:
+            end_bb.add_return()
+
         self._function.assign_entry_block(entry_bb)
+        for block in self._function:
+            if not block.terminated:
+                assert False
         return self._function
 
     def _new_basic_block(self):
@@ -484,8 +489,10 @@ class ControlFlowGraphAssembler(object):
                 main_bb.add_branch(instruction.condition, then_bb, else_bb)
 
                 # Emit branches to merge point.
-                end_then_bb.add_jump(then_else_merge_bb)
-                end_else_bb.add_jump(then_else_merge_bb)
+                if not end_then_bb.terminated:
+                    end_then_bb.add_jump(then_else_merge_bb)
+                if not end_else_bb.terminated:
+                    end_else_bb.add_jump(then_else_merge_bb)
 
                 # Set the current basic block to be the merge point.
                 flag_tracker = then_flag_tracker & else_flag_tracker
@@ -502,10 +509,12 @@ class ControlFlowGraphAssembler(object):
                 main_bb.add_assignment(instruction)
 
             elif isinstance(instruction, Raise):
-                raise TODO('Implement IR lowering for Raise instructions.')
+                main_bb.add_raise(instruction)
+                break
 
             elif isinstance(instruction, FailStep):
-                raise TODO('Implement IR lowering for FailStep instructions.')
+                main_bb.add_fail_step()
+                break
 
         if not main_bb.terminated:
             main_bb.add_assignment((flag, True))

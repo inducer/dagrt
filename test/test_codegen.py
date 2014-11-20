@@ -264,9 +264,9 @@ def test_complex_structural_extraction():
 
 
 def test_complex_structural_extraction_2():
-    """Check that structural extraction correctly detects a complex control
-    tree. This complex control tree is an unstructured interval containing two
-    If-Then structures in blocks.
+    """Check that structural extraction correctly detects a complex
+    control tree. This complex control tree is an If-Then-Else node
+    containing two If-Then structures in blocks.
 
             0
            / \
@@ -292,17 +292,8 @@ def test_complex_structural_extraction_2():
 
     structural_extractor = StructuralExtractor()
     control_tree = structural_extractor(main)
-    assert isinstance(control_tree, UnstructuredIntervalNode)
-    assert len(control_tree.nodes) == 3
-    node_a, node_b, node_c = tuple(control_tree.nodes)
-    if isinstance(node_a, SingleNode):
-        node_a = node_c
-    elif isinstance(node_b, SingleNode):
-        node_b = node_c
-    elif isinstance(node_c, SingleNode):
-        pass
-    else:
-        assert False
+    assert isinstance(control_tree, IfThenElseNode)
+    node_a, node_b = control_tree.then_node, control_tree.else_node
     assert isinstance(node_a, BlockNode)
     assert isinstance(node_b, BlockNode)
 
@@ -364,6 +355,17 @@ def test_line_wrapping_line_with_string():
     assert result == \
         ["write(*,*)                                                 &",
          "    'failed to allocate leap_state%leap_refcnt_p_last_rhs_y'"]
+
+
+def test_KeyToUniqueNameMap():
+    from leap.vm.codegen.utils import KeyToUniqueNameMap
+
+    map_prefilled = KeyToUniqueNameMap(start={'a': 'b'})
+    assert map_prefilled.get_or_make_name_for_key('a') == 'b'
+    assert map_prefilled.get_or_make_name_for_key('b') != 'b'
+
+    map_with_prefix = KeyToUniqueNameMap(forced_prefix='prefix')
+    assert map_with_prefix.get_or_make_name_for_key('a') == 'prefixa'
 
 
 if __name__ == "__main__":

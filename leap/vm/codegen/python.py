@@ -24,12 +24,14 @@ THE SOFTWARE.
 
 from .expressions import PythonExpressionMapper
 from .codegen_base import StructuredCodeGenerator
+from .utils import (wrap_line_base, exec_in_new_namespace,
+                    KeyToUniqueNameMap)
+from .ir import YieldStateInst
 from pytools.py_codegen import (
         PythonCodeGenerator as PythonEmitter,
         PythonFunctionGenerator as PythonFunctionEmitter,
         Indentation)
-from leap.vm.utils import is_state_variable, get_unique_name
-from leap.vm.codegen.utils import wrap_line_base, exec_in_new_namespace
+from leap.vm.utils import is_state_variable
 from functools import partial
 import six
 
@@ -69,6 +71,12 @@ class StepFailed(namedtuple("StepFailed", ["t"])):
         Floating point number.
     """
 
+class TimeStepUnderflow(RuntimeError):
+    pass
+
+class FailStepException(RuntimeError):
+    pass
+
 class _function_symbol_container(object):
     pass
 
@@ -97,52 +105,31 @@ class PythonNameManager(object):
     """
 
     def __init__(self):
-        self._local_map = {}
-        self._global_map = {}
-        self.function_map = {}
-        import string
-        self._ident_chars = set('_' + string.ascii_letters + string.digits)
+        self._local_map = KeyToUniqueNameMap(forced_prefix='local')
+        self._global_map = KeyToUniqueNameMap(forced_prefix='self.global_',
+                                              start={'<t>': 'self.t',
+                                                     '<dt>': 'self.dt'})
+        self.function_map = KeyToUniqueNameMap()
 
-    def _filter_name(self, var):
-        # FIXME: Should also filter Python identifiers
-        return ''.join(c if c in self._ident_chars else '' for c in var)
-
-    def name_global(self, var):
+    def name_global(self, name):
         """Return the identifier for a global variable."""
-        try:
-            return self._global_map[var]
-        except KeyError:
-            if var == '<t>':
-                named_global = 'self.t'
-            elif var == '<dt>':
-                named_global = 'self.dt'
-            else:
-                base = 'self.global_' + self._filter_name(var)
-                named_global = get_unique_name(base, self._global_map)
-            self._global_map[var] = named_global
-            return named_global
+        return self._global_map.get_or_make_name_for_key(name)
 
     def clear_locals(self):
-        self._local_map.clear()
+        del self._local_map
+        self._local_map = KeyToUniqueNameMap(forced_prefix='local')
 
-    def name_local(self, var):
+    def name_local(self, local):
         """Return the identifier for a local variable."""
-        base = 'local_' + self._filter_name(var)
-        return get_unique_name(base, self._local_map)
+        return self._local_map.get_or_make_name_for_key(local)
 
-    def name_function(self, var):
+    def name_function(self, function):
         """Return the identifier for a function."""
-        try:
-            return self.function_map[var]
-        except KeyError:
-            base = self._filter_name(var.name)
-            named_func = get_unique_name(base, self.function_map)
-            self.function_map[var] = named_func
-            return named_func
+        return self.function_map.get_or_make_name_for_key(function)
 
     def get_global_ids(self):
         """Return an iterator to the recognized global variable ids."""
-        return six.iterkeys(self._global_map)
+        return iter(self._global_map)
 
     def __getitem__(self, name):
         """Provide an interface to PythonExpressionMapper to look up
@@ -192,12 +179,21 @@ class PythonCodeGenerator(StructuredCodeGenerator):
             function = assembler(state_name, code, dependencies)
             if optimize:
                 function = optimizer(function)
+            self._pre_lower(function)
             control_tree = extract_structure(function)
             self.lower_function(state_name, control_tree)
 
         self.finish_emit(dag)
 
         return self.get_code()
+
+    def _pre_lower(self, function):
+        self._has_yield_inst = False
+        for block in function:
+            for inst in block:
+                if isinstance(inst, YieldStateInst):
+                    self._has_yield_inst = True
+                    return
 
     def lower_function(self, function_name, control_tree):
         self.emit_def_begin(function_name)
@@ -237,8 +233,8 @@ class PythonCodeGenerator(StructuredCodeGenerator):
 
         # Make function symbols available
         emit('self._functions = self._function_symbol_container()')
-        for function_id, py_function_id in six.iteritems(
-                self._name_manager.function_map):
+        for function_id in self._name_manager.function_map:
+            py_function_id = self._name_manager.name_function(function_id)
             emit('self._functions.{py_function_id} = function_map["{function_id}"]'
                     .format(
                         py_function_id=py_function_id,
@@ -288,10 +284,13 @@ class PythonCodeGenerator(StructuredCodeGenerator):
                 emit('while True:')
                 with Indentation(emit):
                     emit('yield next(state)')
-
             emit('except StopIteration:')
             with Indentation(emit):
                 emit('pass')
+            emit('except self.FailStepException:')
+            with Indentation(emit):
+                emit('yield self.StepFailed(t=self.t)')
+                emit('continue')
             # STATE_HACK: Ensure that the primary state has a chance to run.
             emit('if last_step and current_state == "primary":')
             with Indentation(emit):
@@ -321,6 +320,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
 
     def emit_def_begin(self, name):
         self._emitter = PythonFunctionEmitter('state_' + name, ('self',))
+        self._name_manager.clear_locals()
 
     def emit_def_end(self):
         self._emit("")
@@ -362,11 +362,26 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         #
         # TODO: Python 3.3+ has "yield from ()" which results in slightly less
         # awkward syntax.
-        self._emit('yield')
+        if not self._has_yield_inst:
+            self._emit('yield')
 
     def emit_yield_state(self, inst):
-        self._emit('yield self.StateComputed(')
-        self._emit('    t=%s,' % self._expr(inst.time))
-        self._emit('    time_id=%r,' % inst.time_id)
-        self._emit('    component_id=%r,' % inst.component_id)
-        self._emit('    state_component=%s)' % self._expr(inst.expression))
+        self._emit('yield self.StateComputed(t={t}, time_id={time_id}, '
+                   'component_id={component_id}, '
+                   'state_component={state_component})'.format(
+                       t=self._expr(inst.time),
+                       time_id=repr(inst.time_id),
+                       component_id=repr(inst.component_id),
+                       state_component=self._expr(inst.expression)))
+
+    def emit_raise(self, error_condition, error_message):
+        self._emit('raise self.{condition}("{message}")'.format(
+                   condition=error_condition.__name__,
+                   message=error_message))
+        if not self._has_yield_inst:
+            self._emit('yield')
+
+    def emit_fail_step(self):
+        self._emit('raise self.FailStepException()')
+        if not self._has_yield_inst:
+            self._emit('yield')

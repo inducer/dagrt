@@ -25,50 +25,19 @@ THE SOFTWARE.
 """
 
 import sys
-
+import pytest
 from leap.method.ab import AdamsBashforthTimeStepper
-import numpy as np
-
-import logging
-logger = logging.getLogger(__name__)
 
 
-# Run example with
-# python test_step_matrix.py "test_step_matrix()"
+@pytest.mark.parametrize("order", [1, 2, 3, 4, 5])
+def test_ab_accuracy(python_method_impl, order, show_dag=False,
+                     plot_solution=False):
+    from utils import check_simple_convergence
+    method = AdamsBashforthTimeStepper(order)
+    check_simple_convergence(method=method, method_impl=python_method_impl,
+                             expected_order=order, show_dag=show_dag,
+                             plot_solution=plot_solution)
 
-def test_step_matrix(show_matrix=True, show_dag=False):
-    component_id = 'y'
-    code = AdamsBashforthTimeStepper(3)(component_id)
-    if show_dag:
-        from leap.vm.language import show_dependency_graph
-        show_dependency_graph(code)
-    from leap.vm.exec_numpy import StepMatrixFinder
-
-    def rhs(t, y):
-        return -y
-
-    def rhs_deriv(deriv_arg, t, y):
-        return -1
-
-    y = 1.0
-    t = 0.0
-    final_t = 1.0
-    dt = 0.1
-
-    step_matrices = []
-    finder = StepMatrixFinder(
-            code,
-            function_map={component_id: rhs},
-            function_deriv_map={component_id: rhs_deriv})
-    finder.set_up(t_start=t, dt_start=dt, state={component_id: y})
-    finder.initialize()
-    for event in finder.run(t_end=final_t):
-        if isinstance(event, finder.StateComputed):
-            step_matrices.append(event.step_matrix)
-    if show_matrix:
-        print('Variables: %s' % [var.name for var in finder.get_state_variables()])
-        np.set_printoptions(precision=2)
-        print(step_matrices[-2])
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:

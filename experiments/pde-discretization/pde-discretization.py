@@ -13,7 +13,6 @@ partitioned than [0, 1] by a given ratio.
 from __future__ import division
 
 from leap.vm.codegen import PythonCodeGenerator
-from leap.vm.exec_numpy import StateComputed
 from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
 import leap.method.ab.multirate.methods
 
@@ -32,8 +31,8 @@ def make_rhs(matrix, multiply_fast_component):
     multiplication. If multiply_fast_component is True, then the fast component
     is multiplied, otherwise the slow component is multiplied.
     """
-    def f(t, u, v):
-        return matrix.dot(u if multiply_fast_component else v)
+    def f(t, f, s):
+        return matrix.dot(f if multiply_fast_component else s)
     return f
 
 
@@ -102,7 +101,7 @@ def run_multirate_method(method, y_fast, y_slow, dt, t_start, t_end):
     method.initialize()
     history = [np.concatenate((y_slow, y_fast),)]
     for event in method.run(t_end=t_end):
-        if isinstance(event, StateComputed):
+        if isinstance(event, method.StateComputed):
             slow = event.state_component[1]
             fast = event.state_component[0]
             history.append(np.concatenate((slow, fast),))

@@ -44,7 +44,7 @@ def is_state_variable(var):
             or var.startswith("<ret_time_id>")
             or var.startswith("<ret_time>")
             or var.startswith("<ret_state>")
-            ):
+          ):
         return True
     else:
         return False

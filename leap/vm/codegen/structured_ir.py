@@ -40,16 +40,6 @@ class ControlNode(RecordWithoutPickling):
         kwargs.update({'successors': set(), 'predecessors': set()})
         super(ControlNode, self).__init__(**kwargs)
 
-    def get_entry_block(self):
-        """Return basic block that represents the entry block of the node."""
-        raise NotImplementedError()
-
-    def get_exit_block(self):
-        """Return the basic block that represents the exit block of the
-        node.
-        """
-        raise NotImplementedError()
-
     # The update_* methods are used to inform the predecessor /
     # successor nodes when the current node is updated.
 
@@ -68,6 +58,9 @@ class ControlNode(RecordWithoutPickling):
         for successor in self.successors - exclude:
             successor.predecessors -= {old_predecessor}
             successor.predecessors.add(self)
+
+    # RecordWithoutPickling.__repr__() is really slow on control trees.
+    __repr__ = object.__repr__
 
 
 class SingleNode(ControlNode):
@@ -145,10 +138,10 @@ class IfThenElseNode(ControlNode):
     """Represents an if-then-else control structure.
 
     Distinct nodes A, B, C form an if-then-else control structure if
-    there exists another distinct node D such that
 
       (i) A has exactly two successors B and C
-      (ii) B and C are single entry single exit with successor D
+      (ii) B and C are single entry, and the union of B and C's successors
+           is empty or consists of a single distinct node D
 
     Note that D is not part of the control structure.
 
@@ -169,7 +162,7 @@ class IfThenElseNode(ControlNode):
         self.predecessors |= if_node.predecessors
         self.update_predecessors(if_node)
 
-        self.successors |= then_node.successors
+        self.successors |= then_node.successors | else_node.successors
         self.update_successors(then_node)
         self.update_successors(else_node)
 

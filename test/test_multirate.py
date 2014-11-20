@@ -35,13 +35,13 @@ from pytools import memoize_method
 class MultirateTimestepperAccuracyChecker(object):
     """Check that the multirate timestepper has the advertised accuracy."""
 
-    def __init__(self, method, order, step_ratio, ode, use_interpreter=True,
+    def __init__(self, method, order, step_ratio, ode, method_impl,
                  display_dag=False, display_solution=False):
         self.method = method
         self.order = order
         self.step_ratio = step_ratio
         self.ode = ode
-        self.use_interpreter = use_interpreter
+        self.method_impl = method_impl
         self.display_dag = display_dag
         self.display_solution = display_solution
 
@@ -63,20 +63,13 @@ class MultirateTimestepperAccuracyChecker(object):
                     s2s(*args)),)
             return coupled
 
-        rhs_map = {'<func>f2f': self.ode.f2f_rhs,
+        function_map = {'<func>f2f': self.ode.f2f_rhs,
             '<func>s2f': self.ode.s2f_rhs, '<func>f2s': self.ode.f2s_rhs,
             '<func>s2s': self.ode.s2s_rhs, '<func>coupled': make_coupled(
                 self.ode.f2f_rhs, self.ode.s2f_rhs, self.ode.f2s_rhs,
                 self.ode.s2s_rhs)}
 
-        if self.use_interpreter:
-            from leap.vm.exec_numpy import NumpyInterpreter
-            method = NumpyInterpreter(self.get_code(), rhs_map)
-        else:
-            from leap.vm.codegen import PythonCodeGenerator
-            codegen = PythonCodeGenerator(class_name='MRABMethod')
-            MRABMethod = codegen.get_class(self.get_code())
-            method = MRABMethod(rhs_map)
+        method = self.method_impl(self.get_code(), function_map=function_map)
 
         t = self.ode.t_start
         y = self.ode.initial_values
@@ -91,31 +84,33 @@ class MultirateTimestepperAccuracyChecker(object):
         method = self.initialize_method(dt)
 
         times = []
-        values = []
+        slow = []
+        fast = []
         for event in method.run(t_end=final_t):
             if isinstance(event, method.StateComputed):
-                values.append(event.state_component)
-                times.append(event.t)
+                if event.component_id == "slow":
+                    slow.append(event.state_component)
+                    times.append(event.t)
+                elif event.component_id == "fast":
+                    fast.append(event.state_component)
 
         assert abs(times[-1] - final_t) < 1e-10
 
         t = times[-1]
-        y = values[-1]
+        y = (fast[-1], slow[-1])
 
         from multirate_test_systems import Basic, Tria
-
-        proj = lambda l, x: [z[x] for z in l]
 
         if isinstance(self.ode, Basic) or isinstance(self.ode, Tria):
             # AK: why?
             if self.display_solution:
-                self.plot_solution(times, proj(values, 0), self.ode.soln_0)
+                self.plot_solution(times, fast, self.ode.soln_0)
             return abs(y[0]-self.ode.soln_0(t))
         else:
             from math import sqrt
             if self.display_solution:
-                self.plot_solution(times, proj(values, 0), self.ode.soln_0)
-                self.plot_solution(times, proj(values, 1), self.ode.soln_1)
+                self.plot_solution(times, fast, self.ode.soln_0)
+                self.plot_solution(times, slow, self.ode.soln_1)
             return abs(sqrt(y[0]**2 + y[1]**2)
                     - sqrt(self.ode.soln_0(t)**2 + self.ode.soln_1(t)**2))
 
@@ -155,7 +150,8 @@ class MultirateTimestepperAccuracyChecker(object):
 
 @pytest.mark.slowtest
 @pytest.mark.parametrize("order", [1, 3])
-def test_all_multirate_accuracy(order, use_interpreter=True):
+@pytest.mark.parametrize("system", ["Basic", "Full", "Comp", "Tria"])
+def test_multirate_accuracy(python_method_impl, order, system):
     """Check that the multirate timestepper has the advertised accuracy"""
 
     from leap.method.ab.multirate.methods import methods
@@ -163,16 +159,15 @@ def test_all_multirate_accuracy(order, use_interpreter=True):
 
     step_ratio = 2
 
-    for sys_name in ["Basic", "Full", "Comp", "Tria"]:
-        system = getattr(multirate_test_systems, sys_name)
+    system = getattr(multirate_test_systems, system)
 
-        for name in methods:
-            print("------------------------------------------------------")
-            print("METHOD: %s" % name)
-            print("------------------------------------------------------")
-            MultirateTimestepperAccuracyChecker(
-                    methods[name], order, step_ratio, ode=system(),
-                    use_interpreter=use_interpreter)()
+    for name in methods:
+        print("------------------------------------------------------")
+        print("METHOD: %s" % name)
+        print("------------------------------------------------------")
+        MultirateTimestepperAccuracyChecker(
+            methods[name], order, step_ratio, ode=system(),
+            method_impl=python_method_impl)()
 
 
 if __name__ == "__main__":

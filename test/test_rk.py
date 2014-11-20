@@ -34,9 +34,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# Run example with
-# python test_methods.py "test_rk_accuracy(ODE45TimeStepper(), 5)"
-
 # {{{ non-adaptive test
 
 @pytest.mark.parametrize(("method", "expected_order"), [
@@ -45,71 +42,12 @@ logger = logging.getLogger(__name__)
     (ODE45TimeStepper(use_high_order=False), 4),
     (ODE45TimeStepper(use_high_order=True), 5),
     ])
-def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False):
-    # Use "DEBUG" to trace execution
-    logging.basicConfig(level=logging.INFO)
-
-    component_id = "y"
-    code = method(component_id)
-
-    if show_dag:
-        from leap.vm.language import show_dependency_graph
-        show_dependency_graph(code)
-
-    from leap.vm.exec_numpy import NumpyInterpreter
-
-    def rhs(t, y):
-        u, v = y
-        return np.array([v, -u/t**2], dtype=np.float64)
-
-    def soln(t):
-        inner = np.sqrt(3)/2*np.log(t)
-        return np.sqrt(t)*(
-                5*np.sqrt(3)/3*np.sin(inner)
-                + np.cos(inner)
-                )
-
-    from pytools.convergence import EOCRecorder
-    eocrec = EOCRecorder()
-
-    for n in range(4, 7):
-        dt = 2**(-n)
-        t = 1
-        y = np.array([1, 3], dtype=np.float64)
-        final_t = 10
-
-        interp = NumpyInterpreter(code, function_map={component_id: rhs})
-        interp.set_up(t_start=t, dt_start=dt, state={component_id: y})
-        interp.initialize()
-
-        times = []
-        values = []
-        for event in interp.run(t_end=final_t):
-            if isinstance(event, interp.StateComputed):
-                assert event.component_id == component_id
-                values.append(event.state_component[0])
-                times.append(event.t)
-
-        assert abs(times[-1] - final_t) < 1e-10
-
-        times = np.array(times)
-
-        if plot_solution:
-            import matplotlib.pyplot as pt
-            pt.plot(times, values, label="comp")
-            pt.plot(times, soln(times), label="true")
-            pt.show()
-
-        error = abs(values[-1]-soln(final_t))
-        eocrec.add_data_point(dt, error)
-
-    print("------------------------------------------------------")
-    print("%s: expected order %d" % (method, expected_order))
-    print("------------------------------------------------------")
-    print(eocrec.pretty_print())
-
-    orderest = eocrec.estimate_order_of_convergence()[0, 1]
-    assert orderest > expected_order*0.95
+def test_rk_accuracy(python_method_impl, method, expected_order,
+                     show_dag=False, plot_solution=False):
+    from utils import check_simple_convergence
+    check_simple_convergence(method=method, method_impl=python_method_impl,
+                             expected_order=expected_order, show_dag=show_dag,
+                             plot_solution=plot_solution)
 
 # }}}
 
@@ -120,7 +58,8 @@ def test_rk_accuracy(method, expected_order, show_dag=False, plot_solution=False
     ODE23TimeStepper(rtol=1e-6),
     ODE45TimeStepper(rtol=1e-6),
     ])
-def test_adaptive_timestep(method, show_dag=False, plot=False):
+def test_adaptive_timestep(python_method_impl, method, show_dag=False,
+                           plot=False):
     # Use "DEBUG" to trace execution
     logging.basicConfig(level=logging.INFO)
 
@@ -135,9 +74,7 @@ def test_adaptive_timestep(method, show_dag=False, plot=False):
     example = VanDerPolProblem()
     y = example.initial()
 
-    from leap.vm.exec_numpy import NumpyInterpreter
-
-    interp = NumpyInterpreter(code, function_map={component_id: example})
+    interp = python_method_impl(code, function_map={component_id: example})
     interp.set_up(t_start=example.t_start, dt_start=1e-5, state={component_id: y})
     interp.initialize()
 

@@ -24,6 +24,8 @@ THE SOFTWARE.
 
 import functools
 import shlex
+import six
+from pytools import UniqueNameGenerator
 
 
 def wrap_line_base(line, level=0, width=80, indentation='    ',
@@ -124,3 +126,73 @@ def remove_redundant_blank_lines(lines):
             result.append(l)
 
     return result
+
+
+from string import ascii_letters, digits
+
+
+_ident_chars = set('_' + ascii_letters + digits)
+
+
+def make_identifier_from_name(name, default_identifier="leap_var"):
+    result = "".join([c if c in _ident_chars else "_" for c in name])
+    result = result.lstrip("_")
+    if not result:
+        result = default_identifier
+    return result
+
+
+class _KeyTranslatingUniqueNameGeneratorWrapper(object):
+
+    def __init__(self, generator, translate):
+        self._generator = generator
+        self._translate = translate
+
+    def add_name(self, name):
+        return self._generator.add_name(name)
+
+    def __call__(self, key):
+        return self._generator(self._translate(key))
+
+
+class KeyToUniqueNameMap(object):
+    """Maps keys to unique names that are created on-the-fly.
+
+    Before a unique name is created, a base name is first created. The base name
+    consists of a forced prefix followed by a string that results from
+    translating the key with a supplied function. The mapped value is then
+    created from the base name.
+    """
+
+    def __init__(self, start={}, forced_prefix="",
+                 key_translate_func=make_identifier_from_name,
+                 name_generator=None):
+        self._dict = dict(start)
+
+        if name_generator is None:
+            name_generator = UniqueNameGenerator(forced_prefix=forced_prefix)
+        else:
+            if forced_prefix:
+                raise TypeError("passing 'forced_prefix' is not allowed when "
+                        "passing a pre-existing name generator")
+
+        for existing_name in six.itervalues(start):
+            if existing_name.startswith(name_generator.forced_prefix):
+                name_generator.add_name(existing_name)
+
+        self._generator = _KeyTranslatingUniqueNameGeneratorWrapper(name_generator,
+            key_translate_func)
+
+    def get_or_make_name_for_key(self, key):
+        try:
+            return self._dict[key]
+        except KeyError:
+            new_name = self._generator(key)
+            self._dict[key] = new_name
+            return new_name
+
+    def get_mapped_identifier_without_key(self, name):
+        return self._generator(name)
+
+    def __iter__(self):
+        return six.iterkeys(self._dict)

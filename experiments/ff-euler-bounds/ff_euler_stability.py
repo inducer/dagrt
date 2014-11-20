@@ -67,7 +67,7 @@ def estimate_stable_dt(jacobian, eigvals, eigvects):
             return -2 * (lambda_re + delta(h)) / ((lambda_norm + delta(h)) ** 2) - h
 
         try:
-            dt = np.min([dt, opt.newton(upper_bound, 0.1)])
+            dt = np.min([dt, opt.bisect(upper_bound, 0, 10.0)])
         except:
             return None
 
@@ -83,7 +83,7 @@ def is_stable(jacobian, dt):
     return la.norm(system) < 1.0
 
 
-MAX_STEP_SIZE = 5.0
+MAX_STEP_SIZE = 10.0
 
 
 def experimental_stable_dt(jacobian):
@@ -127,18 +127,18 @@ def computational_stable_dt(jacobian):
 
 
 def make_test_matrices():
-    LAMBDA_SPACING = 10
-    THETA_SPACING = 20
-    OFFSET_SPACING = 10
+    LAMBDA_SPACING = 4
+    THETA_SPACING = 4
+    OFFSET_SPACING = 4
     lambda_2 = -1.0
-    for lambda_1 in np.linspace(-1, -0.1, LAMBDA_SPACING):
+    for lambda_1 in np.linspace(-1, -0.2, LAMBDA_SPACING):
         for alpha in np.linspace(0, np.pi, THETA_SPACING):
             for beta in np.linspace(np.pi / OFFSET_SPACING,
                                     np.pi * (1 - 1 / OFFSET_SPACING),
                                     OFFSET_SPACING - 2):
                 eigvects = np.array([[np.cos(alpha), np.cos(alpha + beta)],
                                      [np.sin(alpha), np.sin(alpha + beta)]])
-                eigvals_diag = np.array([[lambda_1, 0.0], [0.0, lambda_2]])
+                eigvals_diag = np.array([[lambda_2, 0.0], [0.0, lambda_1]])
                 try:
                     result = eigvects.dot(eigvals_diag.dot(la.inv(eigvects)))
                     assert la.det(result) != 0
@@ -159,7 +159,8 @@ def collect_data():
         # Estimate the true dt (as the average of the "experimental"
         # and "computational" values).
         dt_experimental = experimental_stable_dt(jacobian)
-        dt_computational = computational_stable_dt(jacobian)
+        dt_computational = dt_experimental
+        #dt_computational = computational_stable_dt(jacobian)
         if not dt_computational and not dt_experimental:
             num_skipped_tests += 1
             continue
@@ -171,6 +172,7 @@ def collect_data():
             dt_true = np.mean([dt_experimental, dt_computational])
         # Get the analytical estimate.
         dt_estimate = estimate_stable_dt(jacobian, eigvals, eigvects)
+        print(dt_estimate)
         if not dt_estimate:
             num_estimate_failures += 1
             continue
@@ -182,6 +184,8 @@ def collect_data():
         # Record statistics.
         relative_error = (dt_estimate - dt_true) / dt_true
         if dt_estimate > dt_true:
+            print(dt_experimental, dt_computational)
+            print(dt_estimate, dt_true)
             num_skipped_tests += 1
             continue
         timestep_relative_errors.append(relative_error)

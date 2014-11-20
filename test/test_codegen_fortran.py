@@ -80,7 +80,7 @@ def test_rk_codegen(stepper):
     codegen = FortranCodeGenerator(
             'RKMethod',
             ode_component_type_map={
-                component_id: FortranType('real (kind=8)', (200,))
+                component_id: FortranType('real (kind=8)', (2,))
                 },
             function_registry=freg,
             module_preamble="""
@@ -123,11 +123,12 @@ def test_multirate_codegen():
                     """))
 
     codegen = FortranCodeGenerator(
-            'RKMethod', freg,
+            'RKMethod',
             ode_component_type_map={
                 "s": FortranType('real (kind=8)', (200,), ),
                 "f": FortranType('real (kind=8)', (300,), )
                 },
+            function_registry=freg,
             module_preamble="""
             ! lines copied to the start of the module, e.g. to say:
             ! use ModStuff
