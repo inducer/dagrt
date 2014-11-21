@@ -277,7 +277,7 @@ and $\theta \in (0, \pi), \beta \in (0, \pi)$. We used $\lambda = -1$.
 
 Table~\ref{table:h-to-computed} gives the result of computing the ratio
 of the Bauer-Fike estimate versus the (computationally determined)
-maximum stable timestep. The value given is the minimum ratio
+maximum stable timestep. The value given is the range of ratios
 encountered over all $\theta$ for the given combination of $n$ and
 $\beta$.
 
@@ -310,9 +310,8 @@ $n$ & $\beta = \frac{\pi}{8}$ & $\beta = \frac{\pi}{4}$ &
 \hline
 \input{h-to-computed.tex}
 \end{tabular}
-\caption{Smallest ratio of estimate $h$ compared to maximum stable
-  timestep}
-\label{table:h-to-computed}}
+\caption{Range of ratios of estimate $h$ compared to maximum stable
+  timestep\label{table:h-to-computed}}
 \end{table}
 
 \begin{table}
@@ -321,10 +320,10 @@ $n$ & $\beta = \frac{\pi}{8}$ & $\beta = \frac{\pi}{4}$ &
 $n$ & $\beta = \frac{\pi}{8}$ & $\beta = \frac{\pi}{4}$ &
   $\beta=\frac{3\pi}{8}$ & $\beta=\frac{\pi}{2}$ \\
 \hline
-\input{h-to-unperturbed-ratios.tex}
+\input{h-to-unperturbed.tex}
 \end{tabular}
-\caption{Smallest ratio of estimate $h$ compared to unperturbed timestep}
-\label{table:h-to-unperturbed}}
+\caption{Range of ratios of estimate $h$ compared to unperturbed
+  timestep\label{table:h-to-unperturbed}}
 \end{table}
 
 \end{document}
