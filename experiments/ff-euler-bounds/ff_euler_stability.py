@@ -22,9 +22,9 @@ def make_ff_euler_step_coefficients(jacobian):
     represents the step matrix for fastest-first Euler associated with dt.
     """
     assert jacobian.shape == (2, 2)
-    s_0 = np.identity(2, dtype=np.complex_)
+    s_0 = np.identity(2, dtype=np.complex128)
     s_1 = STEP_RATIO * jacobian
-    s_2 = np.zeros((2, 2), dtype=np.complex_)
+    s_2 = np.zeros((2, 2), dtype=np.complex128)
     s_2[1, :] = [jacobian[1, 1] * jacobian[1, 0], jacobian[1, 1] ** 2.0]
     return (s_0, s_1, s_2)
 
@@ -35,7 +35,15 @@ def make_ff_euler_step_matrix(jacobian, dt):
     return s_0 + dt * s_1 + dt ** 2 * s_2
 
 
-def estimate_stable_dt(jacobian, eigvals, eigvects):
+def unperturbed_dt(eigvals):
+    """Return the maximum stable timestep for unperturbed Euler."""
+    eigvals = STEP_RATIO * np.complex128(eigvals)
+    hs = -2 * eigvals.real / np.abs(eigvals) ** 2
+    
+    return hs.min()
+
+
+def bauer_fike_dt(jacobian, eigvals, eigvects):
     """
     Estimate a timestep that should be stable for fastest first forward Euler.
 
@@ -45,45 +53,61 @@ def estimate_stable_dt(jacobian, eigvals, eigvects):
     eigvects: The eigenvectors the Jacobian
 
     Returns:
-    If a stable timestep is calculated, then the timestep is returned.
-    Otherwise, None is returned.
+    The stable timestep value
     """
 
     s_0, s_1, s_2 = make_ff_euler_step_coefficients(jacobian)
 
+    d = la.cond(eigvects, p=2) * la.norm(s_2, ord=2)
+
     dt = np.inf
 
-    for eigval in eigvals:
-        lambda_re = np.real(2 * eigval)
-        lambda_norm = np.abs(2 * eigval)
+    eigvals = np.complex128(eigvals)
 
-        jacobian_eigvect_cond = la.cond(eigvects, p=2)
-        perturbation_norm = la.norm(s_2, ord=2)
+    for eigval in STEP_RATIO * eigvals:
+        l = np.abs(eigval)
+        r_l = eigval.real
 
-        def delta(h):
-            return jacobian_eigvect_cond * h * perturbation_norm
+        h = None
 
-        def upper_bound(h):
-            return -2 * (lambda_re + delta(h)) / ((lambda_norm + delta(h)) ** 2) - h
+        roots = np.roots([d ** 2, 2 * l * d, l ** 2 - 2 * d, 2 * r_l])
+        real_roots = []
+        for root in roots:
+            real_if_close = np.real_if_close(root)
+            if real_if_close.imag == 0:
+                if real_if_close.real > 0:
+                    assert h is None
+                    h = real_if_close.real
+        dt = np.min([h, dt])
 
-        try:
-            dt = np.min([dt, opt.newton(upper_bound, 0.1)])
-        except:
-            return None
-
-    return max(dt, 0)
+    norm = la.norm(la.eigvals(make_ff_euler_step_matrix(jacobian, dt)),
+                   ord=np.inf)
+    assert norm < 1
+    return dt
 
 
 def is_stable(jacobian, dt):
-    system = np.array([1.0, 1.0])
-    system /= la.norm(system)
+    system = np.array([1.0, 1.0]) / np.sqrt(2)
     step_matrix = make_ff_euler_step_matrix(jacobian, dt)
     for i in range(0, 100):
         system = step_matrix.dot(system)
-    return la.norm(system) < 1.0
+    return la.norm(system) <= 10.0
 
 
-MAX_STEP_SIZE = 5.0
+def computational_stable_dt(jacobian):
+    """Estimate the stable timestep by determining the largest timestep such
+    that spectral radius of the step matrix is under 1."""
+    def radius(h):
+        step_matrix = make_ff_euler_step_matrix(jacobian, h)
+        return la.norm(la.eigvals(step_matrix), ord=np.inf) - 1.0
+    try:
+        o = opt.bisect(radius, 0.05, 1.0)
+        return o
+    except:
+        return None
+
+
+MAX_STEP_SIZE = 10.0
 
 
 def experimental_stable_dt(jacobian):
@@ -114,89 +138,60 @@ def experimental_stable_dt(jacobian):
             right = dt
 
 
-def computational_stable_dt(jacobian):
-    """Estimate the stable timestep by determining the largest timestep such
-    that spectral radius of the step matrix is under 1."""
-    def radius(h):
-        step_matrix = make_ff_euler_step_matrix(jacobian, h)
-        return la.norm(la.eigvals(step_matrix), ord=np.inf) - 1.0
-    try:
-        return opt.bisect(radius, 1.0e-16, MAX_STEP_SIZE)
-    except:
-        return None
+def make_test_matrix(theta, beta, n, lambda_=-1.0):
+    eigvects = np.array([[np.cos(theta), np.cos(theta + beta)],
+                         [np.sin(theta), np.sin(theta + beta)]])
+    eigvals_diag = np.array([[lambda_, 0.], [0., n * lambda_]])
+    result = eigvects.dot(eigvals_diag.dot(la.inv(eigvects)))
+    return (result, [lambda_, n * lambda_], eigvects)
 
+
+_betas = np.pi * np.array([1 / 8, 1 / 4, 3 / 8, 1 / 2])
+_ns = [2, 3, 4]
 
 def make_test_matrices():
-    LAMBDA_SPACING = 10
-    THETA_SPACING = 20
-    OFFSET_SPACING = 10
-    lambda_2 = -1.0
-    for lambda_1 in np.linspace(-1, -0.1, LAMBDA_SPACING):
-        for alpha in np.linspace(0, np.pi, THETA_SPACING):
-            for beta in np.linspace(np.pi / OFFSET_SPACING,
-                                    np.pi * (1 - 1 / OFFSET_SPACING),
-                                    OFFSET_SPACING - 2):
-                eigvects = np.array([[np.cos(alpha), np.cos(alpha + beta)],
-                                     [np.sin(alpha), np.sin(alpha + beta)]])
-                eigvals_diag = np.array([[lambda_1, 0.0], [0.0, lambda_2]])
-                try:
-                    result = eigvects.dot(eigvals_diag.dot(la.inv(eigvects)))
-                    assert la.det(result) != 0
-                    yield (result, [lambda_1, lambda_2], eigvects)
-                except:
-                    continue
+    thetas = np.linspace(0, np.pi, 100)
+    for theta in thetas:
+        for beta in _betas:
+            for n in _ns:
+                matrix, eigvals, eigvects = make_test_matrix(theta, beta, n)
+                assert la.det(matrix) != 0
+                yield (theta, beta, n, matrix, eigvals, eigvects)
 
 
 def collect_data():
-    num_tests = 0
-    num_skipped_tests = 0
-    num_estimate_failures = 0
-    timestep_relative_errors = []
-    spectral_radiuses_at_estimates = []
+    from pytools import Table
+    stability_data = {}
+    perturbation_data = {}
+    for theta, beta, n, matrix, eigvals, eigvects in make_test_matrices():
+        estimated_dt = bauer_fike_dt(matrix, eigvals, eigvects)
+        stable_dt = computational_stable_dt(matrix)
+        assert estimated_dt < stable_dt
+        unperturbed_dt_ = unperturbed_dt(eigvals)
+        if (n, beta) not in stability_data:
+            stability_data[n, beta] = []
+            perturbation_data[n, beta] = []
+        stability_data[n, beta].append(estimated_dt / stable_dt)
+        perturbation_data[n, beta].append(estimated_dt / unperturbed_dt_)
 
-    for jacobian, eigvals, eigvects in make_test_matrices():
-        num_tests += 1
-        # Estimate the true dt (as the average of the "experimental"
-        # and "computational" values).
-        dt_experimental = experimental_stable_dt(jacobian)
-        dt_computational = computational_stable_dt(jacobian)
-        if not dt_computational and not dt_experimental:
-            num_skipped_tests += 1
-            continue
-        if not dt_computational:
-            dt_true = dt_experimental
-        elif not dt_experimental:
-            dt_true = dt_computational
-        else:
-            dt_true = np.mean([dt_experimental, dt_computational])
-        # Get the analytical estimate.
-        dt_estimate = estimate_stable_dt(jacobian, eigvals, eigvects)
-        if not dt_estimate:
-            num_estimate_failures += 1
-            continue
-        # Ensure that the analytical estimate is valid.
-        step_matrix = make_ff_euler_step_matrix(jacobian, dt_estimate)
-        radius = la.norm(la.eigvals(step_matrix), ord=np.inf)
-        if radius > 1.0:
-            assert np.isclose(radius - 1.0, 0, atol=1.0e-3)
-        # Record statistics.
-        relative_error = (dt_estimate - dt_true) / dt_true
-        if dt_estimate > dt_true:
-            num_skipped_tests += 1
-            continue
-        timestep_relative_errors.append(relative_error)
-        spectral_radiuses_at_estimates.append(radius)
-
-    print('Total number of tests: ' + str(num_tests))
-    print('Number of tests skipped due to inability to get exact timestep: '
-          + str(num_skipped_tests))
-    print('Number of tests skipped due to inability to estimate timestep: '
-          + str(num_estimate_failures))
-    print('Mean relative error in estimate: '
-          + str(np.mean(timestep_relative_errors)))
-    print('Mean spectral radius at estimate: ' +
-          str(np.mean(spectral_radiuses_at_estimates)))
-
+    from scipy.stats import gmean
+    stability_table = Table()
+    perturbation_table = Table()
+    for n in _ns:
+        stability_row = [n]
+        perturbation_row = [n]
+        for beta in _betas:
+            min_stab = np.min(stability_data[n, beta])
+            stability_row.append("{:0.3f}".format(min_stab))
+            min_perturb = np.min(perturbation_data[n, beta])
+            perturbation_row.append("{:0.3f}".format(min_perturb))
+        stability_table.add_row(stability_row)
+        perturbation_table.add_row(perturbation_row)
+    with open("h-to-computed.tex", "w") as f:
+        f.write(stability_table.latex())
+    with open("h-to-unperturbed.tex", "w") as f:
+        f.write(perturbation_table.latex())
 
 if __name__ == '__main__':
     collect_data()
+        
