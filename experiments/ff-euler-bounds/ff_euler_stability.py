@@ -94,6 +94,9 @@ def is_stable(jacobian, dt):
     return la.norm(system) <= 10.0
 
 
+MAX_STEP_SIZE = 10.0
+
+
 def computational_stable_dt(jacobian):
     """Estimate the stable timestep by determining the largest timestep such
     that spectral radius of the step matrix is under 1."""
@@ -101,13 +104,10 @@ def computational_stable_dt(jacobian):
         step_matrix = make_ff_euler_step_matrix(jacobian, h)
         return la.norm(la.eigvals(step_matrix), ord=np.inf) - 1.0
     try:
-        o = opt.bisect(radius, 0.05, 1.0)
+        o = opt.bisect(radius, 0.01, MAX_STEP_SIZE)
         return o
     except:
         return None
-
-
-MAX_STEP_SIZE = 10.0
 
 
 def experimental_stable_dt(jacobian):
