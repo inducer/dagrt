@@ -3,7 +3,7 @@
 
 
 def main():
-    from setuptools import setup
+    from setuptools import setup, find_packages
 
     version_dict = {}
     init_filename = "leap/version.py"
@@ -38,15 +38,7 @@ def main():
               'Topic :: Utilities',
               ],
 
-          packages=[
-              "leap",
-              "leap.method",
-              "leap.method.rk",
-              "leap.method.ab",
-              "leap.method.ab.multirate",
-              "leap.vm",
-              "leap.vm.codegen"
-              ],
+          packages=find_packages(),
           install_requires=[
               "numpy>=1.5",
               "pytools>=2014.1",
