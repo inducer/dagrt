@@ -287,6 +287,11 @@ class KindInferenceMapper(Mapper):
 
         return Boolean()
 
+    def map_max(self, expr):
+        return Scalar(is_real_valued=True)
+
+    map_min = map_max
+
 # }}}
 
 
