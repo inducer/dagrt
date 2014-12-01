@@ -97,10 +97,9 @@ class StructuredCodeGenerator(object):
         elif isinstance(node, IfThenElseNode):
             self.lower_node(node.if_node)
             self.lower_node(node.then_node)
-            self.emit_if_end()
             self.emit_else_begin()
             self.lower_node(node.else_node)
-            self.emit_else_end()
+            self.emit_if_end()
         elif isinstance(node, BlockNode):
             for node_item in node.node_list:
                 self.lower_node(node_item)
@@ -163,9 +162,6 @@ class StructuredCodeGenerator(object):
         raise NotImplementedError()
 
     def emit_else_begin(self):
-        raise NotImplementedError()
-
-    def emit_else_end(self):
         raise NotImplementedError()
 
     def emit_assign_expr(self, name, expr):

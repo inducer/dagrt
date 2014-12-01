@@ -342,11 +342,9 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         self._emitter.dedent()
 
     def emit_else_begin(self):
+        self._emitter.dedent()
         self._emit('else:')
         self._emitter.indent()
-
-    def emit_else_end(self):
-        self._emitter.dedent()
 
     def emit_assign_expr(self, name, expr):
         self._emit('{name} = {expr}'.format(name=self._name_manager[name],

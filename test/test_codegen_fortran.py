@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from __future__ import division, with_statement
+from __future__ import division, with_statement, print_function
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
 
@@ -91,7 +91,6 @@ def test_rk_codegen(stepper):
     print(codegen(code))
 
 
-@skip  # FIXME remove when done
 def test_multirate_codegen():
     from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
     from leap.method.ab.multirate.methods import methods
@@ -113,10 +112,14 @@ def test_multirate_codegen():
             "<func>s2f",
             "<func>f2f",
             ]:
-        component_id = func_name[-1]
+        component_id = {
+                "s": "slow",
+                "f": "fast",
+                }[func_name[-1]]
         freg = register_ode_rhs(freg, identifier=func_name,
                 component_id=component_id,
-                input_component_ids=("s", "f"))
+                input_component_ids=("slow", "fast"),
+                input_component_names=("s", "f"))
         freg = freg.register_codegen(func_name, "fortran",
                 FortranCallCode("""
                     ${assignee} = -2*${f} + ${s}
@@ -125,8 +128,8 @@ def test_multirate_codegen():
     codegen = FortranCodeGenerator(
             'RKMethod',
             ode_component_type_map={
-                "s": FortranType('real (kind=8)', (200,), ),
-                "f": FortranType('real (kind=8)', (300,), )
+                "slow": FortranType('real (kind=8)', (200,), ),
+                "fast": FortranType('real (kind=8)', (300,), )
                 },
             function_registry=freg,
             module_preamble="""

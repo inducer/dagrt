@@ -286,9 +286,7 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         return self.name_manager.name_rhs(rhs)
 
     def emit(self, line):
-        level = sum(em.level for em in self.emitters)
-        for wrapped_line in wrap_line(line, level):
-            self.emitter(wrapped_line)
+        self.emitter(line)
 
     def emit_traceable(self, line):
         self.emit_trace(line)
@@ -741,7 +739,22 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         self.module_emitter.__exit__(None, None, None)
 
     def get_code(self):
-        return self.module_emitter.get()
+        assert not self.module_emitter.preamble
+
+        indent_spaces = 4
+        indentation = indent_spaces*' '
+
+        wrapped_lines = []
+        for l in self.module_emitter.code:
+            line_leading_spaces = (len(l) - len(l.lstrip(" ")))
+            level = line_leading_spaces // indent_spaces
+            line_ind = level*indentation
+            for wrapped_line in wrap_line(
+                    l[line_leading_spaces:],
+                    level, indentation=indentation):
+                wrapped_lines.append(line_ind+wrapped_line)
+
+        return "\n".join(wrapped_lines)
 
     # {{{ called by superclass
 
@@ -790,25 +803,25 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         del self.declaration_emitter
 
     def emit_while_loop_begin(self, expr):
-        self.emitter = FortranDoEmitter(
+        FortranDoEmitter(
                 self.emitter,
-                self.expr(expr))
-        self.emitter.__enter__()
+                self.expr(expr),
+                self).__enter__()
 
     def emit_while_loop_end(self,):
         self.emitter.__exit__(None, None, None)
 
     def emit_if_begin(self, expr):
-        self.emitter = FortranIfEmitter(
+        FortranIfEmitter(
                 self.emitter,
-                self.expr(expr))
+                self.expr(expr),
+                self).__enter__()
 
-    emit_if_end = emit_while_loop_end
+    def emit_if_end(self,):
+        self.emitter.__exit__(None, None, None)
 
     def emit_else_begin(self):
         self.emitter.emit_else()
-
-    emit_else_end = emit_while_loop_end
 
     def emit_assign_expr(self, assignee_sym, expr):
         from leap.vm.codegen.data import ODEComponent
