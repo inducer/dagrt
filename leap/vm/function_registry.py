@@ -78,7 +78,7 @@ class Function(RecordWithoutPickling):
         try:
             return self.language_to_codegen[language]
         except KeyError:
-            return KeyError(
+            raise KeyError(
                     "'%s' has no code generator for language '%s'"
                     % (self.identifier, language))
 
