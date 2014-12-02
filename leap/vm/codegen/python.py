@@ -161,9 +161,6 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         from .analysis import verify_code
         verify_code(dag)
 
-        from .codegen_base import NewTimeIntegratorCode
-        dag = NewTimeIntegratorCode.from_old(dag)
-
         from .dag2ir import InstructionDAGExtractor, ControlFlowGraphAssembler
         from .optimization import Optimizer
         from .ir2structured_ir import StructuralExtractor
@@ -174,9 +171,9 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         extract_structure = StructuralExtractor()
 
         self.begin_emit(dag)
-        for state_name, dependencies in six.iteritems(dag.states):
-            code = dag_extractor(dag.instructions, dependencies)
-            function = assembler(state_name, code, dependencies)
+        for state_name, state in six.iteritems(dag.states):
+            code = dag_extractor(dag.instructions, state.depends_on)
+            function = assembler(state_name, code, state.depends_on)
             if optimize:
                 function = optimizer(function)
             self._pre_lower(function)
@@ -246,16 +243,16 @@ class PythonCodeGenerator(StructuredCodeGenerator):
     def _emit_set_up(self):
         """Emit the set_up() method."""
         emit = PythonFunctionEmitter('set_up',
-                                     ('self', 't_start', 'dt_start', 'state'))
+                                     ('self', 't_start', 'dt_start', 'context'))
         emit('self.t = t_start')
         emit('self.dt = dt_start')
-        # Save all the state components.
+        # Save all the context components.
         for component_id in self._name_manager.get_global_ids():
             component = self._name_manager.name_global(component_id)
             if not component_id.startswith('<state>'):
                 continue
             component_id = component_id[7:]
-            emit('{component} = state["{component_id}"]'.format(
+            emit('{component} = context["{component_id}"]'.format(
                 component=component, component_id=component_id))
 
         emit("")
@@ -342,11 +339,9 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         self._emitter.dedent()
 
     def emit_else_begin(self):
+        self._emitter.dedent()
         self._emit('else:')
         self._emitter.indent()
-
-    def emit_else_end(self):
-        self._emitter.dedent()
 
     def emit_assign_expr(self, name, expr):
         self._emit('{name} = {expr}'.format(name=self._name_manager[name],

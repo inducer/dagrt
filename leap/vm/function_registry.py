@@ -78,7 +78,7 @@ class Function(RecordWithoutPickling):
         try:
             return self.language_to_codegen[language]
         except KeyError:
-            return KeyError(
+            raise KeyError(
                     "'%s' has no code generator for language '%s'"
                     % (self.identifier, language))
 
@@ -260,16 +260,20 @@ class _ODERightHandSide(Function):
     default_dict = {}
 
     def __init__(self, identifier, component_id, input_component_ids,
-            language_to_codegen=None):
+            language_to_codegen=None, input_component_names=None):
+        if input_component_names is None:
+            input_component_names = input_component_ids
+
         super(_ODERightHandSide, self).__init__(
                 identifier=identifier,
                 component_id=component_id,
                 input_component_ids=input_component_ids,
-                language_to_codegen=language_to_codegen)
+                language_to_codegen=language_to_codegen,
+                input_component_names=input_component_names)
 
     @property
     def arg_names(self):
-        return ("t",) + self.input_component_ids
+        return ("t",) + self.input_component_names
 
     def get_result_kind(self, arg_kinds):
         arg_kinds = self.resolve_args(arg_kinds)
@@ -293,7 +297,8 @@ class _ODERightHandSide(Function):
 
 def register_ode_rhs(
         function_registry,
-        component_id, identifier=None, input_component_ids=None):
+        component_id, identifier=None, input_component_ids=None,
+        input_component_names=None):
     if identifier is None:
         identifier = component_id
 
@@ -302,7 +307,8 @@ def register_ode_rhs(
 
     return function_registry.register(
             _ODERightHandSide(
-                identifier, component_id, input_component_ids))
+                identifier, component_id, input_component_ids,
+                input_component_names=input_component_names))
 
 # }}}
 

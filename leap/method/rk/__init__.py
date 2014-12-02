@@ -291,7 +291,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
 
             cbuild.commit()
 
-            return TimeIntegratorCode(
+            return TimeIntegratorCode.create_with_init_and_step(
                     instructions=cbuild.instructions,
                     initialization_dep_on=initialization_dep_on,
                     step_dep_on=["ret_state",
@@ -326,7 +326,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                     exclude=dep_inf_exclude_names)
             cbuild.commit()
 
-            return TimeIntegratorCode(
+            return TimeIntegratorCode.create_with_init_and_step(
                     instructions=cbuild.instructions,
                     initialization_dep_on=initialization_dep_on,
                     step_dep_on=["reject_check"],

@@ -132,9 +132,9 @@ class SymbolKindTable(object):
                     for func_name, tbl in self.per_function_table.items()])
 
 
-# {{{ type inference mapper
+# {{{ kind inference mapper
 
-class UnableToInferType(Exception):
+class UnableToInferKind(Exception):
     pass
 
 
@@ -205,20 +205,20 @@ class KindInferenceMapper(Mapper):
         except KeyError:
             pass
 
-        raise UnableToInferType()
+        raise UnableToInferKind()
 
     def map_sum(self, expr):
         kind = None
         for ch in expr.children:
             try:
                 ch_kind = self.rec(ch)
-            except UnableToInferType:
+            except UnableToInferKind:
                 pass
             else:
                 kind = unify(kind, ch_kind)
 
         if kind is None:
-            raise UnableToInferType()
+            raise UnableToInferKind()
         else:
             return kind
 
@@ -248,7 +248,7 @@ class KindInferenceMapper(Mapper):
         for key, val in arg_dict.items():
             try:
                 arg_kinds[key] = self.rec(val)
-            except UnableToInferType:
+            except UnableToInferKind:
                 arg_kinds[key] = None
 
         z = func.get_result_kind(arg_kinds)
@@ -286,6 +286,11 @@ class KindInferenceMapper(Mapper):
                     % type(ch_kind).__name__)
 
         return Boolean()
+
+    def map_max(self, expr):
+        return Scalar(is_real_valued=True)
+
+    map_min = map_max
 
 # }}}
 
@@ -342,7 +347,7 @@ class SymbolKindFinder(object):
 
                     try:
                         kind = kim(insn.assignment.expression)
-                    except UnableToInferType:
+                    except UnableToInferKind:
                         insn_queue_push_buffer.append((func_name, insn))
                     else:
                         made_progress = True

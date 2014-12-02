@@ -46,7 +46,7 @@ class ImplicitEulerMethod(Method):
 
         self._make_primary(cbuild)
 
-        return TimeIntegratorCode(
+        return TimeIntegratorCode.create_with_init_and_step(
             instructions=cbuild.instructions,
             initialization_dep_on=frozenset(),
             step_dep_on=['return', 'increment_t'],

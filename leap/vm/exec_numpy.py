@@ -41,7 +41,7 @@ class NumpyInterpreter(object):
     .. automethod:: run
     """
 
-# {{{ events returned from run()
+    # {{{ events returned from run()
 
     class StateComputed(namedtuple("StateComputed",
               ["t", "time_id", "component_id", "state_component"])):
@@ -68,7 +68,7 @@ class NumpyInterpreter(object):
 
             Floating point number.
         """
-# }}}
+    # }}}
 
     def __init__(self, code, function_map, solver_map={}):
         """
@@ -79,8 +79,8 @@ class NumpyInterpreter(object):
         self.code = code
         from leap.vm.language import ExecutionController
         self.exec_controller = ExecutionController(code)
-        self.state = {}
-
+        self.context = {}
+        self.next_state = self.code.initial_state
         builtins = {
                 "<builtin>len": len,
                 "<builtin>isnan": np.isnan,
@@ -93,23 +93,26 @@ class NumpyInterpreter(object):
         assert not set(builtins) & set(function_map)
 
         self.functions = dict(builtins, **function_map)
-        self.eval_mapper = EvaluationMapper(self.state, self.functions)
 
-    def set_up(self, t_start, dt_start, state):
+        self.eval_mapper = EvaluationMapper(self.context, self.functions)
+
+    def set_up(self, t_start, dt_start, context):
         """
-        :arg state: a dictionary mapping state identifiers to their values
+        :arg context: a dictionary mapping identifiers to their values
         """
 
-        self.state["<t>"] = t_start
-        self.state["<dt>"] = dt_start
-        for key, val in six.iteritems(state):
+        self.context["<t>"] = t_start
+        self.context["<dt>"] = dt_start
+        for key, val in six.iteritems(context):
             if key.startswith("<"):
                 raise ValueError("state variables may not start with '<'")
-            self.state["<state>"+key] = val
+            self.context["<state>"+key] = val
 
     def initialize(self):
         self.exec_controller.reset()
-        self.exec_controller.update_plan(self.code.initialization_dep_on)
+        cur_state = self.code.states[self.next_state]
+        self.next_state = cur_state.next_state
+        self.exec_controller.update_plan(cur_state.depends_on)
         for event in self.exec_controller(self):
             pass
 
@@ -120,12 +123,12 @@ class NumpyInterpreter(object):
         while True:
             # {{{ adjust time step down at end of integration
 
-            t = self.state["<t>"]
-            dt = self.state["<dt>"]
+            t = self.context["<t>"]
+            dt = self.context["<dt>"]
 
             if t+dt >= t_end:
                 assert t <= t_end
-                self.state["<dt>"] = t_end - t
+                self.context["<dt>"] = t_end - t
                 last_step = True
 
             # }}}
@@ -133,24 +136,26 @@ class NumpyInterpreter(object):
             try:
                 try:
                     self.exec_controller.reset()
-                    self.exec_controller.update_plan(self.code.step_dep_on)
+                    cur_state = self.code.states[self.next_state]
+                    self.next_state = cur_state.next_state
+                    self.exec_controller.update_plan(cur_state.depends_on)
                     for event in self.exec_controller(self):
                         yield event
 
                 finally:
                     # discard non-permanent per-step state
-                    for name in list(six.iterkeys(self.state)):
+                    for name in list(six.iterkeys(self.context)):
                         if (
                                 not name.startswith("<state>")
                                 and not name.startswith("<p>")
                                 and name not in ["<t>", "<dt>"]):
-                            del self.state[name]
+                            del self.context[name]
 
             except FailStepException:
-                yield self.StepFailed(t=self.state["<t>"])
+                yield self.StepFailed(t=self.context["<t>"])
                 continue
 
-            yield self.StepCompleted(t=self.state["<t>"])
+            yield self.StepCompleted(t=self.context["<t>"])
 
             if last_step:
                 break
@@ -168,9 +173,9 @@ class NumpyInterpreter(object):
         solver = self.solvers[insn.solver_id]
         result = solver.solve(insn.expression,
                               insn.solve_component,
-                              self.state,
+                              self.context,
                               self.functions, guess)
-        self.state[insn.assignee] = result
+        self.context[insn.assignee] = result
 
     def exec_YieldState(self, insn):
         return self.StateComputed(
@@ -180,7 +185,7 @@ class NumpyInterpreter(object):
                     state_component=self.eval_mapper(insn.expression)), []
 
     def exec_AssignExpression(self, insn):
-        self.state[insn.assignee] = self.eval_mapper(insn.expression)
+        self.context[insn.assignee] = self.eval_mapper(insn.expression)
 
     def exec_Raise(self, insn):
         raise insn.error_condition(insn.error_message)

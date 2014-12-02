@@ -213,7 +213,7 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
         initialization_deps = self._emit_initialization(cbuild)
         primary_deps = self._emit_primary(cbuild)
 
-        return TimeIntegratorCode(
+        return TimeIntegratorCode.create_with_init_and_step(
             instructions=cbuild.instructions,
             initialization_dep_on=initialization_deps,
             step_dep_on=primary_deps,

@@ -94,6 +94,9 @@ def is_stable(jacobian, dt):
     return la.norm(system) <= 10.0
 
 
+MAX_STEP_SIZE = 10.0
+
+
 def computational_stable_dt(jacobian):
     """Estimate the stable timestep by determining the largest timestep such
     that spectral radius of the step matrix is under 1."""
@@ -101,13 +104,10 @@ def computational_stable_dt(jacobian):
         step_matrix = make_ff_euler_step_matrix(jacobian, h)
         return la.norm(la.eigvals(step_matrix), ord=np.inf) - 1.0
     try:
-        o = opt.bisect(radius, 0.05, 1.0)
+        o = opt.bisect(radius, 0.01, MAX_STEP_SIZE)
         return o
     except:
         return None
-
-
-MAX_STEP_SIZE = 10.0
 
 
 def experimental_stable_dt(jacobian):
@@ -181,10 +181,16 @@ def collect_data():
         stability_row = [n]
         perturbation_row = [n]
         for beta in _betas:
-            min_stab = np.min(stability_data[n, beta])
-            stability_row.append("{:0.3f}".format(min_stab))
-            min_perturb = np.min(perturbation_data[n, beta])
-            perturbation_row.append("{:0.3f}".format(min_perturb))
+            stability_ratios = stability_data[n, beta]
+            min_stability_ratio = np.min(stability_ratios)
+            max_stability_ratio = np.max(stability_ratios)
+            stability_row.append("{:0.3f} - {:0.3f}".format(
+                    min_stability_ratio, max_stability_ratio))
+            perturbation_ratios = perturbation_data[n, beta]
+            min_perturbation_ratio = np.min(perturbation_ratios)
+            max_perturbation_ratio = np.max(perturbation_ratios)
+            perturbation_row.append("{:0.3f} - {:0.3f}".format(
+                    min_perturbation_ratio, max_perturbation_ratio))
         stability_table.add_row(stability_row)
         perturbation_table.add_row(perturbation_row)
     with open("h-to-computed.tex", "w") as f:
@@ -194,4 +200,3 @@ def collect_data():
 
 if __name__ == '__main__':
     collect_data()
-        

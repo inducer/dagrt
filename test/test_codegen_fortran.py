@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from __future__ import division, with_statement
+from __future__ import division, with_statement, print_function
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
 
@@ -46,9 +46,10 @@ def test_basic_codegen():
                     expression=0, component_id='state',
         depends_on=[]))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-        instructions=cbuild.instructions, step_dep_on=['return'],
-        step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions, step_dep_on=['return'],
+            step_before_fail=False)
     codegen = FortranCodeGenerator("simple",
             ode_component_type_map={
                 "state": FortranType('real (kind=8)', (200,))
@@ -56,13 +57,118 @@ def test_basic_codegen():
     print(codegen(code))
 
 
-@pytest.mark.parametrize("stepper", [
-    ODE23TimeStepper(use_high_order=False),
-    ODE23TimeStepper(use_high_order=True),
-    ODE45TimeStepper(use_high_order=False),
-    ODE45TimeStepper(use_high_order=True),
+def run_fortran(sources):
+    from utils import TemporaryDirectory
+    from os.path import join
+
+    with TemporaryDirectory() as tmpdir:
+        source_names = []
+        for name, contents in sources:
+            source_names.append(name)
+
+            with open(join(tmpdir, name), "w") as srcf:
+                srcf.write(contents)
+
+        from subprocess import check_call, Popen, PIPE
+        check_call(
+                ["gfortran", "-g", "-oruntest"] + list(source_names),
+                cwd=tmpdir)
+
+        p = Popen([join(tmpdir, "runtest")], stdout=PIPE, stderr=PIPE,
+                close_fds=True)
+        stdout_data, stderr_data = p.communicate()
+
+        if stderr_data:
+            raise RuntimeError("Fortran code has non-empty stderr:\n"+stderr_data)
+
+        return p.returncode, stdout_data, stderr_data
+
+
+# {{{ test rk methods
+
+TEST_RK_F90 = """
+program test_rkmethod
+  use RKMethod, only: leap_state_type, &
+    timestep_initialize => initialize, &
+    timestep_shutdown => shutdown, &
+    leap_state_func_initialization, &
+    leap_state_func_primary
+
+  implicit none
+
+  type(leap_state_type), target :: state
+  type(leap_state_type), pointer :: state_ptr
+
+  real*8, dimension(2) :: initial_condition, true_sol
+  integer, dimension(2) :: nsteps
+
+  integer run_count
+  real*8 t_fin
+  parameter (run_count=2, t_fin=1d0)
+
+  real*8, dimension(run_count):: dt_values, errors
+
+  real*8 est_order, min_order
+
+  integer stderr
+  parameter(stderr=0)
+
+  integer istep, irun
+
+  ! start code ----------------------------------------------------------------
+
+  state_ptr => state
+
+  initial_condition(1) = 2
+  initial_condition(2) = 2.3
+  true_sol = initial_condition * exp(-2*t_fin)
+
+  nsteps(1) = 20
+  nsteps(2) = 50
+
+  do irun = 1,run_count
+    dt_values(irun) = t_fin/nsteps(irun)
+
+    call timestep_initialize( &
+      leap_state=state_ptr, &
+      state_y=initial_condition, &
+      leap_t=0d0, &
+      leap_dt=dt_values(irun))
+
+    call leap_state_func_initialization(leap_state=state_ptr)
+    do istep = 1,nsteps(irun)
+      call leap_state_func_primary(leap_state=state_ptr)
+      write(*,*) state%ret_state_y
+    enddo
+
+    errors(irun) = sqrt(sum((true_sol-state%ret_state_y)**2))
+
+    write(*,*) errors
+
+    call timestep_shutdown(leap_state=state_ptr)
+    write(*,*) 'done'
+  enddo
+
+  min_order = MIN_ORDER
+  est_order = log(errors(2)/errors(1))/log(dt_values(2)/dt_values(1))
+
+  write(*,*) 'estimated order:', est_order
+  if (est_order < min_order) then
+    write(stderr,*) 'ERROR: achieved order too low:', est_order, ' < ', &
+        min_order
+  endif
+
+end program
+"""
+
+
+@pytest.mark.parametrize(("min_order", "stepper"), [
+    (2, ODE23TimeStepper(use_high_order=False)),
+    (3, ODE23TimeStepper(use_high_order=True)),
+    (4, ODE45TimeStepper(use_high_order=False)),
+    (5, ODE45TimeStepper(use_high_order=True)),
     ])
-def test_rk_codegen(stepper):
+def test_rk_codegen(min_order, stepper):
     """Test whether Runge-Kutta timestepper code generation works."""
 
     component_id = 'y'
@@ -88,10 +194,14 @@ def test_rk_codegen(stepper):
             ! use ModStuff
             """)
 
-    print(codegen(code))
+    run_fortran([
+        ("rkmethod.f90", codegen(code)),
+        ("test_rk.f90", TEST_RK_F90.replace("MIN_ORDER", str(min_order - 0.3)+"d0")),
+        ])
+
+# }}}
 
 
-@skip  # FIXME remove when done
 def test_multirate_codegen():
     from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
     from leap.method.ab.multirate.methods import methods
@@ -113,10 +223,14 @@ def test_multirate_codegen():
             "<func>s2f",
             "<func>f2f",
             ]:
-        component_id = func_name[-1]
+        component_id = {
+                "s": "slow",
+                "f": "fast",
+                }[func_name[-1]]
         freg = register_ode_rhs(freg, identifier=func_name,
                 component_id=component_id,
-                input_component_ids=("s", "f"))
+                input_component_ids=("slow", "fast"),
+                input_component_names=("s", "f"))
         freg = freg.register_codegen(func_name, "fortran",
                 FortranCallCode("""
                     ${assignee} = -2*${f} + ${s}
@@ -125,8 +239,8 @@ def test_multirate_codegen():
     codegen = FortranCodeGenerator(
             'RKMethod',
             ode_component_type_map={
-                "s": FortranType('real (kind=8)', (200,), ),
-                "f": FortranType('real (kind=8)', (300,), )
+                "slow": FortranType('real (kind=8)', (200,), ),
+                "fast": FortranType('real (kind=8)', (300,), )
                 },
             function_registry=freg,
             module_preamble="""

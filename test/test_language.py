@@ -30,12 +30,16 @@ from leap.vm.language import (CodeBuilder, SimpleCodeBuilder,
 from pymbolic import var
 from pymbolic.primitives import Comparison
 
+from leap.vm.exec_numpy import NumpyInterpreter  # noqa
+from leap.vm.codegen import PythonCodeGenerator  # noqa
+
 
 def test_SimpleCodeBuilder_yield(execute_and_return_single_result):
     cb = CodeBuilder()
     with SimpleCodeBuilder(cb) as builder:
         yield_ = builder.yield_state(1, 'x', 0, 'final')
-    code = TimeIntegratorCode([], yield_, cb.instructions, True)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            [], yield_, cb.instructions, True)
     result = execute_and_return_single_result(code)
     assert result == 1
 
@@ -45,7 +49,8 @@ def test_SimpleCodeBuilder_assign(execute_and_return_single_result):
     with SimpleCodeBuilder(cb) as builder:
         builder.assign(var('x'), 1)
         yield_ = builder.yield_state(var('x'), 'x', 0, 'final')
-    code = TimeIntegratorCode([], yield_, cb.instructions, True)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            [], yield_, cb.instructions, True)
     result = execute_and_return_single_result(code)
     assert result == 1
 
@@ -57,7 +62,8 @@ def test_SimpleCodeBuilder_condition(execute_and_return_single_result):
         with builder.condition(Comparison(var('x'), '==', 1)):
             builder.assign(var('x'), 2)
         yield_ = builder.yield_state(var('x'), 'x', 0, 'final')
-    code = TimeIntegratorCode([], yield_, cb.instructions, True)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            [], yield_, cb.instructions, True)
     result = execute_and_return_single_result(code)
     assert result == 2
 
@@ -71,7 +77,8 @@ def test_SimpleCodeBuilder_nested_condition(execute_and_return_single_result):
             with builder.condition(Comparison(var('x'), '==', 2)):
                 builder.assign(var('x'), 3)
             yield_ = builder.yield_state(var('x'), 'x', 0, 'final')
-    code = TimeIntegratorCode([], yield_, cb.instructions, True)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            [], yield_, cb.instructions, True)
     result = execute_and_return_single_result(code)
     assert result == 3
 
@@ -82,7 +89,8 @@ def test_SimpleCodeBuilder_dependencies(execute_and_return_single_result):
         dependency = builder.assign(var('x'), 1)
     with SimpleCodeBuilder(cb, dependency) as builder:
         yield_ = builder.yield_state(var('x'), 'x', 0, 'final')
-    code = TimeIntegratorCode([], yield_, cb.instructions, True)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            [], yield_, cb.instructions, True)
     result = execute_and_return_single_result(code)
     assert result == 1
 

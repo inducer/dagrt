@@ -63,7 +63,7 @@ def test_convergence(problem, method, expected_order):
                 '<func>impl_' + component_id: problem.stiff
                 },
                 solver_map={'solver': ScipyRootSolver()})
-        interp.set_up(t_start=t_start, dt_start=dt, state={component_id: y_0})
+        interp.set_up(t_start=t_start, dt_start=dt, context={component_id: y_0})
         interp.initialize()
 
         times = []
@@ -114,7 +114,7 @@ def test_kaps_problem(problem, method, rel_error_bound):
             '<func>impl_' + component_id: problem.stiff
             },
             solver_map={'solver': ScipyRootSolver()})
-    interp.set_up(t_start=t_start, dt_start=dt, state={component_id: y_0})
+    interp.set_up(t_start=t_start, dt_start=dt, context={component_id: y_0})
     interp.initialize()
 
     times = []

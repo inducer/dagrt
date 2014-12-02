@@ -50,9 +50,10 @@ def test_circular_dependency_detection():
             expression=var('<state>y'), component_id='<state>',
         depends_on=['assign']))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-        instructions=cbuild.instructions, step_dep_on=['return'],
-        step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions, step_dep_on=['return'],
+            step_before_fail=False)
     codegen = PythonCodeGenerator(class_name='Method')
     try:
         codegen(code)
@@ -72,9 +73,10 @@ def test_missing_dependency_detection():
             expression=var('<state>y'), component_id='<state>',
             depends_on=['assign'])
         ])
-    code = TimeIntegratorCode(initialization_dep_on=[],
-        instructions=instructions, step_dep_on=['return'],
-        step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=instructions, step_dep_on=['return'],
+            step_before_fail=False)
     codegen = PythonCodeGenerator(class_name='Method')
     try:
         codegen(code)

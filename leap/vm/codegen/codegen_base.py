@@ -29,49 +29,6 @@ from .ir import AssignInst, JumpInst, BranchInst, ReturnInst, YieldStateInst, \
 from leap.vm.language import AssignExpression
 from leap.vm.utils import TODO
 
-from pytools import RecordWithoutPickling
-
-
-class NewTimeIntegratorCode(RecordWithoutPickling):
-    """
-    A TimeIntegratorCode with staging support. This will eventually replace
-    TimeIntegratorCode.
-
-    .. attribute:: instructions
-
-        is a list of Instruction instances, in no particular
-        order
-
-    .. attribute:: states
-
-        is a map from time integrator state names to lists of ids
-        corresponding to execution dependencies
-
-    .. attribute:: initial_state
-
-        the name of the starting state
-
-    .. attribute:: step_before_fail
-
-        is a boolean that indicates whether the described
-        method may generate state updates for a time step it later decides
-        to fail
-    """
-
-    @classmethod
-    def from_old(cls, code):
-        states = {}
-        states['initialization'] = code.initialization_dep_on
-        states['primary'] = code.step_dep_on
-        return cls(code.instructions, states, 'initialization',
-                   code.step_before_fail)
-
-    def __init__(self, instructions, states, initial_state, step_before_fail):
-        RecordWithoutPickling.__init__(self, instructions=instructions,
-                                       states=states,
-                                       initial_state=initial_state,
-                                       step_before_fail=step_before_fail)
-
 
 # {{{ structured code generator
 
@@ -97,10 +54,9 @@ class StructuredCodeGenerator(object):
         elif isinstance(node, IfThenElseNode):
             self.lower_node(node.if_node)
             self.lower_node(node.then_node)
-            self.emit_if_end()
             self.emit_else_begin()
             self.lower_node(node.else_node)
-            self.emit_else_end()
+            self.emit_if_end()
         elif isinstance(node, BlockNode):
             for node_item in node.node_list:
                 self.lower_node(node_item)
@@ -163,9 +119,6 @@ class StructuredCodeGenerator(object):
         raise NotImplementedError()
 
     def emit_else_begin(self):
-        raise NotImplementedError()
-
-    def emit_else_end(self):
         raise NotImplementedError()
 
     def emit_assign_expr(self, name, expr):

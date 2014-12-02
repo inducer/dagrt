@@ -3,7 +3,7 @@
 
 
 def main():
-    from setuptools import setup
+    from setuptools import setup, find_packages
 
     version_dict = {}
     init_filename = "leap/version.py"
@@ -26,6 +26,7 @@ def main():
               'License :: OSI Approved :: MIT License',
               'Natural Language :: English',
               'Programming Language :: Python',
+              'Programming Language :: Python :: 2.6',
               'Programming Language :: Python :: 2.7',
               'Programming Language :: Python :: 3.3',
               'Programming Language :: Python :: 3.4',
@@ -37,16 +38,8 @@ def main():
               'Topic :: Utilities',
               ],
 
-          packages=[
-              "leap",
-              "leap.method",
-              "leap.method.rk",
-              "leap.method.ab",
-              "leap.method.ab.multirate",
-              "leap.method.im_euler",
-              "leap.vm",
-              "leap.vm.codegen"
-              ],
+          packages=find_packages(),
+
           install_requires=[
               "numpy>=1.5",
               "scipy>=0.14",

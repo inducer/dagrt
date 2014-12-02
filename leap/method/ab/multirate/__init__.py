@@ -305,10 +305,11 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
             main_code = self.emit_ab_method(cbuild)
             epilogue = self.emit_epilogue(cbuild, main_code)
 
-        return TimeIntegratorCode(instructions=cbuild.instructions,
-                                  initialization_dep_on=initialization,
-                                  step_dep_on=epilogue,
-                                  step_before_fail=False)
+        return TimeIntegratorCode.create_with_init_and_step(
+                instructions=cbuild.instructions,
+                initialization_dep_on=initialization,
+                step_dep_on=epilogue,
+                step_before_fail=False)
 
 
 class MRABCodeEmitter(MRABProcessor):

@@ -69,7 +69,7 @@ class ControlFlowGraphSimplifier(object):
         for block in reachable:
             block.successors &= reachable
             block.predecessors &= reachable
-        all_blocks = {block for block in control_flow_graph}
+        all_blocks = set(control_flow_graph)
         changed = reachable != all_blocks
         if changed:
             control_flow_graph.update()
@@ -175,8 +175,9 @@ class AggressiveDeadCodeElimination(object):
         # Find all trivially essential instructions.
         essential = set()
         for block in control_flow_graph:
-            essential |= \
-                {inst for inst in block if self._is_trivially_essential(inst)}
+            essential.update(
+                inst for inst in block
+                if self._is_trivially_essential(inst))
 
         # Working backwards from the set of trivially essential instructions,
         # discover all essential instructions.
@@ -202,7 +203,7 @@ class AggressiveDeadCodeElimination(object):
     def _get_dependent_instructions(self, inst, reaching_definitions):
         definitions = reaching_definitions.get_reaching_definitions(inst)
         variables = inst.get_used_variables()
-        insts = {pair[1] for pair in definitions if pair[0] in variables}
+        insts = set(pair[1] for pair in definitions if pair[0] in variables)
         return insts
 
     def _is_trivially_essential(self, inst):

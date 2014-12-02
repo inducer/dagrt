@@ -118,6 +118,7 @@ State Instructions
 Code Container
 ~~~~~~~~~~~~~~
 
+.. autoclass:: TimeIntegratorState
 .. autoclass:: TimeIntegratorCode
 
 Visualization
@@ -461,39 +462,70 @@ class If(Instruction):
 
 # {{{ code container
 
+class TimeIntegratorState(RecordWithoutPickling):
+    """
+    .. attribute:: depends_on
+
+        a list of instruction IDs that need to be accomplished
+        for successful execution of one round of this state
+
+    .. attribute:: next_state
+
+        name of the next state after this one, if no other state
+        is specified by the user.
+    """
+
+    def __init__(self, depends_on, next_state):
+        super(TimeIntegratorState, self).__init__(
+                depends_on=depends_on,
+                next_state=next_state)
+
+
 class TimeIntegratorCode(RecordWithoutPickling):
     """
-    .. attribute:: initialization_dep_on
-
-        List of instruction ids (not including their recursive dependencies) to
-        be executed for initialization of the time integrator.
-
-    .. attribute:: step_dep_on
-
-        List of instruction ids (not including their recursive dependencies) to
-        be executed for one time step.
-
     .. attribute:: instructions
 
-        A list of :class:`Instruction` instances, in no particular order.
+        is a list of Instruction instances, in no particular
+        order
+
+    .. attribute:: states
+
+        is a map from time integrator state names to :class:`TimeIntegratorState`
+        instances
+
+    .. attribute:: initial_state
+
+        the name of the starting state
 
     .. attribute:: step_before_fail
 
-        Whether the described method may generate state updates (using
-        :class:`YieldState`) for a time step it later decides to fail
-        (using :class:`FailStep`).
+        is a boolean that indicates whether the described
+        method may generate state updates for a time step it later decides
+        to fail
     """
 
-    def __init__(self,
-            initialization_dep_on,
-            step_dep_on,
-            instructions,
+    @classmethod
+    def create_with_init_and_step(cls,
+            initialization_dep_on, step_dep_on, instructions,
             step_before_fail):
-        RecordWithoutPickling.__init__(self,
-            initialization_dep_on=initialization_dep_on,
-            step_dep_on=step_dep_on,
-            instructions=instructions,
-            step_before_fail=step_before_fail)
+        states = {}
+        states['initialization'] = TimeIntegratorState(
+                initialization_dep_on,
+                next_state='primary')
+
+        states['primary'] = TimeIntegratorState(
+                step_dep_on,
+                next_state='primary')
+
+        return cls(instructions, states, 'initialization',
+                   step_before_fail)
+
+    def __init__(self, instructions, states, initial_state, step_before_fail):
+        assert not isinstance(states, list)
+        RecordWithoutPickling.__init__(self, instructions=instructions,
+                                       states=states,
+                                       initial_state=initial_state,
+                                       step_before_fail=step_before_fail)
 
     @property
     @memoize_method
@@ -866,15 +898,11 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
                     "%s -> %s  [label=\"%s\", style=dashed]"
                     % (insn_2, insn_1, annot))
 
-    lines.append("subgraph cluster_1 { label=\"initialization\"")
-    for dep in code.initialization_dep_on:
-        lines.append(dep)
-    lines.append("}")
-
-    lines.append("subgraph cluster_2 { label=\"step\"")
-    for dep in code.step_dep_on:
-        lines.append(dep)
-    lines.append("}")
+    for name, state in six.iteritems(code.states):
+        lines.append("subgraph %s { label=\"%s\"" % (name, name))
+        for dep in state.depends_on:
+            lines.append(dep)
+        lines.append("}")
 
     return "digraph leap_code {\n%s\n}" % (
             "\n".join(lines)

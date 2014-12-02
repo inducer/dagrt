@@ -48,7 +48,7 @@ class ControlNode(RecordWithoutPickling):
         predecessors' sets of successors.
         """
         for predecessor in self.predecessors - exclude:
-            predecessor.successors -= {old_successor}
+            predecessor.successors -= set([old_successor])
             predecessor.successors.add(self)
 
     def update_successors(self, old_predecessor, exclude=frozenset()):
@@ -56,7 +56,7 @@ class ControlNode(RecordWithoutPickling):
         successors' sets of predecessors.
         """
         for successor in self.successors - exclude:
-            successor.predecessors -= {old_predecessor}
+            successor.predecessors -= set([old_predecessor])
             successor.predecessors.add(self)
 
     # RecordWithoutPickling.__repr__() is really slow on control trees.
@@ -72,7 +72,7 @@ class SingleNode(ControlNode):
 
     def __init__(self, basic_block):
         """Note: Does not set the successors and predecessors."""
-        super(SingleNode, self).__init__(nodes={basic_block},
+        super(SingleNode, self).__init__(nodes=set([basic_block]),
                                          basic_block=basic_block,
                                          entry_block=basic_block,
                                          exit_block=basic_block)
@@ -121,7 +121,7 @@ class IfThenNode(ControlNode):
     """
 
     def __init__(self, if_node, then_node):
-        super(IfThenNode, self).__init__(nodes={if_node, then_node},
+        super(IfThenNode, self).__init__(nodes=set([if_node, then_node]),
                                          if_node=if_node,
                                          then_node=then_node,
                                          entry_block=if_node.entry_block)
@@ -130,7 +130,7 @@ class IfThenNode(ControlNode):
         self.update_predecessors(if_node)
 
         self.successors |= then_node.successors
-        self.update_successors(if_node, exclude={then_node})
+        self.update_successors(if_node, exclude=set([then_node]))
         self.update_successors(then_node)
 
 
@@ -152,8 +152,8 @@ class IfThenElseNode(ControlNode):
     """
 
     def __init__(self, if_node, then_node, else_node):
-        super(IfThenElseNode, self).__init__(nodes={if_node, then_node,
-                                                    else_node},
+        super(IfThenElseNode, self).__init__(nodes=set([if_node, then_node,
+                                                    else_node]),
                                              if_node=if_node,
                                              then_node=then_node,
                                              else_node=else_node,

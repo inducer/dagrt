@@ -43,7 +43,7 @@ class InstructionDAGVerifier(object):
         is a human-readable list of errors detected by the verifier.
     """
 
-    def __init__(self, instructions, *dependency_lists):
+    def __init__(self, instructions, dependency_lists):
         """
         :arg instructions: A set of instructions to verify
         :arg dependency_lists: A list of sets of instruction ids. Each set of
@@ -127,9 +127,11 @@ class CodeGenerationWarning(UserWarning):
 def verify_code(code):
     """Verify that the DAG is well-formed."""
     from .analysis import InstructionDAGVerifier
-    verifier = InstructionDAGVerifier(code.instructions,
-                                      code.initialization_dep_on,
-                                      code.step_dep_on)
+    verifier = InstructionDAGVerifier(
+            code.instructions,
+            [state.depends_on
+                for state in code.states.values()])
+
     if verifier.errors:
         raise CodeGenerationError(verifier.errors)
     if verifier.warnings:

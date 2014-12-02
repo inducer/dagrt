@@ -85,7 +85,7 @@ class InstructionDAGEntryExitAugmenter(object):
         instruction while the exit instruction depends on the set
         instructions_dep_on.
         """
-        ids = {inst.id for inst in instructions}
+        ids = set(inst.id for inst in instructions)
         entry_id = get_unique_name('entry', ids)
         exit_id = get_unique_name('exit', ids)
         augmented_instructions = set()
@@ -274,15 +274,15 @@ class FlagTracker(object):
         """Return a new flag analysis object with the given flag set to true.
         """
         return FlagTracker(self._all_flags,
-                           self._must_be_true | {flag},
-                           self._must_be_false - {flag})
+                           self._must_be_true | set([flag]),
+                           self._must_be_false - set([flag]))
 
     def set_false(self, flag):
         """Return a new flag analysis object with the given flag set to false.
         """
         return FlagTracker(self._all_flags,
-                           self._must_be_true - {flag},
-                           self._must_be_false | {flag})
+                           self._must_be_true - set([flag]),
+                           self._must_be_false | set([flag]))
 
     def is_definitely_true(self, flag):
         """Determine if the flag must be set to true."""

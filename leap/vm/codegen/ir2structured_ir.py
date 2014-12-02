@@ -145,9 +145,9 @@ class StructuralExtractor(object):
         block_nodes = dict((block, SingleNode(block)) for block in function)
         # Add successors / predecessors to block nodes.
         for block, node in block_nodes.items():
-            node.successors |= {block_nodes[succ] for succ in block.successors}
-            node.predecessors |= {block_nodes[pred] for pred in
-                                  block.predecessors}
+            node.successors.update(block_nodes[succ] for succ in block.successors)
+            node.predecessors.update(
+                    block_nodes[pred] for pred in block.predecessors)
 
         nodes = list(reversed([block_nodes[node] for node in
                                function.postorder()]))

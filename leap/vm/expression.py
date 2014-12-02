@@ -67,8 +67,9 @@ class EvaluationMapper(EvaluationMapperBase):
         else:
             raise ValueError("Call to unknown function: " + str(function_name))
         evaluated_parameters = (self.rec(param) for param in parameters)
-        evaluated_kw_parameters = {param_id: self.rec(param)
-             for param_id, param in six.iteritems(kw_parameters)}
+        evaluated_kw_parameters = dict(
+                (param_id, self.rec(param))
+                for param_id, param in six.iteritems(kw_parameters))
         return function(*evaluated_parameters, **evaluated_kw_parameters)
 
     def map_call(self, expr):
