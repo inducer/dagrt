@@ -96,7 +96,7 @@ Assignment Instructions
 
 .. autoclass:: AssignRHS
 
-.. autoclass:: AssignSolvedRHS
+.. autoclass:: AssignSolved
 
 .. autoclass:: AssignExpression
 
@@ -224,29 +224,23 @@ def AssignRHS(
             id=id, depends_on=depends_on)
 
 
-class AssignSolvedRHS(Instruction):
-    # FIXME: We should allow vectorization over multiple inputs/outputs
-    # Pure vectorization is not enough here. We may want some amount
-    # of tensor product expression flexibility.
-
-    # FIXME This needs some thought.
+class AssignSolved(Instruction):
     """
-    .. attribute:: assignees
+    .. attribute:: assignee
 
-        A tuple of strings, the name of the variables being assigned to.
+        The name of the variable being solved to
 
-    .. attribute:: solve_components
+    .. attribute:: solve_component
 
-        A tuple of variables, the components to be solved for.
+        The component to be solved for
 
-    .. attribute:: solver_parameters
+    .. attribute:: guess
 
-        A dictionary that is used to pass additional attributes to the solver.
+        A value for the initial guess
 
-    .. attribute:: expressions
+    .. attribute:: expression
 
-        A list of expressions to be passed to the solver. The solver will find
-        a simultaneous root of the expressions.
+        An expression for which a root will be found
 
     .. attribute:: solver_id
 
@@ -256,28 +250,27 @@ class AssignSolvedRHS(Instruction):
         code generation stage.
     """
 
-    exec_method = six.moves.intern("exec_AssignSolvedRHS")
+    exec_method = six.moves.intern("exec_AssignSolved")
 
     def get_assignees(self):
-        return frozenset(self.assignees)
+        return frozenset([self.assignee])
 
     def get_read_variables(self):
         # Variables can be read by:
         #  1. expressions (except for the solve_component)
         #  2. expressions in solver_parameters
         variables = set()
-        for expression in self.expressions:
-            variables |= get_variables(expression)
-        variables -= set(self.solve_components)
-        # TODO: Implement #2.
+        variables |= get_variables(self.expression)
+        variables -= set([self.solve_component])
+        variables |= get_variables(self.guess)
         return variables
 
     def __str__(self):
         lines = []
         lines.append('{assignee} <- {solve_component} such that\n'.format(
-                assignee=self.assignees[0],
-                solve_component=self.solve_components[0]))
-        for expression in self.expressions:
+                assignee=self.assignee,
+                solve_component=self.solve_component))
+        for expression in [self.expression]:
             lines.append('  {expression} = 0'.format(expression=expression))
         return "\n".join(lines)
 
@@ -718,6 +711,10 @@ class SimpleCodeBuilder(object):
         self._added_instructions = False
         self._dependency_stack = [frozenset()]
 
+    def fresh_var(self, prefix="temp"):
+        from pymbolic import var
+        return var(self.cbuild.fresh_var_name(prefix))
+
     @property
     def last_added_instruction_id(self):
         """Return a singleton list containing the last instruction id
@@ -743,6 +740,20 @@ class SimpleCodeBuilder(object):
                              expression=expression,
                              depends_on=self._next_dependency_set)
             )
+        self._update_dependency_stack(instruction_ids)
+        return instruction_ids
+
+    def assign_solved(self, assignee, solve_component, expression, guess,
+                      solver_id):
+        instruction_ids = self.cbuild.add_and_get_ids(
+            AssignSolved(
+                assignee=assignee.name,
+                solve_component=solve_component,
+                guess=guess,
+                expression=expression,
+                solver_id=solver_id,
+                depends_on=self._next_dependency_set
+            ))
         self._update_dependency_stack(instruction_ids)
         return instruction_ids
 

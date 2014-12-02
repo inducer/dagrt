@@ -27,8 +27,10 @@ THE SOFTWARE.
 
 from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
 from pymbolic.mapper.dependency import DependencyMapper
+from pymbolic.mapper import CombineMapper, IdentityMapper
 
 import logging
+import operator
 import six.moves
 
 logger = logging.getLogger(__name__)
@@ -77,5 +79,150 @@ class EvaluationMapper(EvaluationMapperBase):
                                      expr.kw_parameters)
 
 # }}}
+
+
+class _ConstantFindingMapper(CombineMapper):
+    """Classify subexpressions according to whether they are "constant"
+    (have no free variables) or not.
+    TODO: CSE caching
+    """
+
+    def __init__(self, free_variables):
+        self.free_variables = free_variables
+        self.node_stack = []
+
+    def __call__(self, expr):
+        self.is_constant = {}
+        for variable in self.free_variables:
+            self.is_constant[variable] = False
+        self.node_stack.append(expr)
+        CombineMapper.__call__(self, expr)
+        return self.is_constant
+
+    def rec(self, expr):
+        self.node_stack.append(expr)
+        return CombineMapper.rec(self, expr)
+
+    def combine(self, exprs):
+        current_expr = self.node_stack.pop()
+        result = six.moves.reduce(operator.and_, exprs)
+        self.is_constant[current_expr] = result
+        return result
+
+    def map_constant(self, expr):
+        self.node_stack.pop()
+        self.is_constant[expr] = True
+        return True
+
+    map_function_symbol = map_constant
+
+    def map_variable(self, expr):
+        self.node_stack.pop()
+        result = expr not in self.free_variables
+        self.is_constant[expr] = result
+        return result
+
+
+class _ExpressionCollapsingMapper(IdentityMapper):
+    """Create a new expression that collapses constant expressions
+    (subexpressions with no free variables). Return the new expression
+    and an assignment that converts the input to the new expression.
+    TODO: CSE caching
+    """
+
+    def __init__(self, free_variables):
+        self.constant_finding_mapper = _ConstantFindingMapper(free_variables)
+
+    def __call__(self, expr, new_var_func):
+        self.new_var_func = new_var_func
+        self.is_constant = self.constant_finding_mapper(expr)
+        self.assignments = {}
+        result = IdentityMapper.__call__(self, expr)
+        return result, self.assignments
+
+    def is_primitive_or_var(self, expr):
+        import pymbolic.primitives as primitives
+        return isinstance(expr, primitives.Variable) or \
+            isinstance(expr, primitives.VALID_CONSTANT_CLASSES)
+
+    def get_copy(self, expr):
+        return IdentityMapper()(expr)
+
+    def rec(self, expr):
+        if self.is_primitive_or_var(expr) or not self.is_constant[expr]:
+            return IdentityMapper.rec(self, expr)
+        else:
+            new_var = self.new_var_func()
+            self.assignments[new_var] = expr
+            return new_var
+
+    def map_commut_assoc(self, expr, combine_func):
+        # Classify children according to whether they are constant or
+        # non-constant. If children are non-constant, it's possible that
+        # subexpressions of the children are still constant, so recurse
+        # on the non-constant children.
+        constants = []
+        non_constants = []
+        for child in expr.children:
+            if self.is_constant[child]:
+                constants.append(child)
+            else:
+                non_constants.append(self.rec(child))
+
+        constants = tuple(constants)
+        non_constants = tuple(non_constants)
+
+        # Return the combined sum/product of the constants and
+        # non-constants. Take special care to ensure that the
+        # constructed sum/product is a binary expression; if not, return
+        # whichever leaf is non-empty in place of returning the binary
+        # expression.
+        if not constants:
+            assert non_constants
+            if len(non_constants) > 1:
+                return self.get_copy(combine_func(non_constants))
+            else:
+                return self.non_constants[0]
+
+        if len(constants) == 1 and self.is_primitive_or_var(constants[0]):
+            folded_constants = (constants[0],)
+        else:
+            new_var = self.new_var_func()
+            self.assignments[new_var] = constants[0] \
+                if len(constants) == 1 else combine_func(constants)
+            folded_constants = (new_var,)
+
+        if non_constants:
+            return self.get_copy(
+                combine_func(folded_constants + non_constants))
+        else:
+            return folded_constants[0]
+
+    def map_product(self, expr):
+        from pymbolic.primitives import Product
+        return self.map_commut_assoc(expr, Product)
+
+    def map_sum(self, expr):
+        from pymbolic.primitives import Sum
+        return self.map_commut_assoc(expr, Sum)
+
+
+def collapse_constants(expression, free_variables, assign_func, new_var_func):
+    """
+    Emit a sequence of calls that combine the constant subexpressions in
+    the input.  Return the expression that results from collapsing all
+    the constant subexpressions.
+
+    :arg expression: A pymbolic expression
+    :arg free_variables: The list of free variables in the expression
+    :arg assign_func: A function to call to assign a variable to a constant
+                      subexpression
+    :arg new_var_func: A function to call to make a new variable
+    """
+    mapper = _ExpressionCollapsingMapper(free_variables)
+    new_expression, variable_map = mapper(expression, new_var_func)
+    for variable, expr in variable_map.items():
+        assign_func(variable, expr)
+    return new_expression
 
 # vim: foldmethod=marker

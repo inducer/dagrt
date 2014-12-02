@@ -322,7 +322,7 @@ class SymbolKindFinder(object):
             func_name, insn = insn_queue.pop()
 
             if isinstance(insn, ir.AssignInst):
-                if isinstance(insn.assignment, lang.AssignSolvedRHS):
+                if isinstance(insn.assignment, lang.AssignSolved):
                     made_progress = True
                     from leap.vm.utils import TODO
                     raise TODO()

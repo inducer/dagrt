@@ -97,20 +97,25 @@ class EmbeddedRungeKuttaMethod(Method):
 
         cbuild.add_and_get_ids(
             AssignNorm("norm_start_state", state,
+                       depends_on=last_step_work_ids,
                        id="compute_state_norm"),
-            AssignNorm("norm_end_state", low_order_end_state),
+            AssignNorm("norm_end_state", low_order_end_state,
+                       depends_on=last_step_work_ids,
+                       id="compute_end_state_norm"),
             AssignNorm("rel_error_raw",
                        (high_order_end_state - low_order_end_state) / (
                            var("<builtin>len")(state) ** 0.5
                            *
                            (self.atol + self.rtol * Max((
                                     var("norm_start_state"),
-                                    var("norm_end_state")))))
-                       ),
+                                    var("norm_end_state"))))),
+                       id="compute_rel_error_raw",
+                       depends_on=["compute_state_norm", "compute_end_state_norm"]),
             If(
                 condition=Comparison(var("rel_error_raw"), "==", 0),
                 then_depends_on=["rel_err_zero"],
                 else_depends_on=["rel_err_nonzero"],
+                depends_on=["compute_rel_error_raw"],
                 id="rel_error_zero_check"),
             # then
             AssignExpression("rel_error", var("rel_error_raw"),

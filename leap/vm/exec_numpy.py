@@ -24,7 +24,6 @@ THE SOFTWARE.
 
 from collections import namedtuple
 import numpy as np
-import scipy.optimize
 from leap.vm.expression import EvaluationMapper
 import six
 
@@ -71,11 +70,12 @@ class NumpyInterpreter(object):
         """
 # }}}
 
-    def __init__(self, code, function_map):
+    def __init__(self, code, function_map, solver_map={}):
         """
         :arg code: an instance of :class:`leap.vm.TimeIntegratorCode`
         :arg function_map: a mapping from function identifiers to functions
         """
+        self.solvers = solver_map
         self.code = code
         from leap.vm.language import ExecutionController
         self.exec_controller = ExecutionController(code)
@@ -163,40 +163,14 @@ class NumpyInterpreter(object):
 
     # {{{ execution methods
 
-    def exec_AssignSolvedRHS(self, insn):
-
-        class FunctionWithContext(object):
-
-            def __init__(self, expression, arg_name, context, functions):
-                self.eval_mapper = EvaluationMapper(self, functions)
-                self.expression = expression
-                self.arg_name = arg_name
-                self.context = context
-
-            def __call__(self, arg):
-                self.value = arg
-                return self.eval_mapper(self.expression)
-
-            def __getitem__(self, name):
-                if name == self.arg_name:
-                    return self.value
-                else:
-                    return self.context[name]
-
-        func = FunctionWithContext(insn.expressions[0],
-                                   insn.solve_components[0].name, self.state,
-                                   self.functions)
-
-        if insn.solver_id == 'newton':
-            guess = self.eval_mapper(insn.solver_parameters['initial_guess'])
-            self.state[insn.assignees[0]] = scipy.optimize.newton(func, guess)
-        elif insn.solver_id == 'broyden':
-            guess = self.eval_mapper(insn.solver_parameters['initial_guess'])
-            result = scipy.optimize.root(func, guess, method='broyden1')
-            assert result.success
-            self.state[insn.assignees[0]] = result.x
-        else:
-            raise ValueError('Unknown solver id: ' + str(insn.solver_id))
+    def exec_AssignSolved(self, insn):
+        guess = self.eval_mapper(insn.guess)
+        solver = self.solvers[insn.solver_id]
+        result = solver.solve(insn.expression,
+                              insn.solve_component,
+                              self.state,
+                              self.functions, guess)
+        self.state[insn.assignee] = result
 
     def exec_YieldState(self, insn):
         return self.StateComputed(

@@ -29,9 +29,10 @@ THE SOFTWARE.
 
 
 from leap.method.rk import EmbeddedRungeKuttaMethod
+from leap.vm.expression import collapse_constants
 from pymbolic import var
 from pymbolic.primitives import CallWithKwargs
-from leap.vm.language import (AssignExpression, AssignSolvedRHS, CodeBuilder,
+from leap.vm.language import (CodeBuilder, SimpleCodeBuilder,
                               TimeIntegratorCode)
 
 
@@ -53,36 +54,23 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
 
         return initialization_deps
 
+    def _eval_rhs(self, rhs, y, t):
+        return CallWithKwargs(rhs, parameters=(),
+                              kw_parameters={"t": t, self._component_id: y})
+
     def _update_rhs_values(self, cbuild, depends_on):
         """Add code to assign to the explicit and implicit RHSs. Return the
         list of instruction ids."""
 
-        return cbuild.add_and_get_ids(
-            AssignExpression(
-                assignee=self._rhs_expl.name,
-                expression=CallWithKwargs(
-                    function=self._rhs_expl_function,
-                    parameters=(),
-                    kw_parameters={
-                        't': self._t,
-                        self._component_id: self._state
-                    }),
-                depends_on=depends_on
-                ),
-            AssignExpression(
-                assignee=self._rhs_impl.name,
-                expression=CallWithKwargs(
-                    function=self._rhs_impl_function,
-                    parameters=(),
-                    kw_parameters={
-                        't': self._t,
-                        self._component_id: self._state
-                    }),
-                depends_on=depends_on
-                )
-            )
+        with SimpleCodeBuilder(cbuild, depends_on) as builder:
+            builder.assign(self._rhs_expl, self._eval_rhs(
+                    self._rhs_expl_function, self._state, self._t))
+            builder.assign(self._rhs_impl, self._eval_rhs(
+                    self._rhs_impl_function, self._state, self._t))
 
-    def _finish_solution(self, cbuild, dest, coeffs, explicit_rhss,
+        return builder.last_added_instruction_id
+
+    def _finish_solution(self, builder, dest, coeffs, explicit_rhss,
                          implicit_rhss):
         """Add code to build the final component in the primary stage. Return
         the list of instruction ids.
@@ -104,12 +92,8 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
                                          explicit_rhss + implicit_rhss)
                                      if coeff]
 
-        return cbuild.add_and_get_ids(
-            AssignExpression(
-                assignee=dest.name,
-                expression=sum(arg[0] * arg[1] for arg in args)
-                )
-            )
+        builder.assign(dest, sum(arg[0] * arg[1] for arg in args))
+        return builder.last_added_instruction_id
 
     def _emit_primary(self, cbuild):
         """Add code to drive the primary stage. Return the list of instruction
@@ -117,123 +101,97 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
 
         explicit_rhss = []
         implicit_rhss = []
-        last_dependencies = []
 
-        # Stage loop
+        with SimpleCodeBuilder(cbuild) as builder:
 
-        for c, coeffs_expl, coeffs_impl in \
-                zip(self.c, self.a_explicit, self.a_implicit):
+            # Stage loop
+            for c, coeffs_expl, coeffs_impl in \
+                    zip(self.c, self.a_explicit, self.a_implicit):
 
-            if len(coeffs_expl) == 0:
-                assert c == 0
-                assert len(coeffs_impl) == 0
-                this_rhs_expl = self._rhs_expl
-                this_rhs_impl = self._rhs_impl
+                if len(coeffs_expl) == 0:
+                    assert c == 0
+                    assert len(coeffs_impl) == 0
+                    this_rhs_expl = self._rhs_expl
+                    this_rhs_impl = self._rhs_impl
+                else:
+                    assert len(coeffs_expl) == len(explicit_rhss)
+                    assert len(coeffs_impl) == len(implicit_rhss)
+
+                    args = [(1, self._state)] + [
+                        (self._dt * coeff, erhs)
+                        for coeff, erhs in zip(
+                            coeffs_expl + coeffs_impl,
+                            explicit_rhss + implicit_rhss)
+                        if coeff]
+
+                    sub_y = sum(arg[0] * arg[1] for arg in args)
+
+                    # Compute the next implicit right hand side.
+                    # TODO: Compute a guess parameter using stage value
+                    # predictors.
+                    this_rhs_impl = var(cbuild.fresh_var_name('rhs_impl'))
+                    solve_component = var('rhs_impl*')
+                    solve_expression = collapse_constants(
+                        solve_component - self._eval_rhs(
+                            self._rhs_impl_function, sub_y + self.gamma *
+                            self._dt * solve_component,
+                            self._t + c * self._dt),
+                        [solve_component], builder.assign, builder.fresh_var)
+                    builder.assign_solved(this_rhs_impl, solve_component,
+                                          solve_expression, implicit_rhss[-1],
+                                          self._solver_id)
+
+                    # Compute the next explicit right hand side.
+                    this_rhs_expl = var(cbuild.fresh_var_name('rhs_expl'))
+                    builder.assign(this_rhs_expl, self._eval_rhs(
+                            self._rhs_expl_function, sub_y + self.gamma *
+                            self._dt * this_rhs_impl,
+                            self._t + c * self._dt))
+
+                explicit_rhss.append(this_rhs_expl)
+                implicit_rhss.append(this_rhs_impl)
+
+            if not self.adaptive:
+                state_update_ids = self._finish_solution(builder,
+                    self._state, self.high_order_coeffs if
+                    self.use_high_order else self.low_order_coeffs,
+                    explicit_rhss, implicit_rhss)
             else:
-                assert len(coeffs_expl) == len(explicit_rhss)
-                assert len(coeffs_impl) == len(implicit_rhss)
+                high_order_end_state = \
+                    var(cbuild.fresh_var_name('high_order_end_state'))
+                low_order_end_state = \
+                    var(cbuild.fresh_var_name('low_order_end_state'))
 
-                args = [(1, self._state)] + [
-                    (self._dt * coeff, erhs)
-                    for coeff, erhs in zip(
-                        coeffs_expl + coeffs_impl,
-                        explicit_rhss + implicit_rhss)
-                    if coeff]
+                adaptive_ids = set(self._finish_solution(builder,
+                    high_order_end_state, self.high_order_coeffs,
+                    explicit_rhss, implicit_rhss))
 
-                sub_y = sum(arg[0] * arg[1] for arg in args)
+                adaptive_ids |= set(self._finish_solution(builder,
+                    low_order_end_state, self.low_order_coeffs,
+                    explicit_rhss, implicit_rhss))
 
-                # Compute the next implicit right hand side.
-                # TODO: Compute a guess parameter using stage value predictors.
-                this_rhs_impl = var(cbuild.fresh_var_name('rhs_impl'))
-                solve_component = var('rhs_impl*')
-                last_dependencies = cbuild.add_and_get_ids(
-                    AssignSolvedRHS(
-                        assignees=(this_rhs_impl.name,),
-                        solve_components=(solve_component,),
-                        expressions=[
-                            solve_component -
-                            CallWithKwargs(
-                                function=self._rhs_impl_function,
-                                parameters=(),
-                                kw_parameters={
-                                    't': self._t + c * self._dt,
-                                    self._component_id: sub_y +
-                                    self.gamma * self._dt * solve_component
-                                    })
-                            ],
-                        solver_parameters={
-                            'initial_guess': implicit_rhss[-1]
-                            },
-                        solver_id=self._solver_id,
-                        depends_on=last_dependencies
-                        )
-                    )
-
-                last_dependencies = []
-
-                # Compute the next explicit right hand side.
-                this_rhs_expl = var(cbuild.fresh_var_name('rhs_expl'))
-                last_dependencies = cbuild.add_and_get_ids(
-                    AssignExpression(
-                        assignee=this_rhs_expl.name,
-                        expression=CallWithKwargs(
-                            function=self._rhs_expl_function,
-                            parameters=(),
-                            kw_parameters={
-                                't': self._t + c * self._dt,
-                                self._component_id: sub_y +
-                                self.gamma * self._dt * this_rhs_impl
-                                }),
-                        depends_on=last_dependencies)
-                    )
-
-                last_dependencies = []
-
-            explicit_rhss.append(this_rhs_expl)
-            implicit_rhss.append(this_rhs_impl)
+        # Done with the part that uses SimpleCodeBuilder. Finish the
+        # work by either incrementing t and returning the state or by
+        # adapting the step size.
 
         if not self.adaptive:
-            state_update_ids = self._finish_solution(cbuild,
-                self._state, self.high_order_coeffs if
-                self.use_high_order else self.low_order_coeffs,
-                explicit_rhss, implicit_rhss)
             last_work_ids = self.add_ret_state_and_increment_t(
                 cbuild, self._state, self._component_id,
                 self._t + self._dt, state_update_ids)
         else:
-            high_order_end_state = \
-                var(cbuild.fresh_var_name('high_order_end_state'))
-            low_order_end_state = \
-                var(cbuild.fresh_var_name('low_order_end_state'))
-
-            adaptive_ids = set(self._finish_solution(cbuild,
-                high_order_end_state, self.high_order_coeffs,
-                explicit_rhss, implicit_rhss))
-
-            adaptive_ids |= set(self._finish_solution(cbuild,
-                low_order_end_state, self.low_order_coeffs,
-                explicit_rhss, implicit_rhss))
-
             if self.limiter_name is not None:
                 limiter = var("<func>" + self.limiter_name)
             else:
                 limiter = lambda x: x
-
             last_work_ids = self.adapt_step_size(cbuild, self._state,
                                                  self._component_id,
                                                  self._t, self._dt,
                                                  high_order_end_state,
                                                  low_order_end_state,
                                                  adaptive_ids, limiter)
+            cbuild.commit()
 
-        exclude_names = [self._state.name, self._rhs_expl.name,
-                         self._rhs_impl.name, self._t.name,
-                         self._dt.name]
-        cbuild.infer_single_writer_dependencies(exclude=exclude_names)
-        rhs_update_ids = self._update_rhs_values(cbuild, last_work_ids)
-        cbuild.commit()
-
-        return rhs_update_ids
+        return self._update_rhs_values(cbuild, last_work_ids)
 
     def __call__(self, component_id, solver_id):
         self._dt = var('<dt>')

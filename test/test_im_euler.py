@@ -27,7 +27,15 @@ THE SOFTWARE.
 import sys
 
 from leap.method.im_euler import ImplicitEulerMethod
+from leap.vm.implicit import GenericNumpySolver
 import numpy as np
+import scipy.optimize
+
+
+class ScipyRootSolver(GenericNumpySolver):
+
+    def run_solver(self, func, guess):
+        return scipy.optimize.root(func, guess).x
 
 
 def test_im_euler_accuracy(show_dag=False, plot_solution=False):
@@ -61,7 +69,8 @@ def test_im_euler_accuracy(show_dag=False, plot_solution=False):
         y = y_0
         final_t = 1
 
-        interp = NumpyInterpreter(code, function_map={component_id: rhs})
+        interp = NumpyInterpreter(code, function_map={component_id: rhs},
+                                  solver_map={'newton': ScipyRootSolver()})
         interp.set_up(t_start=t, dt_start=dt, state={component_id: y})
         interp.initialize()
 

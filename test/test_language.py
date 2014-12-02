@@ -87,6 +87,26 @@ def test_SimpleCodeBuilder_dependencies(execute_and_return_single_result):
     assert result == 1
 
 
+def test_collapse_constants():
+    from pymbolic import var
+    f = var("f")
+    y = var("y")
+    t = var("t")
+    dt = var("dt")
+    expr = y - f(t + dt, y)
+    from leap.vm.expression import collapse_constants
+    from pymbolic import var
+
+    def new_var_func():
+        return var("var")
+
+    def assign_func(variable, expr):
+        assert variable == var("var")
+        assert expr == t + dt
+
+    collapse_constants(expr, [y], assign_func, new_var_func)
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])

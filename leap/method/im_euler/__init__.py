@@ -25,7 +25,7 @@ THE SOFTWARE.
 """
 
 from leap.method import Method
-from leap.vm.language import (AssignExpression, AssignSolvedRHS, YieldState,
+from leap.vm.language import (AssignExpression, AssignSolved, YieldState,
                               TimeIntegratorCode, CodeBuilder)
 from pymbolic import var
 from pymbolic.primitives import CallWithKwargs
@@ -56,20 +56,18 @@ class ImplicitEulerMethod(Method):
         """Add code to drive the primary stage."""
 
         cbuild.add_and_get_ids(
-            AssignSolvedRHS(
-                assignees=(self._state.name,),
-                solve_components=(var('next_state'),),
-                expressions=[
-                    var('next_state') - self._state -
-                    self._dt * CallWithKwargs(
-                        function=var(self._component_id),
-                        parameters=(),
-                        kw_parameters={
-                            't': self._t + self._dt,
-                            self._component_id: var('next_state')
-                        })
-                    ],
-                solver_parameters={'initial_guess': self._state},
+            AssignSolved(
+                assignee=self._state.name,
+                solve_component=var('next_state'),
+                expression=var('next_state') - self._state -
+                self._dt * CallWithKwargs(
+                    function=var(self._component_id),
+                    parameters=(),
+                    kw_parameters={
+                        't': self._t + self._dt,
+                        self._component_id: var('next_state')
+                    }),
+                guess=self._state,
                 solver_id='newton',
                 id='step'),
             YieldState(

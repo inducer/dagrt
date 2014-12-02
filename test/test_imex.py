@@ -30,6 +30,14 @@ import sys
 
 from leap.method.rk.imex import KennedyCarpenterIMEXARK4
 from stiff_test_systems import KapsProblem, VanDerPolProblem
+from leap.vm.implicit import GenericNumpySolver
+import scipy.optimize
+
+
+class ScipyRootSolver(GenericNumpySolver):
+
+    def run_solver(self, func, guess):
+        return scipy.optimize.root(func, guess, method='broyden1').x
 
 
 @pytest.mark.parametrize("problem, method, expected_order", [
@@ -37,7 +45,7 @@ from stiff_test_systems import KapsProblem, VanDerPolProblem
     ])
 def test_convergence(problem, method, expected_order):
     component_id = "y"
-    code = method(component_id, solver_id='broyden')
+    code = method(component_id, solver_id='solver')
 
     from leap.vm.exec_numpy import NumpyInterpreter
     from pytools.convergence import EOCRecorder
@@ -53,7 +61,8 @@ def test_convergence(problem, method, expected_order):
         interp = NumpyInterpreter(code, function_map={
                 '<func>expl_' + component_id: problem.nonstiff,
                 '<func>impl_' + component_id: problem.stiff
-                })
+                },
+                solver_map={'solver': ScipyRootSolver()})
         interp.set_up(t_start=t_start, dt_start=dt, state={component_id: y_0})
         interp.initialize()
 
@@ -84,11 +93,11 @@ def test_convergence(problem, method, expected_order):
     assert orderest > 0.9 * expected_order
 
 
-@pytest.mark.parametrize("problem, method, error_bound", [
+@pytest.mark.parametrize("problem, method, rel_error_bound", [
     [KapsProblem(epsilon=0.001), KennedyCarpenterIMEXARK4(rtol=1.0e-6), 1.0e-6],
     [VanDerPolProblem(), KennedyCarpenterIMEXARK4(rtol=1.0e-6), None]
     ])
-def test_kaps_problem(problem, method, error_bound):
+def test_kaps_problem(problem, method, rel_error_bound):
     from leap.vm.exec_numpy import NumpyInterpreter
 
     component_id = 'y'
@@ -98,12 +107,13 @@ def test_kaps_problem(problem, method, error_bound):
     t_end = problem.t_end
     dt = 1.0e-2
 
-    code = method(component_id, solver_id='broyden')
+    code = method(component_id, solver_id='solver')
 
     interp = NumpyInterpreter(code, function_map={
             '<func>expl_' + component_id: problem.nonstiff,
             '<func>impl_' + component_id: problem.stiff
-            })
+            },
+            solver_map={'solver': ScipyRootSolver()})
     interp.set_up(t_start=t_start, dt_start=dt, state={component_id: y_0})
     interp.initialize()
 
@@ -132,9 +142,12 @@ def test_kaps_problem(problem, method, error_bound):
     times = np.array(times)
     values = np.array(values)
     assert abs(times[-1] - t_end) < 1e-10
-    if error_bound is not None:
-        error = np.linalg.norm(values[-1] - problem.exact(t_end))
-        assert error < error_bound
+    try:
+        exact = problem.exact(times[-1])
+        rel_error = np.linalg.norm(values[-1] - exact) / np.linalg.norm(exact)
+        assert rel_error < rel_error_bound
+    except NotImplementedError:
+        pass
 
 
 if __name__ == "__main__":
