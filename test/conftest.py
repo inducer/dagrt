@@ -47,7 +47,7 @@ def execute_and_return_single_result(python_method_impl):
 
     def run(code):
         interpreter = python_method_impl(code, function_map={})
-        interpreter.set_up(t_start=0, dt_start=0, state={})
+        interpreter.set_up(t_start=0, dt_start=0, context={})
         interpreter.initialize()
         events = [event for event in interpreter.run(t_end=0)]
         assert len(events) == 2

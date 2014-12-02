@@ -41,13 +41,14 @@ def test_basic_codegen():
                     expression=0, component_id='<state>',
         depends_on=[]))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-        instructions=cbuild.instructions, step_dep_on=['return'],
-        step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions, step_dep_on=['return'],
+            step_before_fail=False)
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
     method = Method({})
-    method.set_up(t_start=0, dt_start=0, state={})
+    method.set_up(t_start=0, dt_start=0, context={})
     method.initialize()
     hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
@@ -68,13 +69,14 @@ def test_basic_conditional_codegen():
             expression=var('<state>y'), component_id='<state>',
         depends_on=['branch']))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-        instructions=cbuild.instructions, step_dep_on=['return'],
-        step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions, step_dep_on=['return'],
+            step_before_fail=False)
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
     method = Method({})
-    method.set_up(t_start=0, dt_start=0, state={'y': 6})
+    method.set_up(t_start=0, dt_start=0, context={'y': 6})
     method.initialize()
     hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
@@ -101,9 +103,10 @@ def test_basic_assign_rhs_codegen():
             depends_on=['assign_rhs2'])
         )
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-        instructions=cbuild.instructions, step_dep_on=['return'],
-        step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions, step_dep_on=['return'],
+            step_before_fail=False)
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
 
@@ -114,7 +117,7 @@ def test_basic_assign_rhs_codegen():
         return y + 6
 
     method = Method({'y': y, 'yy': yy})
-    method.set_up(t_start=0, dt_start=0, state={'y': 0})
+    method.set_up(t_start=0, dt_start=0, context={'y': 0})
     method.initialize()
     hist = [s for s in method.run(t_end=0)]
     assert len(hist) == 2
@@ -129,13 +132,14 @@ def test_basic_raise_codegen():
     from leap.method import TimeStepUnderflow
     cbuild.add_and_get_ids(Raise(TimeStepUnderflow, "underflow", id="raise"))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-        instructions=cbuild.instructions, step_dep_on=["raise"],
-        step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions, step_dep_on=["raise"],
+            step_before_fail=False)
     codegen = PythonCodeGenerator(class_name="Method")
     Method = codegen.get_class(code)
     method = Method({})
-    method.set_up(t_start=0, dt_start=0, state={})
+    method.set_up(t_start=0, dt_start=0, context={})
     method.initialize()
     try:
         for result in method.run(t_end=0):
@@ -151,13 +155,14 @@ def test_basic_fail_step_codegen():
     cbuild = CodeBuilder()
     cbuild.add_and_get_ids(FailStep(id="fail"))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-        instructions=cbuild.instructions, step_dep_on=["fail"],
-        step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions, step_dep_on=["fail"],
+            step_before_fail=False)
     codegen = PythonCodeGenerator(class_name="Method")
     Method = codegen.get_class(code)
     method = Method({})
-    method.set_up(t_start=0, dt_start=0, state={})
+    method.set_up(t_start=0, dt_start=0, context={})
     method.initialize()
     assert isinstance(next(method.run(t_end=0)), method.StepFailed)
 
@@ -172,13 +177,14 @@ def test_local_name_distinctness():
             expression=var('y^') + var('y*'),
             component_id='y', depends_on=['assign_y^', 'assign_y*']))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-        instructions=cbuild.instructions, step_dep_on=['return'],
-        step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions, step_dep_on=['return'],
+            step_before_fail=False)
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
     method = Method({})
-    method.set_up(t_start=0, dt_start=0, state={})
+    method.set_up(t_start=0, dt_start=0, context={})
     method.initialize()
     hist = list(method.run(t_end=0))
     assert len(hist) == 2
@@ -196,13 +202,14 @@ def test_global_name_distinctness():
             expression=var('<p>y^') + var('<p>y*'),
             component_id='y', depends_on=['assign_y^', 'assign_y*']))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-        instructions=cbuild.instructions, step_dep_on=['return'],
-        step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions, step_dep_on=['return'],
+            step_before_fail=False)
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
     method = Method({})
-    method.set_up(t_start=0, dt_start=0, state={})
+    method.set_up(t_start=0, dt_start=0, context={})
     method.initialize()
     hist = list(method.run(t_end=0))
     assert len(hist) == 2
@@ -218,14 +225,15 @@ def test_function_name_distinctness():
             expression=var('<func>y^')() + var('<func>y*')(),
             component_id='y'))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-        instructions=cbuild.instructions, step_dep_on=['return'],
-        step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions, step_dep_on=['return'],
+            step_before_fail=False)
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
     method = Method({'<func>y^': lambda: 0,
                      '<func>y*': lambda: 1})
-    method.set_up(t_start=0, dt_start=0, state={})
+    method.set_up(t_start=0, dt_start=0, context={})
     method.initialize()
     hist = list(method.run(t_end=0))
     assert len(hist) == 2

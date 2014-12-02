@@ -44,10 +44,11 @@ def test_len(execute_and_return_single_result, len_):
                    expression=var('x'), component_id='<state>',
                    depends_on=['assign_1']))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-                              instructions=cbuild.instructions,
-                              step_dep_on=['return'],
-                              step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions,
+            step_dep_on=['return'],
+            step_before_fail=False)
     result = execute_and_return_single_result(code)
     assert result == len(test_vector)
 
@@ -62,10 +63,11 @@ def test_isnan(execute_and_return_single_result, value):
                    expression=var('x'), component_id='<state>',
                    depends_on=['assign_1']))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-                              instructions=cbuild.instructions,
-                              step_dep_on=['return'],
-                              step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions,
+            step_dep_on=['return'],
+            step_before_fail=False)
     result = execute_and_return_single_result(code)
     assert result == np.isnan(value)
 
@@ -85,10 +87,11 @@ def test_norm(execute_and_return_single_result, order):
                    expression=var('n'), component_id='<state>',
                    depends_on=['assign_2']))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-                              instructions=cbuild.instructions,
-                              step_dep_on=['return'],
-                              step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions,
+            step_dep_on=['return'],
+            step_before_fail=False)
     result = execute_and_return_single_result(code)
     expected_result = np.linalg.norm(test_vector, ord=order)
     assert np.isclose(result, expected_result)
@@ -105,10 +108,11 @@ def test_dot_product(execute_and_return_single_result, x, y):
                    expression=var('x'), component_id='<state>',
                    depends_on=['assign_1']))
     cbuild.commit()
-    code = TimeIntegratorCode(initialization_dep_on=[],
-                              instructions=cbuild.instructions,
-                              step_dep_on=['return'],
-                              step_before_fail=False)
+    code = TimeIntegratorCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions,
+            step_dep_on=['return'],
+            step_before_fail=False)
     result = execute_and_return_single_result(code)
     assert result == np.vdot(x, y)
 

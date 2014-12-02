@@ -168,7 +168,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
             cbuild.infer_single_writer_dependencies(exclude=dep_inf_exclude_names)
             cbuild.commit()
 
-            return TimeIntegratorCode(
+            return TimeIntegratorCode.create_with_init_and_step(
                     instructions=cbuild.instructions,
                     initialization_dep_on=initialization_dep_on,
                     step_dep_on=[
@@ -300,7 +300,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
             cbuild.infer_single_writer_dependencies(exclude=dep_inf_exclude_names)
             cbuild.commit()
 
-            return TimeIntegratorCode(
+            return TimeIntegratorCode.create_with_init_and_step(
                     instructions=cbuild.instructions,
                     initialization_dep_on=initialization_dep_on,
                     step_dep_on=["reject_check"],

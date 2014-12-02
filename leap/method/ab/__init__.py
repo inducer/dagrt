@@ -135,10 +135,11 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         step_dep_on = builder.last_added_instruction_id
 
-        return TimeIntegratorCode(instructions=cbuild.instructions,
-                                  initialization_dep_on=initialization_dep_on,
-                                  step_dep_on=step_dep_on,
-                                  step_before_fail=True)
+        return TimeIntegratorCode.create_with_init_and_step(
+                instructions=cbuild.instructions,
+                initialization_dep_on=initialization_dep_on,
+                step_dep_on=step_dep_on,
+                step_before_fail=True)
 
     def eval_rhs(self, t, y):
         """Return a node that evaluates the RHS at the given time and

@@ -96,8 +96,8 @@ def make_multirate_initial_conditions(dx_fast, ratio):
 
 def run_multirate_method(method, y_fast, y_slow, dt, t_start, t_end):
     """Run the given method and return the history."""
-    method.set_up(t_start=t_start, dt_start=dt, state={'fast': y_fast,
-                                                       'slow': y_slow})
+    method.set_up(t_start=t_start, dt_start=dt,
+            context={'fast': y_fast, 'slow': y_slow})
     method.initialize()
     history = [np.concatenate((y_slow, y_fast),)]
     for event in method.run(t_end=t_end):

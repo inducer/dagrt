@@ -73,8 +73,8 @@ class MultirateTimestepperAccuracyChecker(object):
 
         t = self.ode.t_start
         y = self.ode.initial_values
-        method.set_up(t_start=t, dt_start=dt, state={'fast': y[0],
-            'slow': y[1]})
+        method.set_up(t_start=t, dt_start=dt,
+                context={'fast': y[0], 'slow': y[1]})
         method.initialize()
         return method
 

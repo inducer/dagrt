@@ -89,7 +89,7 @@ def check_simple_convergence(method, method_impl, expected_order,
         final_t = problem.t_end
 
         interp = method_impl(code, function_map={component_id: problem})
-        interp.set_up(t_start=t, dt_start=dt, state={component_id: y})
+        interp.set_up(t_start=t, dt_start=dt, context={component_id: y})
         interp.initialize()
 
         times = []

@@ -300,9 +300,6 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         from .analysis import verify_code
         verify_code(dag)
 
-        from .codegen_base import NewTimeIntegratorCode
-        dag = NewTimeIntegratorCode.from_old(dag)
-
         # {{{ produce function descriptors
 
         from .dag2ir import InstructionDAGExtractor, ControlFlowGraphAssembler
@@ -316,9 +313,9 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         optimizer = Optimizer()
         extract_structure = StructuralExtractor()
 
-        for state_name, dependencies in six.iteritems(dag.states):
-            code = dag_extractor(dag.instructions, dependencies)
-            function = assembler(state_name, code, dependencies)
+        for state_name, state in six.iteritems(dag.states):
+            code = dag_extractor(dag.instructions, state.depends_on)
+            function = assembler(state_name, code, state.depends_on)
             if optimize:
                 function = optimizer(function)
             control_tree = extract_structure(function)

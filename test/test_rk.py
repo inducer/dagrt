@@ -91,7 +91,7 @@ def test_adaptive_timestep(python_method_impl, method, show_dag=False,
     y = example.ic()
 
     interp = python_method_impl(code, function_map={component_id: example})
-    interp.set_up(t_start=example.t_start, dt_start=1e-5, state={component_id: y})
+    interp.set_up(t_start=example.t_start, dt_start=1e-5, context={component_id: y})
     interp.initialize()
 
     times = []
