@@ -23,11 +23,12 @@ def run():
     code = ImplicitEulerMethod()('y')
     def rhs(t, y):
         return -10.0 * y
-    interpreter = NumpyInterpreter(code, function_map={'<func>y': rhs},
+    interpreter = NumpyInterpreter(code,
+                                   function_map={'<func>y': rhs},
                                    solver_map={'newton': NewtonSolver()})
-    interpreter.set_up(0, 0.1, context={'y': 1.0})
+    interpreter.set_up(t_start=0, dt_start=0.1, context={'y': 1.0})
     interpreter.initialize()
-    for event in interpreter.run(1.0):
+    for event in interpreter.run(t_end=1.0):
         pass
 
 if __name__ == '__main__':
