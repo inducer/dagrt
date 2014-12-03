@@ -69,7 +69,8 @@ def test_im_euler_accuracy(show_dag=False, plot_solution=False):
         y = y_0
         final_t = 1
 
-        interp = NumpyInterpreter(code, function_map={component_id: rhs},
+        interp = NumpyInterpreter(code,
+                                  function_map={'<func>' + component_id: rhs},
                                   solver_map={'newton': ScipyRootSolver()})
         interp.set_up(t_start=t, dt_start=dt, context={component_id: y})
         interp.initialize()
