@@ -169,7 +169,9 @@ end program
     (5, ODE45TimeStepper(use_high_order=True)),
     ])
 def test_rk_codegen(min_order, stepper):
-    """Test whether Runge-Kutta timestepper code generation works."""
+    """Test whether Fortran code generation for the Runge-Kutta
+    timestepper works.
+    """
 
     component_id = 'y'
 
@@ -199,6 +201,59 @@ def test_rk_codegen(min_order, stepper):
         ("test_rk.f90", TEST_RK_F90.replace("MIN_ORDER", str(min_order - 0.3)+"d0")),
         ])
 
+
+def test_rk_codegen_fancy():
+    """Test whether Fortran code generation with lots of fancy features for the
+    Runge-Kutta timestepper works.
+    """
+
+    component_id = 'y'
+
+    stepper = ODE23TimeStepper(use_high_order=True)
+    min_order = 3
+
+    from leap.vm.function_registry import (
+            base_function_registry, register_ode_rhs,
+            register_function)
+    freg = register_ode_rhs(base_function_registry, component_id)
+    freg = freg.register_codegen(component_id, "fortran",
+            FortranCallCode("""
+                ${result} = -2*${y}
+                """))
+    freg = register_function(freg, "notify_pre_state_update", ())
+    freg = freg.register_codegen("notify_pre_state_update", "fortran",
+            FortranCallCode("""
+                write(*,*) 'before state update'
+                """))
+    freg = register_function(freg, "notify_post_state_update", ())
+    freg = freg.register_codegen("notify_post_state_update", "fortran",
+            FortranCallCode("""
+                write(*,*) 'after state update'
+                """))
+
+    code = stepper(component_id)
+
+    codegen = FortranCodeGenerator(
+            'RKMethod',
+            ode_component_type_map={
+                component_id: FortranType('real (kind=8)', (2,))
+                },
+            function_registry=freg,
+            module_preamble="""
+            ! lines copied to the start of the module, e.g. to say:
+            ! use ModStuff
+            """,
+            call_before_state_update="notify_pre_state_update",
+            call_after_state_update="notify_post_state_update",
+            )
+
+    code_str = codegen(code)
+    print(code_str)
+
+    run_fortran([
+        ("rkmethod.f90", code_str),
+        ("test_rk.f90", TEST_RK_F90.replace("MIN_ORDER", str(min_order - 0.3)+"d0")),
+        ])
 # }}}
 
 
