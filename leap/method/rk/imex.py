@@ -178,20 +178,35 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
             last_work_ids = self.add_ret_state_and_increment_t(
                 cbuild, self._state, self._component_id,
                 self._t + self._dt, state_update_ids)
-        else:
-            if self.limiter_name is not None:
-                limiter = var("<func>" + self.limiter_name)
-            else:
-                limiter = lambda x: x
-            last_work_ids = self.adapt_step_size(cbuild, self._state,
-                                                 self._component_id,
-                                                 self._t, self._dt,
-                                                 high_order_end_state,
-                                                 low_order_end_state,
-                                                 adaptive_ids, limiter)
             cbuild.commit()
+            return self._update_rhs_values(cbuild, last_work_ids)
 
-        return self._update_rhs_values(cbuild, last_work_ids)
+        # Adaptivity
+
+        if self.limiter_name is not None:
+            limiter = var("<func>" + self.limiter_name)
+        else:
+            limiter = lambda x: x
+
+        with SimpleCodeBuilder(cbuild, adaptive_ids) as builder:
+            step_completion_ids = \
+                builder.assign(self._state, high_order_end_state)
+
+        step_completion_ids = \
+            self._update_rhs_values(cbuild, step_completion_ids)
+
+        step_completion_ids = self.add_ret_state_and_increment_t(
+            cbuild, self._state, self._component_id,
+            self._t + self._dt, step_completion_ids)
+
+        last_work_ids = self.adapt_step_size(
+            cbuild, self._state, self._component_id, self._t, self._dt,
+            high_order_end_state, low_order_end_state,
+            step_work_ids=adaptive_ids,
+            step_completion_ids=step_completion_ids)
+
+        cbuild.commit()
+        return last_work_ids
 
     def __call__(self, component_id, solver_id):
         self._dt = var('<dt>')

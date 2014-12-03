@@ -72,7 +72,7 @@ class EmbeddedRungeKuttaMethod(Method):
 
     def adapt_step_size(self, cbuild, state, component_id, t, dt,
                         low_order_end_state, high_order_end_state,
-                        last_step_work_ids, limiter):
+                        step_work_ids, step_completion_ids):
         """
         :arg cbuild: The CodeBuilder
 
@@ -82,25 +82,23 @@ class EmbeddedRungeKuttaMethod(Method):
 
         :arg high_order_end_state: The high order updated state variable
 
-        :arg last_step_work_ids: Instruction ids for instructions that
-        finish the work of the timestep
+        :arg step_work_ids: Instruction ids for instructions that
+        do the work of the timestep
 
-        :arg limiter: The limiter function
+        :arg step_completion_ids: Instruction ids for instructions that are
+        run to complete a full timestep
         """
         from leap.method import TimeStepUnderflow
         from pymbolic.primitives import Min, Max, Comparison, LogicalOr
 
-        self.add_ret_state_and_increment_t(cbuild, state, component_id,
-                                           t + dt, ["update_state"])
-
-        last_step_work_ids = list(last_step_work_ids)
+        step_work_ids = list(step_work_ids)
 
         cbuild.add_and_get_ids(
             AssignNorm("norm_start_state", state,
-                       depends_on=last_step_work_ids,
+                       depends_on=step_work_ids,
                        id="compute_state_norm"),
             AssignNorm("norm_end_state", low_order_end_state,
-                       depends_on=last_step_work_ids,
+                       depends_on=step_work_ids,
                        id="compute_end_state_norm"),
             AssignNorm("rel_error_raw",
                        (high_order_end_state - low_order_end_state) / (
@@ -131,8 +129,7 @@ class EmbeddedRungeKuttaMethod(Method):
                         var("<builtin>isnan")(var("rel_error"))
                         )),
                 then_depends_on=["rej_step"],
-                else_depends_on=["acc_adjust_dt", "ret_state",
-                                 "increment_t"] + last_step_work_ids,
+                else_depends_on=["acc_adjust_dt"] + step_completion_ids,
                 depends_on=["rel_error_zero_check"],
                 id="reject_check"),
             # then
@@ -178,11 +175,7 @@ class EmbeddedRungeKuttaMethod(Method):
                      var("rel_error") ** (-1 / self.high_order),
                      self.max_dt_growth * dt)),
                 id="acc_adjust_dt",
-                depends_on=["increment_t"]),
-            AssignExpression(
-                state.name, limiter(high_order_end_state),
-                id="update_state",
-                depends_on=["compute_state_norm"] + last_step_work_ids)
+                depends_on=["increment_t"])
             # endif
             )
 
@@ -190,6 +183,7 @@ class EmbeddedRungeKuttaMethod(Method):
 
 
 class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
+
     def __call__(self, component_id):
         """
         :arg component_id: an identifier to be used for the single state component
@@ -302,7 +296,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         else:
             # {{{ step size adaptation
 
-            compute_estimate_ids = add_and_get_ids(
+            step_work_ids = add_and_get_ids(
                     AssignExpression(
                         "high_order_end_state", state + sum(
                                 dt * coeff * rhss[j]
@@ -315,12 +309,24 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                         id="compute_les")
                     )
 
+            update_state_ids = add_and_get_ids(
+                AssignExpression(
+                    state.name, limiter(var("high_order_end_state")),
+                    id="update_state",
+                    depends_on=step_work_ids)
+                )
+
+            self.add_ret_state_and_increment_t(cbuild, state,
+                                               component_id, t + dt,
+                                               ["update_state"])
+
+            step_completion_ids = ["increment_t", last_rhs_assignment_id]
+
             self.adapt_step_size(cbuild, state, component_id, t, dt,
                                  var("low_order_end_state"),
                                  var("high_order_end_state"),
-                                 compute_estimate_ids +
-                                 [last_rhs_assignment_id],
-                                 limiter)
+                                 step_work_ids,
+                                 step_completion_ids)
 
             cbuild.infer_single_writer_dependencies(
                     exclude=dep_inf_exclude_names)
