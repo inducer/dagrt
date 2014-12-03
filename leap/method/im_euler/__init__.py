@@ -25,8 +25,7 @@ THE SOFTWARE.
 """
 
 from leap.method import Method
-from leap.vm.language import (AssignExpression, AssignSolved, YieldState,
-                              TimeIntegratorCode, CodeBuilder)
+from leap.vm.language import (TimeIntegratorCode, CodeBuilder, SimpleCodeBuilder)
 from pymbolic import var
 from pymbolic.primitives import CallWithKwargs
 
@@ -40,47 +39,43 @@ class ImplicitEulerMethod(Method):
         self._dt = var('<dt>')
         self._t = var('<t>')
         self._state = var('<state>' + component_id)
+        self._rhs = var('<func>' + component_id)
         self._component_id = component_id
 
         cbuild = CodeBuilder()
 
-        self._make_primary(cbuild)
+        primary = self._make_primary(cbuild)
 
         return TimeIntegratorCode.create_with_init_and_step(
             instructions=cbuild.instructions,
             initialization_dep_on=frozenset(),
-            step_dep_on=['return', 'increment_t'],
-            step_before_fail=True)
+            step_dep_on=primary,
+            step_before_fail=False)
 
     def _make_primary(self, cbuild):
         """Add code to drive the primary stage."""
+        from leap.vm.expression import collapse_constants
 
-        cbuild.add_and_get_ids(
-            AssignSolved(
-                assignee=self._state.name,
-                solve_component=var('next_state'),
-                expression=var('next_state') - self._state -
-                self._dt * CallWithKwargs(
-                    function=var(self._component_id),
+        with SimpleCodeBuilder(cbuild) as builder:
+            solve_component = var('next_state')
+            solve_expression = collapse_constants(
+                solve_component - self._state - self._dt *
+                CallWithKwargs(
+                    function=self._rhs,
                     parameters=(),
                     kw_parameters={
                         't': self._t + self._dt,
-                        self._component_id: var('next_state')
-                    }),
-                guess=self._state,
-                solver_id='newton',
-                id='step'),
-            YieldState(
-                time_id='final',
-                time=self._t + self._dt,
-                component_id=self._component_id,
-                expression=self._state,
-                depends_on=['step'],
-                id='return'),
-            AssignExpression(
-                assignee=self._t.name,
-                expression=self._t + self._dt,
-                depends_on=['step', 'return'],
-                id='increment_t'))
+                        self._component_id: solve_component
+                        }),
+                [solve_component],
+                builder.assign,
+                builder.fresh_var)
+            
+            builder.assign_solved(self._state, solve_component,
+                                  solve_expression, self._state,
+                                  'newton')
+            builder.yield_state(self._state, self._component_id,
+                                self._t + self._dt, 'final')
+            builder.assign(self._t, self._t + self._dt)
 
-        cbuild.commit()
+        return builder.last_added_instruction_id
