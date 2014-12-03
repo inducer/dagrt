@@ -109,7 +109,7 @@ def test_rk_codegen(min_order, stepper):
     freg = register_ode_rhs(base_function_registry, component_id)
     freg = freg.register_codegen(component_id, "fortran",
             FortranCallCode("""
-                ${assignee} = -2*${y}
+                ${result} = -2*${y}
                 """))
 
     code = stepper(component_id)
@@ -144,7 +144,6 @@ def test_rk_codegen_fancy():
     component_id = 'y'
 
     stepper = ODE23TimeStepper(use_high_order=True)
-    min_order = 3
 
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs,
@@ -174,11 +173,14 @@ def test_rk_codegen_fancy():
                 },
             function_registry=freg,
             module_preamble="""
-            use sim_types
-            """,
+                use sim_types
+                """,
             call_before_state_update="notify_pre_state_update",
             call_after_state_update="notify_post_state_update",
-            )
+            extra_arguments=("region",),
+            extra_argument_decl="""
+                type(region_type), pointer :: region
+                """)
 
     code_str = codegen(code)
     print(code_str)
@@ -223,7 +225,7 @@ def test_multirate_codegen():
                 input_component_names=("s", "f"))
         freg = freg.register_codegen(func_name, "fortran",
                 FortranCallCode("""
-                    ${assignee} = -2*${f} + ${s}
+                    ${result} = -2*${f} + ${s}
                     """))
 
     codegen = FortranCodeGenerator(

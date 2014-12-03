@@ -195,12 +195,12 @@ class FortranCallCode(object):
     def __call__(self, result, function, arg_dict,
             get_new_identifier, add_declaration):
         from leap.vm.codegen.utils import (
-                chop_common_indentation,
+                remove_common_indentation,
                 remove_redundant_blank_lines)
 
         args = function.resolve_args(arg_dict)
         return remove_redundant_blank_lines(
-                chop_common_indentation(
+                remove_common_indentation(
                     self.template.render(
                         result=result,
                         get_new_identifier=get_new_identifier,
@@ -246,10 +246,27 @@ class FortranCodeGenerator(StructuredCodeGenerator):
             use_complex_scalars=True,
             call_before_state_update=None,
             call_after_state_update=None,
+            extra_arguments=(),
+            extra_argument_decl=None,
             trace=False):
         """
+        :arg function_registry:
         :arg ode_component_type_map: a map from ODE component_id names
             to :class:`FortranType` instances
+        :arg call_before_state_update: The name of a function that should
+            be called before each state update. The function must be known
+            to *function_registry*.
+        :arg call_after_state_update: The name of a function that should
+            be called after each state update. The function must be known
+            to *function_registry*.
+        :arg extra_arguments: A tuple of names of extra arguments that are
+            prepended to the call signature of each generated function
+            and are available to refer to in user-supplied function
+            implementations.
+        :arg extra_argument_decl: Type declarations for *extra_arguments*,
+            inserted into each generated function. Must be a multi-line
+            string whose first line is empty, typically from a triple-quoted
+            string in Python. Leading indentation is removed.
         """
         if function_registry is None:
             from leap.vm.function_registry import base_function_registry
@@ -261,8 +278,8 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
         self.trace = trace
 
-        from leap.vm.codegen.utils import chop_common_indentation
-        self.module_preamble = chop_common_indentation(module_preamble)
+        from leap.vm.codegen.utils import remove_common_indentation
+        self.module_preamble = remove_common_indentation(module_preamble)
 
         self.real_scalar_kind = real_scalar_kind
         self.complex_scalar_kind = complex_scalar_kind
@@ -270,9 +287,19 @@ class FortranCodeGenerator(StructuredCodeGenerator):
         self.call_before_state_update = call_before_state_update
         self.call_after_state_update = call_after_state_update
 
+        self.extra_arguments = extra_arguments
+        if extra_argument_decl is not None:
+            from leap.vm.codegen.utils import remove_common_indentation
+            extra_argument_decl = remove_common_indentation(
+                extra_argument_decl)
+        self.extra_argument_decl = extra_argument_decl
+
         self.name_manager = FortranNameManager()
         self.expr_mapper = FortranExpressionMapper(
                 self.name_manager)
+
+        # FIXME: Should make extra arguments known to
+        # name manager
 
         self.module_emitter = FortranModuleEmitter(module_name)
         self.module_emitter.__enter__()
@@ -620,6 +647,18 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
         self.emit('')
 
+    def emit_extra_arg_decl(self, emitter=None):
+        if emitter is None:
+            emitter = self.emit
+
+        if not self.extra_argument_decl:
+            return
+
+        for l in self.extra_argument_decl:
+            emitter(l)
+
+        self.emit('')
+
     # }}}
 
     def emit_initialize(self):
@@ -628,7 +667,7 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                 for sym in self.sym_kind_table.global_table
                 if not sym.startswith("<ret")]
 
-        args = ('leap_state',) + tuple(
+        args = self.extra_arguments + ('leap_state',) + tuple(
                 self.name_manager.name_global(sym)
                 for sym in init_symbols)
 
@@ -638,6 +677,8 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
             self.emit('implicit none')
             self.emit('')
+            self.emit_extra_arg_decl()
+
             self.emit('type(leap_state_type), pointer :: leap_state')
             self.emit('integer leap_ierr')
             self.emit('')
@@ -673,12 +714,13 @@ class FortranCodeGenerator(StructuredCodeGenerator):
     def emit_shutdown(self):
         with FortranSubroutineEmitter(
                 self.emitter,
-                'shutdown', ('leap_state',), self):
+                'shutdown', self.extra_arguments+('leap_state',), self):
 
             self.emit('implicit none')
             self.emit('')
             self.emit('type(leap_state_type), pointer :: leap_state')
             self.emit('')
+            self.emit_extra_arg_decl()
 
             from leap.vm.codegen.data import ODEComponent
 
@@ -767,11 +809,14 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
         FortranSubroutineEmitter(
                 self.emitter,
-                'leap_state_func_' + func_id, ('leap_state',),
+                'leap_state_func_' + func_id,
+                self.extra_arguments + ('leap_state',),
                 self).__enter__()
 
         self.declaration_emitter('implicit none')
         self.declaration_emitter('')
+        self.emit_extra_arg_decl(self.declaration_emitter)
+
         self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
         self.declaration_emitter('integer leap_ierr')
         self.declaration_emitter('')
