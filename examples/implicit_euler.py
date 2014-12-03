@@ -4,18 +4,19 @@ from leap.vm.exec_numpy import NumpyInterpreter
 
 class NewtonSolver(GenericNumpySolver):
 
-    def __init__(self):
-        self.printed = False
-
     def run_solver(self, function, guess):
         from scipy.optimize import newton
         return newton(function, guess)
 
     def solve(self, expression, solve_component, context, functions, guess):
-        if not self.printed:
-            print('Expression to solve: ' + str(expression))
-            print('Solve component: ' + str(solve_component))
-            self.printed = True
+        print('Expression to solve: ' + str(expression))
+        print('Solve component: ' + str(solve_component))
+        print('Mapping:')
+        from leap.vm.utils import get_variables
+        for variable_name in get_variables(expression):
+            if variable_name == solve_component.name:
+                continue
+            print('  ' + variable_name +  ' --> ' + str(context[variable_name]))
         return GenericNumpySolver.solve(self, expression, solve_component,
                                         context, functions, guess)
 
@@ -26,9 +27,9 @@ def run():
     interpreter = NumpyInterpreter(code,
                                    function_map={'<func>y': rhs},
                                    solver_map={'newton': NewtonSolver()})
-    interpreter.set_up(t_start=0, dt_start=0.1, context={'y': 1.0})
+    interpreter.set_up(t_start=0, dt_start=0.5, context={'y': 3.0})
     interpreter.initialize()
-    for event in interpreter.run(t_end=1.0):
+    for event in interpreter.run(t_end=0.5):
         pass
 
 if __name__ == '__main__':
