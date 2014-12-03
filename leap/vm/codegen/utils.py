@@ -77,32 +77,6 @@ def exec_in_new_namespace(code):
     return namespace
 
 
-def chop_common_indentation(text):
-    if text is None:
-        return []
-
-    if not text.startswith("\n"):
-        raise ValueError("expected newline as first character "
-                "in preamble")
-
-    lines = text.split("\n")
-    while lines[0].strip() == "":
-        lines.pop(0)
-    while lines[-1].strip() == "":
-        lines.pop(-1)
-
-    if lines:
-        base_indent = 0
-        while lines[0][base_indent] in " \t":
-            base_indent += 1
-
-        for line in lines[1:]:
-            if line[:base_indent].strip():
-                raise ValueError("inconsistent indentation in preamble")
-
-    return [line[base_indent:] for line in lines]
-
-
 def remove_redundant_blank_lines(lines):
     def is_blank(l):
         return not l.strip()
@@ -196,3 +170,33 @@ class KeyToUniqueNameMap(object):
 
     def __iter__(self):
         return six.iterkeys(self._dict)
+
+
+def remove_common_indentation(text):
+    """
+    :arg text: a multi-line string
+    :returns: a list of lines
+    """
+
+    if text is None:
+        return text
+
+    if not text.startswith("\n"):
+        raise ValueError("expected newline as first character")
+
+    lines = text.split("\n")
+    while lines[0].strip() == "":
+        lines.pop(0)
+    while lines[-1].strip() == "":
+        lines.pop(-1)
+
+    if lines:
+        base_indent = 0
+        while lines[0][base_indent] in " \t":
+            base_indent += 1
+
+        for line in lines[1:]:
+            if line[:base_indent].strip():
+                raise ValueError("inconsistent indentation")
+
+    return [line[base_indent:] for line in lines]

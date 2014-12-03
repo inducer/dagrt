@@ -86,6 +86,18 @@ class Function(RecordWithoutPickling):
         from leap.vm.utils import resolve_args
         return resolve_args(self.arg_names, self.default_dict, arg_dict)
 
+
+class FixedResultKindFunction(Function):
+    def __init__(self, **kwargs):
+        result_kind = kwargs.get("result_kind", None)
+        if result_kind is None:
+            raise TypeError("result_kind argument must be specified")
+
+        super(FixedResultKindFunction, self).__init__(**kwargs)
+
+    def get_result_kind(self, arg_kinds):
+        return self.result_kind
+
 # }}}
 
 
@@ -309,6 +321,23 @@ def register_ode_rhs(
             _ODERightHandSide(
                 identifier, component_id, input_component_ids,
                 input_component_names=input_component_names))
+
+
+def register_function(
+        function_registry,
+        identifier,
+        arg_names,
+        default_dict=None,
+        # There's no way for a function to not have
+        # a return type.
+        result_kind=Boolean()):
+
+    return function_registry.register(
+            FixedResultKindFunction(
+                identifier=identifier,
+                arg_names=arg_names,
+                default_dict=default_dict,
+                result_kind=result_kind))
 
 # }}}
 
