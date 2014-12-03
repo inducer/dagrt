@@ -71,7 +71,7 @@ def run_fortran(sources):
 
         from subprocess import check_call, Popen, PIPE
         check_call(
-                ["gfortran", "-g", "-oruntest"] + list(source_names),
+                ["gfortran", "-Wall", "-g", "-oruntest"] + list(source_names),
                 cwd=tmpdir)
 
         p = Popen([join(tmpdir, "runtest")], stdout=PIPE, stderr=PIPE,
@@ -84,83 +84,12 @@ def run_fortran(sources):
         return p.returncode, stdout_data, stderr_data
 
 
+def read_file(name):
+    with open(name, "r") as inf:
+        return inf.read()
+
+
 # {{{ test rk methods
-
-TEST_RK_F90 = """
-program test_rkmethod
-  use RKMethod, only: leap_state_type, &
-    timestep_initialize => initialize, &
-    timestep_shutdown => shutdown, &
-    leap_state_func_initialization, &
-    leap_state_func_primary
-
-  implicit none
-
-  type(leap_state_type), target :: state
-  type(leap_state_type), pointer :: state_ptr
-
-  real*8, dimension(2) :: initial_condition, true_sol
-  integer, dimension(2) :: nsteps
-
-  integer run_count
-  real*8 t_fin
-  parameter (run_count=2, t_fin=1d0)
-
-  real*8, dimension(run_count):: dt_values, errors
-
-  real*8 est_order, min_order
-
-  integer stderr
-  parameter(stderr=0)
-
-  integer istep, irun
-
-  ! start code ----------------------------------------------------------------
-
-  state_ptr => state
-
-  initial_condition(1) = 2
-  initial_condition(2) = 2.3
-  true_sol = initial_condition * exp(-2*t_fin)
-
-  nsteps(1) = 20
-  nsteps(2) = 50
-
-  do irun = 1,run_count
-    dt_values(irun) = t_fin/nsteps(irun)
-
-    call timestep_initialize( &
-      leap_state=state_ptr, &
-      state_y=initial_condition, &
-      leap_t=0d0, &
-      leap_dt=dt_values(irun))
-
-    call leap_state_func_initialization(leap_state=state_ptr)
-    do istep = 1,nsteps(irun)
-      call leap_state_func_primary(leap_state=state_ptr)
-      write(*,*) state%ret_state_y
-    enddo
-
-    errors(irun) = sqrt(sum((true_sol-state%ret_state_y)**2))
-
-    write(*,*) errors
-
-    call timestep_shutdown(leap_state=state_ptr)
-    write(*,*) 'done'
-  enddo
-
-  min_order = MIN_ORDER
-  est_order = log(errors(2)/errors(1))/log(dt_values(2)/dt_values(1))
-
-  write(*,*) 'estimated order:', est_order
-  if (est_order < min_order) then
-    write(stderr,*) 'ERROR: achieved order too low:', est_order, ' < ', &
-        min_order
-  endif
-
-end program
-"""
-
 
 @pytest.mark.parametrize(("min_order", "stepper"), [
     (2, ODE23TimeStepper(use_high_order=False)),
@@ -198,9 +127,14 @@ def test_rk_codegen(min_order, stepper):
 
     run_fortran([
         ("rkmethod.f90", codegen(code)),
-        ("test_rk.f90", TEST_RK_F90.replace("MIN_ORDER", str(min_order - 0.3)+"d0")),
+        ("test_rk.f90", read_file("test_rk.f90").replace(
+            "MIN_ORDER", str(min_order - 0.3)+"d0")),
         ])
 
+
+# }}}
+
+# {{{ test fancy codegen
 
 def test_rk_codegen_fancy():
     """Test whether Fortran code generation with lots of fancy features for the
@@ -240,8 +174,7 @@ def test_rk_codegen_fancy():
                 },
             function_registry=freg,
             module_preamble="""
-            ! lines copied to the start of the module, e.g. to say:
-            ! use ModStuff
+            use sim_types
             """,
             call_before_state_update="notify_pre_state_update",
             call_after_state_update="notify_post_state_update",
@@ -251,9 +184,11 @@ def test_rk_codegen_fancy():
     print(code_str)
 
     run_fortran([
+        ("sim_types.f90", read_file("sim_types.f90")),
         ("rkmethod.f90", code_str),
-        ("test_rk.f90", TEST_RK_F90.replace("MIN_ORDER", str(min_order - 0.3)+"d0")),
+        ("test_rk.f90", read_file("test_fancy_rk.f90")),
         ])
+
 # }}}
 
 
