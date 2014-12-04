@@ -94,7 +94,7 @@ def test_norm(execute_and_return_single_result, order):
             step_before_fail=False)
     result = execute_and_return_single_result(code)
     expected_result = np.linalg.norm(test_vector, ord=order)
-    assert np.isclose(result, expected_result)
+    assert np.allclose(result, expected_result)
 
 
 @pytest.mark.parametrize(('x, y'), [(1.0, 1.0j), (1.0j, 1.0),
