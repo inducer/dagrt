@@ -857,8 +857,8 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
                     "%s -> %s  [label=\"%s\", style=dashed]"
                     % (insn_2, insn_1, annot))
 
-    for name, state in six.iteritems(code.states):
-        lines.append("subgraph %s { label=\"%s\"" % (name, name))
+    for i, (name, state) in enumerate(six.iteritems(code.states)):
+        lines.append("subgraph cluster_%d { label=\"%s\"" % (i, name))
         for dep in state.depends_on:
             lines.append(dep)
         lines.append("}")
