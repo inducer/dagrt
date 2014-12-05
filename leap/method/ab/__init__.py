@@ -80,101 +80,76 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         # Declare variables
         self.step = var('<p>step')
+        self.function = var('<func>') + component_id
         self.rhs = var('<p>f_n')
-        self.history = [var('<p>f_n_minus_' + str(i))
-                        for i in range(self.order - 1, 0, -1)]
+        self.history = \
+            [var('<p>f_n_minus_' + str(i)) for i in range(self.order - 1, 0, -1)]
         self.state = var('<state>' + component_id)
         self.t = var('<t>')
         self.dt = var('<dt>')
 
-        # Initialization stage
-        with SimpleCodeBuilder(cbuild) as builder:
-            builder.assign(self.step, 0)
-            builder.assign(self.rhs, self.eval_rhs(self.t, self.state))
+        # Initialization
+        with SimpleCodeBuilder(cbuild, state="initialization") as cb:
+            cb(self.step, 1)
 
-        initialization_dep_on = builder.last_added_instruction_id
+        cb_init = cb
+        
+        with SimpleCodeBuilder(cbuild, state="primary") as cb:
+            cb(self.rhs, self.eval_rhs(self.t, self.state))
+            with cb.if_(self.step, "<", self.order):
+                self.rk_bootstrap(cb)
+                cb(self.step, self.step + 1)
+            with cb.else_():
+                history = self.history + [self.rhs]
+                ab_sum = sum(self.coeffs[i] * history[i] for i in range(steps))
+                cb(self.state, self.state + self.dt * ab_sum)
+                cb.fence()
+                # Rotate history.
+                for i in range(len(self.history)):
+                    cb(self.history[i], history[i + 1])
+            cb(self.t, self.t + self.dt)
 
-        # AB stage
-        with SimpleCodeBuilder(cbuild) as builder:
-            ab_comb = sum(self.coeffs[i] * self.history[i]
-                          for i in range(0, self.order - 1))
-            ab_comb += self.rhs * self.coeffs[-1]
-            builder.assign(self.state, self.state + self.dt * ab_comb)
-
-            # Rotate history
-            for i in range(len(self.history)):
-                next_val = self.history[i + 1] \
-                    if (i + 1) < len(self.history) else self.rhs
-                builder.assign(self.history[i], next_val)
-
-            builder.assign(self.rhs,
-                           self.eval_rhs(self.t + self.dt, self.state))
-
-        ab_dep_on = builder.last_added_instruction_id
-
-        # Bootstrap stage
-        with SimpleCodeBuilder(cbuild) as builder:
-            self.rk_bootstrap(builder)
-            builder.assign(self.step, self.step + 1)
-
-        bootstrap_dep_on = builder.last_added_instruction_id
-
-        # Main branch
-        main_branch = cbuild.add_and_get_ids(
-            If(condition=Comparison(self.step, "<", self.order - 1),
-               then_depends_on=bootstrap_dep_on,
-               else_depends_on=ab_dep_on))
-
-        cbuild.commit()
-
-        # Update and return
-        with SimpleCodeBuilder(cbuild, main_branch) as builder:
-            builder.yield_state(self.state, component_id,
-                                self.t + self.dt, "final")
-            builder.assign(self.t, self.t + self.dt)
-
-        step_dep_on = builder.last_added_instruction_id
+        cb_primary = cb
 
         return TimeIntegratorCode.create_with_init_and_step(
                 instructions=cbuild.instructions,
-                initialization_dep_on=initialization_dep_on,
-                step_dep_on=step_dep_on,
+                initialization_dep_on=cb_init.state_dependencies,
+                step_dep_on=cb_primary.state_dependencies,
                 step_before_fail=True)
 
     def eval_rhs(self, t, y):
         """Return a node that evaluates the RHS at the given time and
         component value."""
-        return CallWithKwargs(function=var(self.component_id),
+        return CallWithKwargs(function=self.function,
                               parameters=(),
                               kw_parameters={"t": t, self.component_id: y})
 
-    def rk_bootstrap(self, builder):
+    def rk_bootstrap(self, cb):
         """Initialize the timestepper with an RK method."""
 
         # Save the current RHS to the AB history
-        for i in range(len(self.history)):
-            with builder.condition(Comparison(self.step, "==", i)):
-                builder.assign(self.history[i], self.rhs)
 
+        for i in range(len(self.history)):
+            with cb.if_(self.step, "==", i):
+                cb(self.history[i], current_rhs)
+        
         rk_tableau, rk_coeffs = self.get_rk_tableau_and_coeffs(self.order)
 
         # Stage loop (taken from EmbeddedButcherTableauMethod)
         rhss = [var("rk_rhs_" + str(i)) for i in range(len(rk_tableau))]
-        for stage_number, (c, coeffs) in enumerate(rk_tableau):
+        for stage_num, (c, coeffs) in enumerate(rk_tableau):
             if len(coeffs) == 0:
                 assert c == 0
-                builder.assign(rhss[stage_number], self.rhs)
+                cb(rhss[stage_num], self.rhs)
             else:
-                stage_state = self.state + sum(self.dt * coeff * rhss[j]
-                                               for (j, coeff)
-                                               in enumerate(coeffs))
+                stage = self.state + sum(self.dt * coeff * rhss[j]
+                                         for (j, coeff)
+                                         in enumerate(coeffs))
 
-                builder.assign(rhss[stage_number], self.eval_rhs(
-                        self.t + c * self.dt, stage_state))
+                cb(rhss[stage_num], self.eval_rhs(self.t + c * self.dt, stage))
 
         # Merge the values of the RHSs.
-        merged = sum(coeff * rhss[j] for j, coeff in enumerate(rk_coeffs))
+        rk_comb = sum(coeff * rhss[j] for j, coeff in enumerate(rk_coeffs))
+        cb.fence()
         # Assign the value of the new state.
-        builder.assign(self.state, self.state + self.dt * merged)
-        # Assign the value of the new RHS,
-        builder.assign(self.rhs, self.eval_rhs(self.t + self.dt, self.state))
+        cb(self.state, self.state + self.dt * rk_comb)
