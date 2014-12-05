@@ -176,6 +176,17 @@ class Instruction(RecordWithoutPickling):
         raise NotImplementedError()
 
 
+class Nop(Instruction):
+
+    def get_assignees(self):
+        return frozenset([])
+    
+    get_read_variables = get_assignees
+
+    def visit_expressions(self, visitor):
+        pass
+    
+
 # {{{ assignments
 
 def AssignRHS(
@@ -714,7 +725,7 @@ class SimpleCodeBuilder(object):
     """Provide a simplified interface to timestepper description generation in
     the leap language."""
 
-    def __init__(self, cbuild, dependencies=[]):
+    def __init__(self, cbuild, state):
         self.cbuild = cbuild
         self._dependencies = frozenset(dependencies)
         self._added_instructions = False
@@ -732,6 +743,23 @@ class SimpleCodeBuilder(object):
 
     def _update_dependency_stack(self, instruction_ids):
         self._dependency_stack[-1] = frozenset(instruction_ids)
+
+    def copy_fence(self, variables):
+        pass
+
+    def fence(self):
+        pass
+
+    def fail_step(self):
+        pass
+
+    @contextmanager
+    def if_(self, condition):
+        pass
+
+    @contextmanager
+    def else_(self):
+        pass
 
     def assign(self, assignee, expression):
         """
