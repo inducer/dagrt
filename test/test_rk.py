@@ -33,8 +33,14 @@ import numpy as np
 import logging
 logger = logging.getLogger(__name__)
 
+from utils import (  # noqa
+        python_method_impl_interpreter as pmi_int,
+        python_method_impl_codegen as pmi_cg)
+
 
 # {{{ non-adaptive test
+
+# test using 'python test_rk.py test_rk_accuracy(pmi_int, ODE23TimeStepper(use_high_order=False), 2)'  # noqa
 
 @pytest.mark.parametrize(("method", "expected_order"), [
     (ODE23TimeStepper(use_high_order=False), 2),

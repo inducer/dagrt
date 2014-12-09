@@ -32,9 +32,11 @@ from leap.vm.language import AssignExpression, YieldState
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
 from pymbolic import var
 
+from utils import execute_and_return_single_result
+
 
 @pytest.mark.parametrize(('len_'), [0, 1, 2])
-def test_len(execute_and_return_single_result, len_):
+def test_len(python_method_impl, len_):
     test_vector = np.ones(len_)
     cbuild = CodeBuilder()
     cbuild.add_and_get_ids(
@@ -49,12 +51,13 @@ def test_len(execute_and_return_single_result, len_):
             instructions=cbuild.instructions,
             step_dep_on=['return'],
             step_before_fail=False)
-    result = execute_and_return_single_result(code)
+
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == len(test_vector)
 
 
 @pytest.mark.parametrize(('value'), [0, float('nan')])
-def test_isnan(execute_and_return_single_result, value):
+def test_isnan(python_method_impl, value):
     cbuild = CodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_1', assignee='x',
@@ -68,12 +71,12 @@ def test_isnan(execute_and_return_single_result, value):
             instructions=cbuild.instructions,
             step_dep_on=['return'],
             step_before_fail=False)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == np.isnan(value)
 
 
 @pytest.mark.parametrize(('order'), [2, np.inf])
-def test_norm(execute_and_return_single_result, order):
+def test_norm(python_method_impl, order):
     test_vector = np.array([-3, 4], dtype=np.double)
     cbuild = CodeBuilder()
     cbuild.add_and_get_ids(
@@ -92,14 +95,14 @@ def test_norm(execute_and_return_single_result, order):
             instructions=cbuild.instructions,
             step_dep_on=['return'],
             step_before_fail=False)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     expected_result = np.linalg.norm(test_vector, ord=order)
     assert np.allclose(result, expected_result)
 
 
 @pytest.mark.parametrize(('x, y'), [(1.0, 1.0j), (1.0j, 1.0),
                                     (1.0, 1.0), (1.0j, 1.0j)])
-def test_dot_product(execute_and_return_single_result, x, y):
+def test_dot_product(python_method_impl, x, y):
     cbuild = CodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_1', assignee='x',
@@ -113,7 +116,7 @@ def test_dot_product(execute_and_return_single_result, x, y):
             instructions=cbuild.instructions,
             step_dep_on=['return'],
             step_before_fail=False)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == np.vdot(x, y)
 
 

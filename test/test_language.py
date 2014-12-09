@@ -33,29 +33,35 @@ from pymbolic.primitives import Comparison
 from leap.vm.exec_numpy import NumpyInterpreter  # noqa
 from leap.vm.codegen import PythonCodeGenerator  # noqa
 
+from utils import (  # noqa
+        python_method_impl_interpreter as pmi_int,
+        python_method_impl_codegen as pmi_cg)
 
-def test_SimpleCodeBuilder_yield(execute_and_return_single_result):
+from utils import execute_and_return_single_result
+
+
+def test_SimpleCodeBuilder_yield(python_method_impl):
     cb = CodeBuilder()
     with SimpleCodeBuilder(cb) as builder:
         yield_ = builder.yield_state(1, 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_init_and_step(
             [], yield_, cb.instructions, True)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == 1
 
 
-def test_SimpleCodeBuilder_assign(execute_and_return_single_result):
+def test_SimpleCodeBuilder_assign(python_method_impl):
     cb = CodeBuilder()
     with SimpleCodeBuilder(cb) as builder:
         builder.assign(var('x'), 1)
         yield_ = builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_init_and_step(
             [], yield_, cb.instructions, True)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == 1
 
 
-def test_SimpleCodeBuilder_condition(execute_and_return_single_result):
+def test_SimpleCodeBuilder_condition(python_method_impl):
     cb = CodeBuilder()
     with SimpleCodeBuilder(cb) as builder:
         builder.assign(var('x'), 1)
@@ -64,11 +70,11 @@ def test_SimpleCodeBuilder_condition(execute_and_return_single_result):
         yield_ = builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_init_and_step(
             [], yield_, cb.instructions, True)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == 2
 
 
-def test_SimpleCodeBuilder_nested_condition(execute_and_return_single_result):
+def test_SimpleCodeBuilder_nested_condition(python_method_impl):
     cb = CodeBuilder()
     with SimpleCodeBuilder(cb) as builder:
         builder.assign(var('x'), 1)
@@ -79,11 +85,11 @@ def test_SimpleCodeBuilder_nested_condition(execute_and_return_single_result):
             yield_ = builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_init_and_step(
             [], yield_, cb.instructions, True)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == 3
 
 
-def test_SimpleCodeBuilder_dependencies(execute_and_return_single_result):
+def test_SimpleCodeBuilder_dependencies(python_method_impl):
     cb = CodeBuilder()
     with SimpleCodeBuilder(cb) as builder:
         dependency = builder.assign(var('x'), 1)
@@ -91,7 +97,7 @@ def test_SimpleCodeBuilder_dependencies(execute_and_return_single_result):
         yield_ = builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_init_and_step(
             [], yield_, cb.instructions, True)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == 1
 
 

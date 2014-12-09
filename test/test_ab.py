@@ -28,6 +28,10 @@ import sys
 import pytest
 from leap.method.ab import AdamsBashforthTimeStepper
 
+from utils import (  # noqa
+        python_method_impl_interpreter as pmi_int,
+        python_method_impl_codegen as pmi_cg)
+
 
 @pytest.mark.parametrize("order", [1, 2, 3, 4, 5])
 def test_ab_accuracy(python_method_impl, order, show_dag=False,
