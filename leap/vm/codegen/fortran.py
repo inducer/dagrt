@@ -186,7 +186,7 @@ class FortranTypeEmitter(FortranSubblockEmitter):
 # }}}
 
 
-class FortranCallCode(object):
+class CallCode(object):
     def __init__(self, template):
         from mako.template import Template
 
@@ -208,7 +208,9 @@ class FortranCallCode(object):
                         **dict(zip(function.arg_names, args)))))
 
 
-class FortranType(object):
+# {{{ types
+
+class TypeBase(object):
     """
     .. attribute:: base_type
     .. attribute:: dimension
@@ -223,6 +225,149 @@ class FortranType(object):
             dimension = tuple(str(d) for d in dimension)
         self.dimension = dimension
 
+    def get_base_type(self):
+        raise NotImplementedError()
+
+    def get_type_specifiers(self, defer_dim):
+        raise NotImplementedError()
+
+    def emit_allocation(self, code_generator, fortran_sym):
+        raise NotImplementedError()
+
+    def emit_deallocation(self, code_generator, fortran_sym):
+        raise NotImplementedError()
+
+    def emit_variable_init(self, code_generator, fortran_sym):
+        raise NotImplementedError()
+
+    def emit_variable_deinit(self, code_generator, fortran_sym):
+        raise NotImplementedError()
+
+    def emit_assignment(self, code_generator, fortran_sym, rhs_expr):
+        raise NotImplementedError()
+
+
+class BuiltinType(TypeBase):
+    def __init__(self, type_name):
+        self.type_name = type_name
+
+    def get_base_type(self):
+        return self.type_name
+
+    def get_type_specifiers(self, defer_dim):
+        return ()
+
+    def emit_allocation(self, code_generator, fortran_sym):
+        raise NotImplementedError()
+
+    def emit_deallocation(self, code_generator, fortran_sym):
+        raise NotImplementedError()
+
+    def emit_variable_init(self, code_generator, fortran_sym):
+        pass
+
+    def emit_variable_deinit(self, code_generator, fortran_sym):
+        pass
+
+    def emit_assignment(self, code_generator, fortran_sym, rhs_expr):
+        raise NotImplementedError()
+
+
+# Allocatable arrays are not yet supported, use pointers for now.
+
+class ArrayType(TypeBase):
+    """
+    .. attribute:: dimension
+
+        A tuple of ``'200'``, ``'-5:5'``, or some such.
+        Entries may be numeric, too. Or they may refer
+        to variables that are available through
+        *extra_arguments* in :class:`CodeGenerator`.
+    """
+
+    def __init__(self, element_type, dimension):
+        self.element_type = element_type
+        self.dimension = tuple(str(i) for i in dimension)
+
+    def get_base_type(self):
+        return self.element_type.get_base_type()
+
+    def get_type_specifiers(self, defer_dim):
+        result = self.element_type.get_type_specifiers(defer_dim)
+
+        if defer_dim:
+            result += (
+                    "dimension(%s)" % ",".join(len(self.dimension)*":"),)
+        else:
+            result += (
+                    "dimension(%s)" % ",".join(self.dimension),)
+
+        return result
+
+    def emit_allocation(self, code_generator, fortran_sym):
+        pass
+
+    def emit_deallocation(self, code_generator, fortran_sym):
+        pass
+
+    def emit_assignment(self, code_generator, fortran_sym, rhs_expr):
+        raise NotImplementedError()
+
+
+class PointerType(TypeBase):
+    def __init__(self, pointee_type):
+        self.pointee_type = pointee_type
+
+    def get_base_type(self):
+        return self.pointee_type.get_base_type()
+
+    def get_type_specifiers(self, defer_dim):
+        return self.pointee_type.get_type_specifiers(defer_dim=True) + ("pointer",)
+
+    def emit_allocation(self, code_generator, fortran_sym):
+        raise NotImplementedError()
+
+    def emit_deallocation(self, code_generator, fortran_sym):
+        raise NotImplementedError()
+
+    def emit_variable_init(self, code_generator, fortran_sym):
+        code_generator.emit_traceable("nullify(%s)" % fortran_sym)
+
+    def emit_variable_deinit(self, code_generator, fortran_sym):
+        pass
+
+    def emit_assignment(self, code_generator, fortran_sym, rhs_expr):
+        raise NotImplementedError()
+
+
+class StructureType(TypeBase):
+    """
+    .. attribute:: members
+
+        A tuple of **(name, type)** tuples.
+    """
+
+    def __init__(self, type_name, members):
+        self.type_name = type_name
+        self.members = members
+
+    def get_base_type(self):
+        return "type(%s)" % self.type_name
+
+    def get_type_specifiers(self, defer_dim):
+        return ()
+
+    def emit_allocation(self, code_generator, fortran_sym):
+        raise NotImplementedError()
+
+    def emit_deallocation(self, code_generator, fortran_sym):
+        raise NotImplementedError()
+
+    def emit_assignment(self, code_generator, fortran_sym, rhs_expr):
+        raise NotImplementedError()
+
+# }}}
+
 
 # {{{ code generator
 
@@ -234,7 +379,7 @@ class _IRFunctionDescriptor(Record):
     """
 
 
-class FortranCodeGenerator(StructuredCodeGenerator):
+class CodeGenerator(StructuredCodeGenerator):
     language = "fortran"
 
     def __init__(self, module_name,
@@ -434,6 +579,13 @@ class FortranCodeGenerator(StructuredCodeGenerator):
 
     # {{{ data management
 
+    def get_ode_component_type(self, component_id, is_argument=False):
+        comp_type = self.ode_component_type_map[component_id]
+        if not is_argument:
+            comp_type = PointerType(comp_type)
+
+        return comp_type
+
     def emit_variable_decl(self, fortran_name, sym_kind,
             is_argument=False, other_specifiers=(), emit=None):
         if emit is None:
@@ -454,23 +606,18 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                 type_name = 'complex (kind=%s)' % self.complex_scalar_kind
 
         elif isinstance(sym_kind, ODEComponent):
-            comp_type = self.ode_component_type_map[sym_kind.component_id]
-            type_name = comp_type.base_type
+            comp_type = self.get_ode_component_type(sym_kind.component_id,
+                    is_argument=is_argument)
+
+            type_name = comp_type.get_base_type()
+            type_specifiers = (
+                    type_specifiers
+                    + comp_type.get_type_specifiers(defer_dim=is_argument))
 
             if not is_argument:
-                type_specifiers = type_specifiers + ('pointer',)
                 emit(
                         'integer, pointer :: leap_refcnt_{id}'.format(
                             id=fortran_name))
-
-            if comp_type.dimension:
-                if is_argument:
-                    type_specifiers += (
-                            "dimension(%s)" % ",".join(comp_type.dimension),)
-                else:
-                    type_specifiers += (
-                            "dimension(%s)"
-                            % ",".join(len(comp_type.dimension)*":"),)
 
         else:
             raise ValueError("unknown variable kind: %s" % type(sym_kind).__name__)
@@ -486,11 +633,10 @@ class FortranCodeGenerator(StructuredCodeGenerator):
                 id=fortran_name))
 
     def emit_variable_init(self, name, sym_kind):
-        fortran_name = self.name_manager[name]
-
         from leap.vm.codegen.data import ODEComponent
         if isinstance(sym_kind, ODEComponent):
-            self.emit_traceable("nullify(%s)" % fortran_name)
+            comp_type = self.get_ode_component_type(sym_kind.component_id)
+            comp_type.emit_variable_init(self, self.name_manager[name])
 
     def emit_variable_deinit(self, name, sym_kind):
         fortran_name = self.name_manager[name]
