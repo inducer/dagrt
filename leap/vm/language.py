@@ -169,8 +169,10 @@ class Instruction(RecordWithoutPickling):
         """
         raise NotImplementedError()
 
-    def visit_expressions(self, visitor):
-        """Calls ``visitor(expr)`` for every :class:`pymbolic.primitives.Expression`
+    def map_expressions(self, mapper):
+        """Returns a new copy of *self* with all expressions
+        replaced by ``mapepr(expr)`` for every
+        :class:`pymbolic.primitives.Expression`
         contained in *self*.
         """
         raise NotImplementedError()
@@ -274,8 +276,9 @@ class AssignExpression(Instruction):
     def get_read_variables(self):
         return get_variables(self.expression)
 
-    def visit_expressions(self, visitor):
-        visitor(self.expression)
+    def map_expressions(self, mapper):
+        return self.copy(
+                expression=mapper(self.expression))
 
     def __str__(self):
         return "%s <- %s" % (self.assignee, self.expression)
@@ -339,8 +342,9 @@ class YieldState(Instruction):
     def get_read_variables(self):
         return get_variables(self.expression)
 
-    def visit_expressions(self, visitor):
-        visitor(self.expression)
+    def map_expressions(self, mapper):
+        return self.copy(
+                expression=mapper(self.expression))
 
     def __str__(self):
         return "Ret %s at %s as %s" % (
@@ -376,7 +380,7 @@ class Raise(Instruction):
     def get_read_variables(self):
         return frozenset()
 
-    def visit_expressions(self, visitor):
+    def map_expressions(self, mapper):
         pass
 
     def __str__(self):
@@ -400,7 +404,7 @@ class FailStep(Instruction):
     def get_read_variables(self):
         return frozenset()
 
-    def visit_expressions(self, visitor):
+    def map_expressions(self, mapper):
         pass
 
     def __str__(self):
@@ -429,8 +433,9 @@ class If(Instruction):
     def get_read_variables(self):
         return get_variables(self.condition)
 
-    def visit_expressions(self, visitor):
-        visitor(self.condition)
+    def map_expressions(self, mapper):
+        return self.copy(
+                condition=mapper(self.condition))
 
     def __str__(self):
         return "If %s" % self.condition
@@ -512,6 +517,27 @@ class TimeIntegratorCode(RecordWithoutPickling):
     def id_to_insn(self):
         return dict((insn.id, insn)
                 for insn in self.instructions)
+
+    # {{{ identifier wrangling
+
+    def get_insn_id_generator(self):
+        from pytools import UniqueNameGenerator
+        return UniqueNameGenerator(
+                set(insn.id for insn in self.instructions))
+
+    def existing_var_names(self):
+        result = set()
+        for insn in self.instructions:
+            result.update(insn.get_assignees())
+            result.update(insn.get_read_variables())
+
+        return result
+
+    def get_var_name_generator(self):
+        from pytools import UniqueNameGenerator
+        return UniqueNameGenerator(self.existing_var_names())
+
+    # }}}
 
 # }}}
 

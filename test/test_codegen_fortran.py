@@ -81,6 +81,13 @@ def run_fortran(sources):
         if stderr_data:
             raise RuntimeError("Fortran code has non-empty stderr:\n"+stderr_data)
 
+        if stdout_data:
+            print("Fortran code said this on stdout: -----------------------------",
+                    file=sys.stderr)
+            print(stdout_data, file=sys.stderr)
+            print("---------------------------------------------------------------",
+                    file=sys.stderr)
+
         return p.returncode, stdout_data, stderr_data
 
 
@@ -181,7 +188,7 @@ def test_rk_codegen_fancy():
                 """,
             call_before_state_update="notify_pre_state_update",
             call_after_state_update="notify_post_state_update",
-            extra_arguments=("region",),
+            extra_arguments="region",
             extra_argument_decl="""
                 type(region_type), pointer :: region
                 """)

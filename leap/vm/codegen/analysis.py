@@ -162,11 +162,12 @@ def collect_function_names_from_dag(dag):
 
     result = set()
 
-    def visit(expr):
+    def mapper(expr):
         result.update(fnc(expr))
+        return expr
 
     for insn in dag.instructions:
-        insn.visit_expressions(visit)
+        insn.map_expressions(mapper)
 
     return result
 
