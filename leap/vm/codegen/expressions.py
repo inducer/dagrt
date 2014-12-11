@@ -74,6 +74,13 @@ class FortranExpressionMapper(StringifyMapper):
         else:
             return self._name_manager[expr.name]
 
+    def map_lookup(self, expr, enclosing_prec, *args, **kwargs):
+        return self.parenthesize_if_needed(
+                self.format("%s%%%s",
+                    self.rec(expr.aggregate, PREC_CALL, *args, **kwargs),
+                    expr.name),
+                enclosing_prec, PREC_CALL)
+
     def map_subscript(self, expr, enclosing_prec, *args, **kwargs):
         if isinstance(expr.index, tuple):
             index_str = self.join_rec(", ", expr.index, PREC_NONE, *args, **kwargs)

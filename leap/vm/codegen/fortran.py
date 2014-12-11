@@ -291,6 +291,9 @@ class TypeBase(object):
     def get_type_specifiers(self, defer_dim):
         raise NotImplementedError()
 
+    def is_allocatable(self):
+        raise NotImplementedError()
+
     def emit_allocation(self, code_generator, fortran_expr):
         raise NotImplementedError()
 
@@ -313,6 +316,9 @@ class BuiltinType(TypeBase):
 
     def get_type_specifiers(self, defer_dim):
         return ()
+
+    def is_allocatable(self):
+        return False
 
     def emit_allocation(self, code_generator, fortran_expr):
         raise NotImplementedError()
@@ -375,8 +381,29 @@ class ArrayType(TypeBase):
 
         return result
 
+    def is_allocatable(self):
+        return self.element_type.is_allocatable()
+
     def emit_allocation(self, code_generator, fortran_expr):
-        pass
+        if not self.element_type.is_allocatable():
+            return
+        else:
+            # Array of pointers, for example.
+            raise NotImplementedError()
+
+    def emit_variable_init(self, code_generator, fortran_expr):
+        if not self.element_type.is_allocatable():
+            return
+        else:
+            # Array of pointers, for example.
+            raise NotImplementedError()
+
+    def emit_variable_deinit(self, code_generator, fortran_expr):
+        if not self.element_type.is_allocatable():
+            return
+        else:
+            # Array of pointers, for example.
+            raise NotImplementedError()
 
     def emit_assignment(self, code_generator, fortran_expr, rhs_expr):
         index_names = [
@@ -385,7 +412,7 @@ class ArrayType(TypeBase):
 
         emitters = []
         for i, (dim, index_name) in enumerate(
-                zip(self.dimension, index_names)):
+                reversed(zip(self.dimension, index_names))):
             code_generator.declaration_emitter('integer %s' % index_name)
 
             start_stop = self.parse_dimension(dim)
@@ -423,13 +450,34 @@ class PointerType(TypeBase):
     def get_type_specifiers(self, defer_dim):
         return self.pointee_type.get_type_specifiers(defer_dim=True) + ("pointer",)
 
+    def is_allocatable(self):
+        return True
+
     def emit_allocation(self, code_generator, fortran_expr):
-        raise NotImplementedError()
+        dimension = ""
+        if isinstance(self.pointee_type, ArrayType):
+            if self.pointee_type.dimension:
+                dimension = '(%s)' % ', '.join(
+                        str(dim_axis) for dim_axis in self.pointee_type.dimension)
+
+        code_generator.emit_traceable(
+                'allocate({name}{dimension}, stat=leap_ierr)'.format(
+                    name=fortran_expr,
+                    dimension=dimension))
+        with FortranIfEmitter(
+                code_generator.emitter, 'leap_ierr.ne.0', code_generator):
+            code_generator.emit("write(*,*) 'failed to allocate {name}'".format(
+                name=fortran_expr))
+            code_generator.emit("stop")
+
+        self.pointee_type.emit_allocation(code_generator, fortran_expr)
 
     def emit_variable_init(self, code_generator, fortran_expr):
         code_generator.emit_traceable("nullify(%s)" % fortran_expr)
 
     def emit_variable_deinit(self, code_generator, fortran_expr):
+        self.pointee_type.emit_variable_deinit(code_generator, fortran_expr)
+
         code_generator.emit_traceable('deallocate({id})'.format(id=fortran_expr))
         code_generator.emit_traceable("nullify(%s)" % fortran_expr)
 
@@ -454,8 +502,35 @@ class StructureType(TypeBase):
     def get_type_specifiers(self, defer_dim):
         return ()
 
+    def is_allocatable(self):
+        return any(
+                member_type.is_allocatable()
+                for name, member_type in self.members)
+
     def emit_allocation(self, code_generator, fortran_expr):
-        raise NotImplementedError()
+        for member_name, member_type in self.members:
+            if member_type.is_allocatable():
+                member_type.emit_allocation(
+                        code_generator,
+                        '{expr}%{member_name}'.format(
+                            expr=fortran_expr,
+                            member_name=member_name))
+
+    def emit_variable_init(self, code_generator, fortran_expr):
+        for member_name, member_type in self.members:
+            member_type.emit_variable_init(
+                    code_generator,
+                    '{expr}%{member_name}'.format(
+                        expr=fortran_expr,
+                        member_name=member_name))
+
+    def emit_variable_deinit(self, code_generator, fortran_expr):
+        for member_name, member_type in self.members:
+            member_type.emit_variable_deinit(
+                    code_generator,
+                    '{expr}%{member_name}'.format(
+                        expr=fortran_expr,
+                        member_name=member_name))
 
     def emit_assignment(self, code_generator, fortran_expr, rhs_expr):
         for name, type in self.members:
@@ -463,8 +538,9 @@ class StructureType(TypeBase):
                     code_generator.sym_kind_table, code_generator.current_function,
                     name)
             type.emit_assignment(
+                    code_generator,
                     fortran_expr+"%"+name,
-                    sla(fortran_expr))
+                    sla(rhs_expr))
 
 # }}}
 
@@ -651,7 +727,13 @@ class CodeGenerator(StructuredCodeGenerator):
     def lower_function(self, function_name, control_tree):
         self.current_function = function_name
 
-        self.emit_def_begin(function_name)
+        self.emit_def_begin(
+                'leap_state_func_' + function_name,
+                self.extra_arguments + ('leap_state',),
+                state_id=function_name)
+        self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
+        self.declaration_emitter('')
+
         self.lower_node(control_tree)
         self.emit_def_end(function_name)
 
@@ -800,21 +882,8 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_traceable('{refcnt} = 1'.format(refcnt=refcnt_name))
 
     def emit_allocation(self, fortran_name, sym_kind):
-        comp_type = self.ode_component_type_map[sym_kind.component_id]
-
-        if comp_type.dimension:
-            dimension = '(%s)' % ', '.join(
-                    str(dim_axis) for dim_axis in comp_type.dimension)
-        else:
-            dimension = ""
-
-        self.emit_traceable('allocate({name}{dimension}, stat=leap_ierr)'.format(
-            name=fortran_name,
-            dimension=dimension))
-        with FortranIfEmitter(self.emitter, 'leap_ierr.ne.0', self):
-            self.emit("write(*,*) 'failed to allocate {name}'".format(
-                name=fortran_name))
-            self.emit("stop")
+        comp_type = self.get_ode_component_type(sym_kind.component_id)
+        comp_type.emit_allocation(self, fortran_name)
 
     def emit_allocation_check(self, sym, sym_kind):
         fortran_name = self.name_manager[sym]
@@ -875,10 +944,10 @@ class CodeGenerator(StructuredCodeGenerator):
 
         arg_strs_dict = {}
         for i, arg in enumerate(expr.parameters):
-            arg_strs_dict[i] = "(%s)" % self.expr(arg)
+            arg_strs_dict[i] = self.expr(arg)
         if isinstance(expr, CallWithKwargs):
             for arg_name, arg in expr.kw_parameters.items():
-                arg_strs_dict[arg_name] = "(%s)" % self.expr(arg)
+                arg_strs_dict[arg_name] = self.expr(arg)
 
         lines = codegen(
                 result=result_fortran_name,
@@ -936,45 +1005,61 @@ class CodeGenerator(StructuredCodeGenerator):
                 self.name_manager.name_global(sym)
                 for sym in init_symbols)
 
-        with FortranSubroutineEmitter(
-                self.emitter,
-                'initialize', args, self):
+        function_name = 'initialize'
+        state_id = "<leap>"+function_name
+        self.emit_def_begin(function_name, args, state_id=state_id)
 
-            self.emit('implicit none')
-            self.emit('')
-            self.emit_extra_arg_decl()
+        for sym in init_symbols:
+            sym_kind = self.sym_kind_table.global_table[sym]
+            fortran_name = self.name_manager.name_global(sym)
+            self.sym_kind_table.set(state_id, "<target>"+fortran_name, sym_kind)
 
-            self.emit('type(leap_state_type), pointer :: leap_state')
-            self.emit('integer leap_ierr')
-            self.emit('')
+        self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
+        self.declaration_emitter('')
 
-            for sym in init_symbols:
-                sym_kind = self.sym_kind_table.global_table[sym]
-                fortran_name = self.name_manager.name_global(sym)
+        self.current_function = state_id
 
-                self.emit_variable_decl(
-                        fortran_name, sym_kind, is_argument=True,
-                        other_specifiers=("optional",))
-            self.emit('')
+        for sym in init_symbols:
+            sym_kind = self.sym_kind_table.global_table[sym]
+            fortran_name = self.name_manager.name_global(sym)
 
-            for sym, sym_kind in six.iteritems(
-                    self.sym_kind_table.global_table):
-                self.emit_variable_init(sym, sym_kind)
+            self.emit_variable_decl(
+                    fortran_name, sym_kind, is_argument=True,
+                    other_specifiers=("optional",))
+        self.emit('')
 
-            for sym in init_symbols:
-                sym_kind = self.sym_kind_table.global_table[sym]
+        for sym, sym_kind in six.iteritems(
+                self.sym_kind_table.global_table):
+            self.emit_variable_init(sym, sym_kind)
 
-                tgt_fortran_name = self.name_manager[sym]
-                fortran_name = self.name_manager.name_global(sym)
+        for sym in init_symbols:
+            sym_kind = self.sym_kind_table.global_table[sym]
 
-                with FortranIfEmitter(
-                        self.emitter, 'present(%s)' % fortran_name, self):
-                    self.emit_refcounted_allocation(sym, sym_kind)
+            tgt_fortran_name = self.name_manager[sym]
+            fortran_name = self.name_manager.name_global(sym)
 
-                    self.emit_traceable("{name} = {arg}"
+            with FortranIfEmitter(
+                    self.emitter, 'present(%s)' % fortran_name, self):
+                self.emit_refcounted_allocation(sym, sym_kind)
+
+                from leap.vm.codegen.data import ODEComponent
+                if not isinstance(sym_kind, ODEComponent):
+                    self.emit(
+                            "{lhs} = {rhs}"
                             .format(
-                                name=tgt_fortran_name,
-                                arg=fortran_name))
+                                lhs=tgt_fortran_name,
+                                rhs=fortran_name))
+                else:
+                    comp_type = self.get_ode_component_type(
+                            sym_kind.component_id)
+                    from pymbolic import var
+                    comp_type.emit_assignment(
+                            self, tgt_fortran_name,
+                            var("<target>"+fortran_name))
+
+        self.emit_def_end(function_name)
+
+        self.current_function = None
 
     def emit_shutdown(self):
         with FortranSubroutineEmitter(
@@ -1069,41 +1154,41 @@ class CodeGenerator(StructuredCodeGenerator):
 
     # {{{ called by superclass
 
-    def emit_def_begin(self, func_id):
+    def emit_def_begin(self, function_name, argument_names, state_id=None):
         self.declaration_emitter = FortranEmitter()
 
         FortranSubroutineEmitter(
                 self.emitter,
-                'leap_state_func_' + func_id,
-                self.extra_arguments + ('leap_state',),
+                function_name,
+                argument_names,
                 self).__enter__()
 
         self.declaration_emitter('implicit none')
-        self.declaration_emitter('')
-        self.emit_extra_arg_decl(self.declaration_emitter)
-
-        self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
         self.declaration_emitter('integer leap_ierr')
         self.declaration_emitter('')
+
+        self.emit_extra_arg_decl(self.declaration_emitter)
 
         body_emitter = FortranEmitter()
         self.emitters.append(body_emitter)
 
-        sym_table = self.sym_kind_table.per_function_table.get(func_id, {})
-        for identifier, sym_kind in six.iteritems(sym_table):
-            self.emit_variable_decl(self.name_manager[identifier], sym_kind)
+        if state_id is not None:
+            sym_table = self.sym_kind_table.per_function_table.get(state_id, {})
+            for identifier, sym_kind in six.iteritems(sym_table):
+                self.emit_variable_decl(self.name_manager[identifier], sym_kind)
 
-        if sym_table:
-            self.emit('')
+            if sym_table:
+                self.emit('')
 
         self.emit_trace('================================================')
-        self.emit_trace('enter %s' % func_id)
+        self.emit_trace('enter %s' % function_name)
 
-        for identifier, sym_kind in six.iteritems(sym_table):
-            self.emit_variable_init(identifier, sym_kind)
+        if state_id is not None:
+            for identifier, sym_kind in six.iteritems(sym_table):
+                self.emit_variable_init(identifier, sym_kind)
 
-        if sym_table:
-            self.emit('')
+            if sym_table:
+                self.emit('')
 
     def emit_def_end(self, func_id):
         self.emitters[-2].incorporate(self.declaration_emitter)
