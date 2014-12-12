@@ -412,7 +412,7 @@ class ArrayType(TypeBase):
 
         emitters = []
         for i, (dim, index_name) in enumerate(
-                reversed(zip(self.dimension, index_names))):
+                reversed(list(zip(self.dimension, index_names)))):
             code_generator.declaration_emitter('integer %s' % index_name)
 
             start_stop = self.parse_dimension(dim)
