@@ -2,6 +2,7 @@ program test_rkmethod
 
   use RKMethod, only: leap_state_type, &
     timestep_initialize => initialize, &
+    timestep_run => run, &
     timestep_shutdown => shutdown, &
     leap_state_func_initialization, &
     leap_state_func_primary
@@ -19,8 +20,8 @@ program test_rkmethod
   real*8, dimension(2) :: initial_condition
 
   real*8 t_fin
-  integer nsteps
-  parameter (t_fin=1d0, nsteps=20)
+  integer ntrips
+  parameter (t_fin=1d0, ntrips=20)
 
   integer istep
 
@@ -36,9 +37,8 @@ program test_rkmethod
     leap_t=0d0, &
     leap_dt=t_fin/20)
 
-  call leap_state_func_initialization(region=region_ptr, leap_state=state_ptr)
-  do istep = 1,nsteps
-    call leap_state_func_primary(region=region_ptr, leap_state=state_ptr)
+  do istep = 1,ntrips
+    call timestep_run(region=region_ptr, leap_state=state_ptr)
   enddo
 
   call timestep_shutdown(region=region_ptr, leap_state=state_ptr)

@@ -466,7 +466,7 @@ class PointerType(TypeBase):
                     dimension=dimension))
         with FortranIfEmitter(
                 code_generator.emitter, 'leap_ierr.ne.0', code_generator):
-            code_generator.emit("write(*,*) 'failed to allocate {name}'".format(
+            code_generator.emit("write(leap_stderr,*) 'failed to allocate {name}'".format(
                 name=fortran_expr))
             code_generator.emit("stop")
 
@@ -630,6 +630,10 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.emitters = [self.module_emitter]
 
+    @staticmethod
+    def state_name_to_state_sym(state_name):
+        return "leap_state_"+state_name
+
     @property
     def emitter(self):
         return self.emitters[-1]
@@ -752,8 +756,8 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit('')
 
         for i, state in enumerate(dag.states):
-            self.emit("parameter (leap_state_{state_name} = {i})".format(
-                state_name=state, i=i))
+            self.emit("parameter ({state_sym_name} = {i})".format(
+                state_sym_name=self.state_name_to_state_sym(state), i=i))
 
         self.emit('')
 
@@ -761,7 +765,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 self.emitter,
                 'leap_state_type',
                 self) as emit:
-            emit('integer leap_state')
+            emit('integer leap_next_state')
             emit('')
 
             for identifier, sym_kind in six.iteritems(
@@ -770,6 +774,9 @@ class CodeGenerator(StructuredCodeGenerator):
                         self.name_manager.name_global(identifier),
                         sym_kind=sym_kind)
 
+        self.emit('integer leap_stderr')
+        self.emit('parameter (leap_stderr=0)')
+        self.emit('')
         self.emit('contains')
         self.emit('')
 
@@ -875,7 +882,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_traceable('allocate({name}, stat=leap_ierr)'.format(
             name=refcnt_name))
         with FortranIfEmitter(self.emitter, 'leap_ierr.ne.0', self):
-            self.emit("write(*,*) 'failed to allocate {name}'".format(
+            self.emit("write(leap_stderr,*) 'failed to allocate {name}'".format(
                 name=refcnt_name))
             self.emit("stop")
 
@@ -1002,7 +1009,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
     # }}}
 
-    def emit_initialize(self):
+    def emit_initialize(self, dag):
         init_symbols = [
                 sym
                 for sym in self.sym_kind_table.global_table
@@ -1034,6 +1041,8 @@ class CodeGenerator(StructuredCodeGenerator):
                     fortran_name, sym_kind, is_argument=True,
                     other_specifiers=("optional",))
         self.emit('')
+
+        self.emit("leap_state%leap_next_state = leap_state_{}".format(dag.initial_state))
 
         for sym, sym_kind in six.iteritems(
                 self.sym_kind_table.global_table):
@@ -1089,55 +1098,59 @@ class CodeGenerator(StructuredCodeGenerator):
                     with FortranIfEmitter(
                             self.emitter,
                             'associated({id})'.format(id=fortran_name), self):
-                        self.emit("write(*,*) 'leaked reference in {name}'".format(
+                        self.emit("write(leap_stderr,*) 'leaked reference in {name}'".format(
                             name=fortran_name))
-                        self.emit("write(*,*) '  remaining refcount ', {name}"
+                        self.emit("write(leap_stderr,*) '  remaining refcount ', {name}"
                                 .format(name=self.name_manager.name_refcount(sym)))
                         #self.emit('stop')
 
-    def emit_run_step(self):
-        """Emit the run() method."""
-        with FortranSubroutineEmitter(
-                self.emitter,
-                'run', ('leap_state', 't_end'), self) as emit:
-            emit('t_end = kwargs["t_end"]')
-            emit('last_step = False')
+    def emit_run_step(self, dag):
+        args = self.extra_arguments + ('leap_state',)
 
-            # STATE_HACK: This implementation of staging support should be replaced
-            # so that the states are not hard-coded.
-            emit('next_states = { "initialization": "primary", ' +
-                 '"primary": "primary" }')
-            emit('current_state = "initialization"')
+        function_name = 'run'
+        state_id = "<leap>"+function_name
+        self.emit_def_begin(function_name, args, state_id=state_id)
 
-            with FortranDoWhileEmitter(emit, ".true.", self):
-                with FortranIfEmitter(
-                        self.emitter, 'self.t + self.dt >= t_end', self):
-                    self.emit('assert self.t <= t_end')
-                    self.emit('self.dt = t_end - self.t')
-                    self.emit('last_step = True')
+        self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
+        self.declaration_emitter('')
 
-                self.emit('state_function = getattr(self, "state_" + current_state)')
-                emit('result = state_function()')
+        self.current_function = state_id
 
-                with FortranIfEmitter(self.emitter, 'result') as emit_res:
-                    emit_res('result = dict(result)')
-                    emit_res('t = result["time"]')
-                    emit_res('time_id = result["time_id"]')
-                    emit_res('component_id = result["component_id"]')
-                    emit_res('state_component = result["expression"]')
-                    emit_res('yield self.StateComputed(t=t, time_id=time_id, \\')
-                    emit_res('    component_id=component_id, ' +
-                         'state_component=state_component)')
+        if_emit = None
+        for name, state_descr in six.iteritems(dag.states):
+            state_sym_name = self.state_name_to_state_sym(name)
+            cond = "leap_state%leap_next_state == "+state_sym_name
 
-                    with FortranIfEmitter(emit_res, 'last_step') as emit_ls:
-                        emit_ls('yield self.StepCompleted(t=self.t)')
-                        emit_ls('exit')
-                self.emit('current_state = next_states[current_state]')
+            if if_emit is None:
+                if_emit = FortranIfEmitter(
+                        self.emitter, cond, self)
+                if_emit.__enter__()
+            else:
+                if_emit.emit_else_if(cond)
+
+            self.emit("leap_state%leap_next_state = "+self.state_name_to_state_sym(state_descr.next_state))
+
+            self.emit(
+                    "call leap_state_func_{state_name}({args})".format(
+                        state_name=name,
+                        args=", ".join(args)))
+
+        if if_emit:
+            if_emit.emit_else()
+            self.emit("write(leap_stderr,*) 'encountered invalid state in run', "
+                    "leap_state%leap_next_state")
+            self.emit("stop")
+
+        if_emit.__exit__(None, None, None)
+
+        self.emit_def_end(function_name)
+
+        self.current_function = None
 
     def finish_emit(self, dag):
-        self.emit_initialize()
+        self.emit_initialize(dag)
         self.emit_shutdown()
-        # self.emit_run()
+        self.emit_run_step(dag)
 
         self.module_emitter.__exit__(None, None, None)
 
