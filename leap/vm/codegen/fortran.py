@@ -479,8 +479,9 @@ class PointerType(TypeBase):
                     dimension=dimension))
         with FortranIfEmitter(
                 code_generator.emitter, 'leap_ierr.ne.0', code_generator):
-            code_generator.emit("write(leap_stderr,*) 'failed to allocate {name}'".format(
-                name=fortran_expr))
+            code_generator.emit(
+                    "write(leap_stderr,*) 'failed to allocate {name}'".format(
+                        name=fortran_expr))
             code_generator.emit("stop")
 
         self.pointee_type.emit_allocation(code_generator, fortran_expr)
@@ -1059,7 +1060,9 @@ class CodeGenerator(StructuredCodeGenerator):
                     other_specifiers=("optional",))
         self.emit('')
 
-        self.emit("leap_state%leap_next_state = leap_state_{}".format(dag.initial_state))
+        self.emit(
+                "leap_state%leap_next_state = leap_state_{0}"
+                .format(dag.initial_state))
 
         for sym, sym_kind in six.iteritems(
                 self.sym_kind_table.global_table):
@@ -1116,9 +1119,11 @@ class CodeGenerator(StructuredCodeGenerator):
                     with FortranIfEmitter(
                             self.emitter,
                             'associated({id})'.format(id=fortran_name), self):
-                        self.emit("write(leap_stderr,*) 'leaked reference in {name}'".format(
-                            name=fortran_name))
-                        self.emit("write(leap_stderr,*) '  remaining refcount ', {name}"
+                        self.emit(
+                                "write(leap_stderr,*) 'leaked reference in {name}'"
+                                .format(name=fortran_name))
+                        self.emit(
+                                "write(leap_stderr,*) 'remaining refcount ', {name}"
                                 .format(name=self.name_manager.name_refcount(sym)))
                         #self.emit('stop')
 
@@ -1146,7 +1151,9 @@ class CodeGenerator(StructuredCodeGenerator):
             else:
                 if_emit.emit_else_if(cond)
 
-            self.emit("leap_state%leap_next_state = "+self.state_name_to_state_sym(state_descr.next_state))
+            self.emit(
+                    "leap_state%leap_next_state = "
+                    + self.state_name_to_state_sym(state_descr.next_state))
 
             self.emit(
                     "call leap_state_func_{state_name}({args})".format(
