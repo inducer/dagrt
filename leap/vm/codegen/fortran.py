@@ -303,6 +303,9 @@ class TypeBase(object):
     def emit_variable_deinit(self, code_generator, fortran_expr):
         raise NotImplementedError()
 
+    def emit_variable_deallocate(self, code_generator, fortran_expr):
+        raise NotImplementedError()
+
     def emit_assignment(self, code_generator, fortran_expr, rhs_expr):
         raise NotImplementedError()
 
@@ -327,6 +330,9 @@ class BuiltinType(TypeBase):
         pass
 
     def emit_variable_deinit(self, code_generator, fortran_expr):
+        pass
+
+    def emit_variable_deallocate(self, code_generator, fortran_expr):
         pass
 
     def emit_assignment(self, code_generator, fortran_expr, rhs_expr):
@@ -405,6 +411,13 @@ class ArrayType(TypeBase):
             # Array of pointers, for example.
             raise NotImplementedError()
 
+    def emit_variable_deallocate(self, code_generator, fortran_expr):
+        if not self.element_type.is_allocatable():
+            return
+        else:
+            # Array of pointers, for example.
+            raise NotImplementedError()
+
     def emit_assignment(self, code_generator, fortran_expr, rhs_expr):
         index_names = [
             code_generator.name_manager.make_unique_fortran_name("i%d" % i)
@@ -476,6 +489,9 @@ class PointerType(TypeBase):
         code_generator.emit_traceable("nullify(%s)" % fortran_expr)
 
     def emit_variable_deinit(self, code_generator, fortran_expr):
+        code_generator.emit_traceable("nullify(%s)" % fortran_expr)
+
+    def emit_variable_deallocate(self, code_generator, fortran_expr):
         self.pointee_type.emit_variable_deinit(code_generator, fortran_expr)
 
         code_generator.emit_traceable('deallocate({id})'.format(id=fortran_expr))
@@ -855,13 +871,14 @@ class CodeGenerator(StructuredCodeGenerator):
                     self.emitter, '{refcnt}.eq.1'.format(refcnt=refcnt_name), self) \
                             as if_emit:
                 comp_type = self.get_ode_component_type(sym_kind.component_id)
-                comp_type.emit_variable_deinit(self, self.name_manager[name])
+                comp_type.emit_variable_deallocate(self, self.name_manager[name])
 
                 self.emit_traceable(
                         'deallocate({refcnt})'.format(refcnt=refcnt_name))
 
                 if_emit.emit_else()
 
+                comp_type.emit_variable_deinit(self, self.name_manager[name])
                 self.emit_traceable(
                         '{refcnt} = {refcnt} - 1'
                         .format(refcnt=refcnt_name))
@@ -1093,6 +1110,7 @@ class CodeGenerator(StructuredCodeGenerator):
             for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
                 self.emit_variable_deinit(sym, sym_kind)
 
+            for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
                 if isinstance(sym_kind, ODEComponent):
                     fortran_name = self.name_manager[sym]
                     with FortranIfEmitter(
