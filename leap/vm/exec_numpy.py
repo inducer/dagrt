@@ -33,6 +33,8 @@ class FailStepException(Exception):
     pass
 
 
+# {{{ interpreter
+
 class NumpyInterpreter(object):
     """A :mod:`numpy`-targeting interpreter for the time integration language
     defined in :mod:`leap.vm.language`.
@@ -195,5 +197,96 @@ class NumpyInterpreter(object):
             return None, insn.else_depends_on
 
     # }}}
+
+# }}}
+
+
+# {{{ step matrix finder
+
+class StepMatrixFinder(object):
+    """Constructs a step matrix on-the-fly while interpreting code.
+
+    Assumes that all function evaluations occur as the root node of
+    a separate assignment instruction.
+    """
+
+    def __init__(self, code, function_map, variables=None):
+        self.code = code
+
+        self.function_map = function_map
+
+        if variables is None:
+            variables = self._get_state_variables()
+        self.variables = variables
+
+        from leap.vm.language import ExecutionController
+        self.exec_controller = ExecutionController(code)
+        self.context = {}
+
+        self.eval_mapper = EvaluationMapper(self.context, self.function_map)
+
+    def _get_state_variables(self):
+        """Extract all state-related variables from the code."""
+        all_var_ids = set()
+        for inst in self.code.instructions:
+            all_var_ids |= inst.get_assignees()
+            all_var_ids |= inst.get_read_variables()
+        all_state_vars = []
+        for var_name in all_var_ids:
+            if var_name.startswith('<p>') or var_name.startswith('<state>'):
+                all_state_vars.append(var_name)
+        all_state_vars.sort()
+        return all_state_vars
+
+    def get_state_step_matrix(self, state_name):
+        state = self.code.states[state_name]
+
+        from pymbolic import var
+
+        initial_vars = []
+
+        self.context.clear()
+        for vname in self.variables:
+            iv = self.context[vname] = var(vname+"_0")
+            initial_vars.append(iv)
+
+        self.context["<dt>"] = var("<dt>")
+        self.context["<t>"] = 0
+
+        self.exec_controller.reset()
+        self.exec_controller.update_plan(state.depends_on)
+        for event in self.exec_controller(self):
+            pass
+
+        from pymbolic.mapper.differentiator import DifferentiationMapper
+
+        nv = len(self.variables)
+        step_matrix = np.zeros((nv, nv), dtype=np.object)
+        for i, v in enumerate(self.variables):
+            for j, iv in enumerate(initial_vars):
+                step_matrix[i][j] = DifferentiationMapper(iv)(self.context[v])
+        return step_matrix
+
+    # {{{ exec methods
+
+    def exec_AssignExpression(self, insn):
+        self.context[insn.assignee] = self.eval_mapper(insn.expression)
+
+    def exec_YieldState(self, insn):
+        pass
+
+    def exec_Raise(self, insn):
+        raise insn.error_condition(insn.error_message)
+
+    def exec_FailStep(self, insn):
+        raise FailStepException()
+
+    def exec_If(self, insn):
+        raise RuntimeError("matrices don't represent conditionals well, "
+                "so StepMatrixFinder cannot support them")
+
+    # }}}
+
+# }}}
 
 # vim: fdm=marker
