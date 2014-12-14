@@ -37,8 +37,11 @@ class NumpyInterpreter(object):
     """A :mod:`numpy`-targeting interpreter for the time integration language
     defined in :mod:`leap.vm.language`.
 
+    .. attribute:: next_state
+
     .. automethod:: set_up
     .. automethod:: run
+    .. automethod:: run_single_step
     """
 
     # {{{ events returned from run()
@@ -131,22 +134,8 @@ class NumpyInterpreter(object):
             # }}}
 
             try:
-                try:
-                    self.exec_controller.reset()
-                    cur_state = self.code.states[self.next_state]
-                    self.next_state = cur_state.next_state
-                    self.exec_controller.update_plan(cur_state.depends_on)
-                    for event in self.exec_controller(self):
-                        yield event
-
-                finally:
-                    # discard non-permanent per-step state
-                    for name in list(six.iterkeys(self.context)):
-                        if (
-                                not name.startswith("<state>")
-                                and not name.startswith("<p>")
-                                and name not in ["<t>", "<dt>"]):
-                            del self.context[name]
+                for evt in self.run_single_step():
+                    yield evt
 
             except FailStepException:
                 yield self.StepFailed(t=self.context["<t>"])
@@ -156,6 +145,24 @@ class NumpyInterpreter(object):
 
             if last_step:
                 break
+
+    def run_single_step(self):
+        try:
+            self.exec_controller.reset()
+            cur_state = self.code.states[self.next_state]
+            self.next_state = cur_state.next_state
+            self.exec_controller.update_plan(cur_state.depends_on)
+            for event in self.exec_controller(self):
+                yield event
+
+        finally:
+            # discard non-permanent per-step state
+            for name in list(six.iterkeys(self.context)):
+                if (
+                        not name.startswith("<state>")
+                        and not name.startswith("<p>")
+                        and name not in ["<t>", "<dt>"]):
+                    del self.context[name]
 
     def register_function(self, name, f):
         if name in self.functions:
