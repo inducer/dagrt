@@ -174,6 +174,15 @@ def test_multirate_accuracy(python_method_impl, order, system):
             method_impl=python_method_impl)()
 
 
+def test_diagram_generation():
+    from leap.method.ab.multirate.methods import methods
+    from leap.method.ab.multirate.processors import MRABToTeXProcessor
+
+    for name, method in methods.items():
+        mrab2tex = MRABToTeXProcessor(method, 3, no_mixing=True)
+        mrab2tex.run()
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
