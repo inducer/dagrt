@@ -77,6 +77,5 @@ class EvaluationMapper(EvaluationMapperBase):
         return self.map_generic_call(expr.function.name, expr.parameters,
                                      expr.kw_parameters)
 
-# }}}
 
 # vim: foldmethod=marker

@@ -145,7 +145,7 @@ def verify_code(code):
 # }}}
 
 
-# {{{ collect rhs names from DAG
+# {{{ collect function names from DAG
 
 class _FunctionNameCollector(Collector):
     def map_call(self, expr):
