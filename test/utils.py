@@ -33,6 +33,7 @@ def python_method_impl_interpreter(code, **kwargs):
     from leap.vm.exec_numpy import NumpyInterpreter
     return NumpyInterpreter(code, **kwargs)
 
+
 def python_method_impl_codegen(code, **kwargs):
     from leap.vm.codegen import PythonCodeGenerator
     codegen = PythonCodeGenerator(class_name='Method')
@@ -44,7 +45,6 @@ def python_method_impl_codegen(code, **kwargs):
 def execute_and_return_single_result(python_method_impl, code):
     interpreter = python_method_impl(code, function_map={})
     interpreter.set_up(t_start=0, dt_start=0, context={})
-    interpreter.initialize()
     events = [event for event in interpreter.run(t_end=0)]
     assert len(events) == 2
     assert isinstance(events[0], interpreter.StateComputed)
@@ -115,7 +115,6 @@ def check_simple_convergence(method, method_impl, expected_order,
 
         interp = method_impl(code, function_map={component_id: problem})
         interp.set_up(t_start=t, dt_start=dt, context={component_id: y})
-        interp.initialize()
 
         times = []
         values = []

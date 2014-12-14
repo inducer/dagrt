@@ -38,7 +38,6 @@ class NumpyInterpreter(object):
     defined in :mod:`leap.vm.language`.
 
     .. automethod:: set_up
-    .. automethod:: initialize
     .. automethod:: run
     """
 
@@ -109,12 +108,10 @@ class NumpyInterpreter(object):
             self.context["<state>"+key] = val
 
     def initialize(self):
-        self.exec_controller.reset()
-        cur_state = self.code.states[self.next_state]
-        self.next_state = cur_state.next_state
-        self.exec_controller.update_plan(cur_state.depends_on)
-        for event in self.exec_controller(self):
-            pass
+        from warnings import warn
+        warn("NumpyInterpreter.initialize is deprecated and a no-op, "
+                "having been replaced by the integrator states system",
+                DeprecationWarning, stacklevel=2)
 
     def run(self, t_end):
         """Generates :ref:`numpy-exec-events`."""
