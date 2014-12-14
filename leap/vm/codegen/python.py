@@ -57,11 +57,16 @@ class StateComputed(namedtuple("StateComputed",
     .. attribute:: state_component
     """
 
-class StepCompleted(namedtuple("StepCompleted", ["t"])):
+class StepCompleted(
+        namedtuple("StepCompleted",
+            ["t", "current_state", "next_state"])):
     """
     .. attribute:: t
 
-        Floating point number.
+        Approximate integrator time at end of step.
+
+    .. attribute:: current_state
+    .. attribute:: next_state
     """
 
 class StepFailed(namedtuple("StepFailed", ["t"])):
@@ -139,6 +144,19 @@ class PythonNameManager(object):
             return self.name_global(name)
         else:
             return self.name_local(name)
+
+
+class BareExpression(object):
+    """The point of this class is to have a ``repr()`` that is exactly
+    a given string. That way, ``repr()`` can be used as a helper for
+    code generation on structured data.
+    """
+
+    def __init__(self, s):
+        self.s = s
+
+    def __repr__(self):
+        return self.s
 
 
 class PythonCodeGenerator(StructuredCodeGenerator):
@@ -221,7 +239,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
             emit(line)
         self._class_emitter.incorporate(emit)
 
-    def _emit_constructor(self):
+    def _emit_constructor(self, dag):
         """Emit the constructor."""
         emit = PythonFunctionEmitter('__init__', ('self', 'function_map'))
         # Perform necessary imports.
@@ -236,11 +254,17 @@ class PythonCodeGenerator(StructuredCodeGenerator):
                     .format(
                         py_function_id=py_function_id,
                         function_id=function_id))
-        emit('return')
         emit("")
+        emit("self.state_info = "+repr(dict(
+            (state_name, (
+                state.next_state,
+                BareExpression("self.state_"+state_name)))
+            for state_name, state in six.iteritems(dag.states))))
+        emit("")
+
         self._class_emitter.incorporate(emit)
 
-    def _emit_set_up(self):
+    def _emit_set_up(self, dag):
         """Emit the set_up() method."""
         emit = PythonFunctionEmitter('set_up',
                                      ('self', 't_start', 'dt_start', 'context'))
@@ -255,62 +279,60 @@ class PythonCodeGenerator(StructuredCodeGenerator):
             emit('{component} = context["{component_id}"]'.format(
                 component=component, component_id=component_id))
 
+        emit("self.next_state = "+repr(dag.initial_state))
+
         emit("")
         self._class_emitter.incorporate(emit)
 
     def _emit_run(self):
-        """Emit the run() method."""
-        emit = PythonFunctionEmitter('run', ('self', '**kwargs'))
-        emit('t_end = kwargs["t_end"]')
-        emit('last_step = False')
-        # STATE_HACK: This implementation of staging support should be replaced
-        # so that the states are not hard-coded.
-        emit('next_states = { "initialization": "primary", ' +
-             '"primary": "primary" }')
-        emit('current_state = "initialization"')
+        emit = PythonFunctionEmitter('run', ('self', 't_end=None', 'max_steps=None'))
+        emit('n_steps = 0')
         emit('while True:')
         with Indentation(emit):
-            emit('if self.t + self.dt >= t_end:')
+            emit('if t_end is not None and self.t >= t_end:')
             with Indentation(emit):
-                emit('assert self.t <= t_end')
-                emit('self.dt = t_end - self.t')
-                emit('last_step = True')
-            emit('state = getattr(self, "state_" + current_state)()')
+                emit('return')
+
+            emit('if max_steps is not None and n_steps >= max_steps:')
+            with Indentation(emit):
+                emit('return')
+
+            emit('cur_state = self.next_state')
             emit('try:')
             with Indentation(emit):
-                emit('while True:')
+                emit('for evt in self.run_single_step():')
                 with Indentation(emit):
-                    emit('yield next(state)')
-            emit('except StopIteration:')
-            with Indentation(emit):
-                emit('pass')
+                    emit('yield evt')
+
             emit('except self.FailStepException:')
             with Indentation(emit):
                 emit('yield self.StepFailed(t=self.t)')
                 emit('continue')
-            # STATE_HACK: Ensure that the primary state has a chance to run.
-            emit('if last_step and current_state == "primary":')
-            with Indentation(emit):
-                emit('yield self.StepCompleted(t=self.t)')
-                emit('raise StopIteration()')
-            emit('current_state = next_states[current_state]')
+
+            emit('yield self.StepCompleted(t=self.t, '
+                'current_state=cur_state, next_state=self.next_state)')
+
+            emit('n_steps += 1')
+
         emit("")
         self._class_emitter.incorporate(emit)
 
-    def _emit_initialize(self):
-        # This method is not used by the class, but is here for compatibility
-        # with the NumpyInterpreter interface.
-        emit = PythonFunctionEmitter('initialize', ('self',))
-        emit('pass')
+    def _emit_run_single_step(self):
+        emit = PythonFunctionEmitter('run_single_step', ('self',))
 
+        emit('self.next_state, state_func = self.state_info[self.next_state]')
+
+        emit('for evt in state_func():')
+        with Indentation(emit):
+            emit('yield evt')
         emit("")
         self._class_emitter.incorporate(emit)
 
     def finish_emit(self, dag):
-        self._emit_constructor()
-        self._emit_set_up()
-        self._emit_initialize()
+        self._emit_constructor(dag)
+        self._emit_set_up(dag)
         self._emit_run()
+        self._emit_run_single_step()
 
     def get_code(self):
         return self._class_emitter.get()
@@ -348,7 +370,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
                                            expr=self._expr(expr)))
 
     def emit_return(self):
-        self._emit('raise StopIteration()')
+        self._emit('return')
         # Ensure that Python recognizes this method as a generator function by
         # adding a yield statement. Otherwise, calling methods that do not
         # yield any values may result in raising a naked StopIteration instead

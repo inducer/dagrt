@@ -45,11 +45,14 @@ def python_method_impl_codegen(code, **kwargs):
 def execute_and_return_single_result(python_method_impl, code):
     interpreter = python_method_impl(code, function_map={})
     interpreter.set_up(t_start=0, dt_start=0, context={})
-    events = [event for event in interpreter.run(t_end=0)]
-    assert len(events) == 2
-    assert isinstance(events[0], interpreter.StateComputed)
-    assert isinstance(events[1], interpreter.StepCompleted)
-    return events[0].state_component
+    events = [event for event in interpreter.run(max_steps=2)]
+    assert len(events) == 3
+    assert isinstance(events[0], interpreter.StepCompleted)
+    assert events[0].current_state == 'initialization'
+    assert isinstance(events[1], interpreter.StateComputed)
+    assert isinstance(events[2], interpreter.StepCompleted)
+    assert events[2].current_state == 'primary'
+    return events[1].state_component
 
 
 class Problem(object):

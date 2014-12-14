@@ -98,7 +98,6 @@ def test_adaptive_timestep(python_method_impl, method, show_dag=False,
 
     interp = python_method_impl(code, function_map={component_id: example})
     interp.set_up(t_start=example.t_start, dt_start=1e-5, context={component_id: y})
-    interp.initialize()
 
     times = []
     values = []
@@ -112,7 +111,6 @@ def test_adaptive_timestep(python_method_impl, method, show_dag=False,
     for event in interp.run(t_end=example.t_end):
         if isinstance(event, interp.StateComputed):
             assert event.component_id == component_id
-            assert event.t < example.t_end + 1e-12
 
             new_values.append(event.state_component)
             new_times.append(event.t)

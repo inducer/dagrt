@@ -60,11 +60,16 @@ class NumpyInterpreter(object):
         .. attribute:: state_component
         """
 
-    class StepCompleted(namedtuple("StepCompleted", ["t"])):
+    class StepCompleted(
+            namedtuple("StepCompleted",
+                ["t", "current_state", "next_state"])):
         """
         .. attribute:: t
 
-            Floating point number.
+            Approximate integrator time at end of step.
+
+        .. attribute:: current_state
+        .. attribute:: next_state
         """
 
     class StepFailed(namedtuple("StepFailed", ["t"])):
@@ -112,29 +117,18 @@ class NumpyInterpreter(object):
                 raise ValueError("state variables may not start with '<'")
             self.context["<state>"+key] = val
 
-    def initialize(self):
-        from warnings import warn
-        warn("NumpyInterpreter.initialize is deprecated and a no-op, "
-                "having been replaced by the integrator states system",
-                DeprecationWarning, stacklevel=2)
-
-    def run(self, t_end):
+    def run(self, t_end=None, max_steps=None):
         """Generates :ref:`numpy-exec-events`."""
 
-        last_step = False
+        n_steps = 0
         while True:
-            # {{{ adjust time step down at end of integration
+            if t_end is not None and self.context["<t>"] >= t_end:
+                return
 
-            t = self.context["<t>"]
-            dt = self.context["<dt>"]
+            if max_steps is not None and n_steps >= max_steps:
+                return
 
-            if t+dt >= t_end:
-                assert t <= t_end
-                self.context["<dt>"] = t_end - t
-                last_step = True
-
-            # }}}
-
+            cur_state = self.next_state
             try:
                 for evt in self.run_single_step():
                     yield evt
@@ -143,10 +137,12 @@ class NumpyInterpreter(object):
                 yield self.StepFailed(t=self.context["<t>"])
                 continue
 
-            yield self.StepCompleted(t=self.context["<t>"])
+            yield self.StepCompleted(
+                    t=self.context["<t>"],
+                    current_state=cur_state,
+                    next_state=self.next_state)
 
-            if last_step:
-                break
+            n_steps += 1
 
     def run_single_step(self):
         try:
