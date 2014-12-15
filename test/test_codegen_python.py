@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from __future__ import division, with_statement
+from __future__ import division, with_statement, print_function
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
 
@@ -49,7 +49,7 @@ def test_basic_codegen():
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
     method = Method({})
-    print codegen(code)
+    print(codegen(code))
     method.set_up(t_start=0, dt_start=0, context={})
     hist = [s for s in method.run(max_steps=2)]
     assert len(hist) == 3
