@@ -25,74 +25,87 @@ THE SOFTWARE.
 """
 
 import sys
-from leap.vm.language import (CodeBuilder, SimpleCodeBuilder,
-                              TimeIntegratorCode)
+from leap.vm.language import (NewCodeBuilder, TimeIntegratorCode)
 from pymbolic import var
-from pymbolic.primitives import Comparison
 
 from leap.vm.exec_numpy import NumpyInterpreter  # noqa
 from leap.vm.codegen import PythonCodeGenerator  # noqa
 
 
-def test_SimpleCodeBuilder_yield(execute_and_return_single_result):
-    cb = CodeBuilder()
-    with SimpleCodeBuilder(cb) as builder:
-        yield_ = builder.yield_state(1, 'x', 0, 'final')
-    code = TimeIntegratorCode.create_with_init_and_step(
-            [], yield_, cb.instructions, True)
+def test_NewCodeBuilder_yield(execute_and_return_single_result):
+    with NewCodeBuilder() as builder:
+        builder.yield_state(1, 'x', 0, 'final')
+    code = TimeIntegratorCode.create_with_steady_state(
+        builder.instructions, builder.execution_depends_on)
     result = execute_and_return_single_result(code)
     assert result == 1
 
 
-def test_SimpleCodeBuilder_assign(execute_and_return_single_result):
-    cb = CodeBuilder()
-    with SimpleCodeBuilder(cb) as builder:
-        builder.assign(var('x'), 1)
-        yield_ = builder.yield_state(var('x'), 'x', 0, 'final')
-    code = TimeIntegratorCode.create_with_init_and_step(
-            [], yield_, cb.instructions, True)
+def test_NewCodeBuilder_assign(execute_and_return_single_result):
+    with NewCodeBuilder() as builder:
+        builder(var('x'), 1)
+        builder.yield_state(var('x'), 'x', 0, 'final')
+    code = TimeIntegratorCode.create_with_steady_state(
+        builder.instructions, builder.execution_depends_on)
     result = execute_and_return_single_result(code)
     assert result == 1
 
 
-def test_SimpleCodeBuilder_condition(execute_and_return_single_result):
-    cb = CodeBuilder()
-    with SimpleCodeBuilder(cb) as builder:
-        builder.assign(var('x'), 1)
-        with builder.condition(Comparison(var('x'), '==', 1)):
-            builder.assign(var('x'), 2)
-        yield_ = builder.yield_state(var('x'), 'x', 0, 'final')
-    code = TimeIntegratorCode.create_with_init_and_step(
-            [], yield_, cb.instructions, True)
+def test_NewCodeBuilder_condition(execute_and_return_single_result):
+    with NewCodeBuilder() as builder:
+        builder(var('x'), 1)
+        with builder._if(var('x'), '==', 1):
+            builder(var('x'), 2)
+        builder.yield_state(var('x'), 'x', 0, 'final')
+    code = TimeIntegratorCode.create_with_steady_state(
+        builder.instructions, builder.execution_depends_on)
     result = execute_and_return_single_result(code)
     assert result == 2
 
 
-def test_SimpleCodeBuilder_nested_condition(execute_and_return_single_result):
-    cb = CodeBuilder()
-    with SimpleCodeBuilder(cb) as builder:
-        builder.assign(var('x'), 1)
-        with builder.condition(Comparison(var('x'), '==', 1)):
-            builder.assign(var('x'), 2)
-            with builder.condition(Comparison(var('x'), '==', 2)):
-                builder.assign(var('x'), 3)
-            yield_ = builder.yield_state(var('x'), 'x', 0, 'final')
-    code = TimeIntegratorCode.create_with_init_and_step(
-            [], yield_, cb.instructions, True)
+def test_NewCodeBuilder_condition_with_else(execute_and_return_single_result):
+    with NewCodeBuilder() as cb:
+        cb(var('x'), 1)
+        with cb._if(var('x'), '!=', 1):
+            cb(var('x'), 2)
+        with cb._else():
+            cb(var('x'), 3)
+        cb.yield_state(var('x'), 'x', 0, 'final')
+    code = TimeIntegratorCode.create_with_steady_state(
+        cb.instructions, cb.execution_depends_on)
     result = execute_and_return_single_result(code)
     assert result == 3
 
 
-def test_SimpleCodeBuilder_dependencies(execute_and_return_single_result):
-    cb = CodeBuilder()
-    with SimpleCodeBuilder(cb) as builder:
-        dependency = builder.assign(var('x'), 1)
-    with SimpleCodeBuilder(cb, dependency) as builder:
-        yield_ = builder.yield_state(var('x'), 'x', 0, 'final')
-    code = TimeIntegratorCode.create_with_init_and_step(
-            [], yield_, cb.instructions, True)
+def test_NewCodeBuilder_nested_condition(execute_and_return_single_result):
+    with NewCodeBuilder() as builder:
+        builder(var('x'), 1)
+        with builder._if(var('x'), '==', 1):
+            builder(var('x'), 2)
+            with builder._if(var('x'), '==', 2):
+                builder(var('x'), 3)
+            builder.yield_state(var('x'), 'x', 0, 'final')
+    code = TimeIntegratorCode.create_with_steady_state(
+        builder.instructions, builder.execution_depends_on)
     result = execute_and_return_single_result(code)
-    assert result == 1
+    assert result == 3
+
+
+def test_NewCodeBuilder_nested_condition_with_else(
+        execute_and_return_single_result):
+    with NewCodeBuilder() as cb:
+        cb(var('x'), 1)
+        with cb._if(var('x'), '==', 1):
+            cb(var('x'), 2)
+            with cb._if(var('x'), '!=', 2):
+                cb(var('x'), 3)
+            with cb._else():
+                cb(var('x'), 4)
+            cb.yield_state(var('x'), 'x', 0, 'final')
+    code = TimeIntegratorCode.create_with_steady_state(
+        cb.instructions, cb.execution_depends_on)
+    result = execute_and_return_single_result(code)
+    assert result == 4
 
 
 if __name__ == "__main__":

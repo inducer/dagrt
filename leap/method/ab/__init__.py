@@ -32,7 +32,7 @@ from leap.method.ab.utils import make_ab_coefficients
 from leap.method import Method
 from pymbolic import var
 from pymbolic.primitives import CallWithKwargs, Comparison
-from leap.vm.language import SimpleCodeBuilder
+from leap.vm.language import CodeBuilder
 
 __doc__ = """
 .. autoclass:: AdamsBashforthTimeStepper
@@ -89,12 +89,12 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         self.dt = var('<dt>')
 
         # Initialization
-        with SimpleCodeBuilder(cbuild, state="initialization") as cb:
+        with CodeBuilder(state="initialization") as cb:
             cb(self.step, 1)
 
         cb_init = cb
         
-        with SimpleCodeBuilder(cbuild, state="primary") as cb:
+        with CodeBuilder(state="primary") as cb:
             cb(self.rhs, self.eval_rhs(self.t, self.state))
             with cb.if_(self.step, "<", self.order):
                 self.rk_bootstrap(cb)
@@ -108,6 +108,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                 for i in range(len(self.history)):
                     cb(self.history[i], history[i + 1])
             cb(self.t, self.t + self.dt)
+            cb.yield_state(expression=self.state, time_id='', time=self.t)
 
         cb_primary = cb
 

@@ -118,17 +118,15 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
     def emit_initialization(self, cbuild):
         """Initialize method variables. Returns the initialization list."""
 
-        # Initial value of RK y vector
-        with SimpleCodeBuilder(cbuild) as builder:
-            builder.assign(self.step, 0)
+        with CodeBuilder("initializtion") as cb:
+            cb.assign(self.step, 1)
 
-        # Initial value of RK derivatives
+            # Initial value of RK derivatives
             for hist_component, function in self.component_functions.items():
                 assignee = self.current_rhss[hist_component]
-                builder.assign(assignee,
-                               function(t=self.t, s=self.slow, f=self.fast))
+                cb(assignee, function(t=self.t, s=self.slow, f=self.fast))
 
-        return builder.last_added_instruction_id
+        return cb.last_added_instruction_id
 
     def emit_small_rk_step(self, builder, t, name_prefix):
         """Emit a single step of an RK method."""

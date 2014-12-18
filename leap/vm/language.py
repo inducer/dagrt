@@ -94,15 +94,9 @@ Instructions
 Assignment Instructions
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autoclass:: AssignRHS
-
-.. autoclass:: AssignSolvedRHS
+.. autoclass:: AssignSolved
 
 .. autoclass:: AssignExpression
-
-.. autoclass:: AssignNorm
-
-.. autoclass:: AssignDotProduct
 
 State Instructions
 ^^^^^^^^^^^^^^^^^^
@@ -189,54 +183,8 @@ class Nop(Instruction):
 
 # {{{ assignments
 
-def AssignRHS(
-        assignees, component_id, t, rhs_arguments,
-        id=None, depends_on=frozenset()):
-    """
-    .. attribute:: assignee
 
-        A string, the name of the variable being assigned to.
-
-    .. attribute:: component_id
-
-        Identifier of the right hand side to be evaluated. Typically a number
-        or a string.
-
-    .. attribute:: t
-
-        A :mod:`pymbolic` expression for the time at which the right hand side
-        is to be evaluated. Time is implicitly the first argument to each
-        expression.
-
-    .. attribute:: arguments
-
-        A tuple that lists arguments being passed to the right-hand side
-        (identified by :attr:`component_id`) being invoked.  These are tuples
-        ``(arg_name, expression)``, where *expression* is a :mod:`pymbolic`
-        expression.
-
-    :returns: a :class:`AssignExpression` instance
-    """
-
-    # It was never used with more than one RHS
-    if len(assignees) != 1:
-        raise ValueError("only one assignee is supported")
-
-    from warnings import warn
-    warn("AssignRHS is deprecated. Right-hand sides should be specified "
-            "as expressions, which may (or may not) call functions",
-            DeprecationWarning, stacklevel=2)
-
-    assignee, = assignees
-    arg_list, = rhs_arguments
-
-    from pymbolic import var
-    return AssignExpression(
-            assignee, var(component_id)(t=t, **dict(arg_list)),
-            id=id, depends_on=depends_on)
-
-
-class AssignSolvedRHS(Instruction):
+class AssignSolved(Instruction):
     # FIXME: We should allow vectorization over multiple inputs/outputs
     # Pure vectorization is not enough here. We may want some amount
     # of tensor product expression flexibility.
@@ -264,7 +212,7 @@ class AssignSolvedRHS(Instruction):
         code generation stage.
     """
 
-    exec_method = six.moves.intern("exec_AssignSolvedRHS")
+    exec_method = six.moves.intern("exec_AssignSolved")
 
 
 class AssignExpression(Instruction):
@@ -292,42 +240,6 @@ class AssignExpression(Instruction):
         return "%s <- %s" % (self.assignee, self.expression)
 
     exec_method = "exec_AssignExpression"
-
-
-def AssignNorm(assignee, expression, p=2, id=None, depends_on=frozenset()):
-    """
-    .. attribute:: assignee
-    .. attribute:: expression
-    .. attribute:: p
-    """
-    from pymbolic import var
-    from warnings import warn
-    warn("AssignNorm is deprecated. Use a call to <builtin>norm.",
-            DeprecationWarning, stacklevel=2)
-    return AssignExpression(
-            assignee, var("<builtin>norm")(expression, ord=p),
-            id=id, depends_on=depends_on)
-
-
-def AssignDotProduct(
-        assignee, expression_1, expression_2,
-        id=None, depends_on=frozenset()):
-    """
-    .. attribute:: assignee
-    .. attribute:: expression_1
-
-        The complex conjugate of this argument is taken before computing the
-        dot product, if applicable.
-
-    .. attribute:: expression_2
-    """
-    from pymbolic import var
-    from warnings import warn
-    warn("AssignDotProduct is deprecated. Use a call to <builtin>dot_product.",
-            DeprecationWarning, stacklevel=2)
-    return AssignExpression(
-            assignee, var("<builtin>dot_product")(expression_1, expression_2),
-            id=id, depends_on=depends_on)
 
 # }}}
 
@@ -496,9 +408,14 @@ class TimeIntegratorCode(RecordWithoutPickling):
     """
 
     @classmethod
+    def create_with_steady_state(cls, dep_on, instructions):
+        states = {'main': TimeIntegratorState(dep_on, next_state='main')}
+        return cls(instructions, states, 'main', step_before_fail=True)
+
+    @classmethod
     def create_with_init_and_step(cls,
             initialization_dep_on, step_dep_on, instructions,
-            step_before_fail):
+            step_before_fail=True):
         states = {}
         states['initialization'] = TimeIntegratorState(
                 initialization_dep_on,
@@ -523,7 +440,7 @@ class TimeIntegratorCode(RecordWithoutPickling):
     def id_to_insn(self):
         return dict((insn.id, insn)
                 for insn in self.instructions)
-
+ 
 # }}}
 
 
@@ -744,23 +661,6 @@ class SimpleCodeBuilder(object):
     def _update_dependency_stack(self, instruction_ids):
         self._dependency_stack[-1] = frozenset(instruction_ids)
 
-    def copy_fence(self, variables):
-        pass
-
-    def fence(self):
-        pass
-
-    def fail_step(self):
-        pass
-
-    @contextmanager
-    def if_(self, condition):
-        pass
-
-    @contextmanager
-    def else_(self):
-        pass
-
     def assign(self, assignee, expression):
         """
         Append an AssigneExpression instruction to the current build group.
@@ -814,6 +714,179 @@ class SimpleCodeBuilder(object):
     def __exit__(self, *ignored):
         assert len(self._dependency_stack) == 1
         self.cbuild.commit()
+
+
+class NewCodeBuilder(object):
+
+    class Context(RecordWithoutPickling):
+        """
+        Attributes:
+        names of variables being assigned to and corresponding instruction ids
+        prior dependency set
+        head context
+        """
+        def __init__(self, prior_dependencies=[]):
+            RecordWithoutPickling.__init__(self,
+                prior_dependencies=frozenset(prior_dependencies),
+                variable_map={},
+                variable_uses=set(),
+                context_instruction_ids=set())
+
+    class IfContext(Context):
+
+        def __init__(self, conditional_id):
+            CodeBuilderContext.__init__(self,
+                prior_dependencies=[conditional_id],
+                conditional_id=conditional_id)
+
+    def __init__(self, label="state"):
+        self.label = label
+        self._instruction_map = {}
+        self._instruction_count = 0
+        self._contexts = []
+        self._all_var_names = set()
+        self._all_generated_var_names = set()
+
+    @property
+    def instructions(self):
+        return frozenset(self._instruction_map.values())
+
+    def fence(self):
+        """
+        Enter a new logical block of instructions. Force all prior
+        instructions to execute before subsequent ones.
+        """
+        self._enforce_dependencies_on_current_context()
+        context = self._contexts[-1]
+        nop_id_set = self._add_and_get_ids(
+            Nop(depends_on=list(context.context_instruction_ids)))
+        self._contexts[-1] = NewCodeBuilder.CodeBuilderContext(nop_id_set)
+
+    def _enforce_dependencies_on_current_context(self):
+        # Enforce the single-writer heuristic on the current context.
+        pass
+
+    @contextmanager
+    def if_(self, *condition_arg):
+        self.fence()
+
+        """Create a new block that is conditionally executed."""
+        if len(condition_arg) == 1:
+            condition = condition_arg[0]
+        elif len(condition_arg) == 3:
+            from pymbolic.primitives import Comparison
+            condition = Comparison(*condition_arg)
+        else:
+            raise ValueError("Unrecognized condition format")
+
+        # Create a conditional instruction: then and else are empty.
+        context = self._contexts[-1]
+        conditional_id, = self._add_and_get_ids(
+            If(depends_on=list(context.context_instruction_ids),
+               then_depends_on=[], else_depends_on=[],
+               condition=condition))
+        self._contexts[-1] = NewCodeBuilder.IfContext(conditional_id)
+        contexts.append(NewCodeBuilder.CodeBuilderContext())
+        yield
+        # Then depends on is the same as the instruction ids for the
+        # last inserted context.
+        then_context = self._contexts.pop()
+        self._instruction_map[conditional_id] = \
+            self._instruction_map[conditional_id].copy(
+            then_depends_on=list())
+
+    @contextmanager
+    def else_(self):
+        """Create the "else" portion of a conditionally executed
+        block.
+        """
+        # Ensure that the last inserted instruction at this context
+        # level was an If.
+        assert isinstance(self.contexts[-1], NewCodeBuilder.IfContext)
+        self._contexts.append(NewCodeBuilder.Context())
+        yield
+        else_context = self._contexts.pop()
+        conditional_id = self._contexts[-1].conditional_id
+        self._instruction_map[conditional_id] = \
+            self._instruction_map[conditional_id].copy(
+            else_depends_on=list())
+        # Create a new merged context.
+        self._contexts[-1] = NewCodeBuilder.Context(
+            prior_dependencies=[conditional_id])
+
+    def _make_dependencies(self, variable_names=[]):
+        prior_dependencies = list(self._contexts[-1].prior_dependencies)
+        write_dependencies = set()
+        variable_map = self._contexts[-1].variable_map
+        for variable_name in variable_names:
+            if variable_name in variable_map:
+                write_dependencies |= variable_map[variable_name]
+        return prior_dependencies + list[write_dependencies]
+
+    def _next_instruction_id(self):
+        self._instruction_count += 1
+        return "inst_" + str(self._instruction_count)
+
+    def __call__(self, assignee, expression):
+        """Assign a value."""
+        from pymbolic.primitives import Variable
+        assert isinstance(assignee, Variable)
+        self._add_and_get_ids(AssignExpression(
+                assignee=assignee.name,
+                expression=expression))
+
+    def _add_and_get_ids(self, *instructions):
+        variable_map = {}
+        context = self._contexts[-1]
+        for inst in instructions:
+            inst_id = self._next_instruction_id()
+            for assignee in inst.get_assignees():
+                # Warn about potential ordering of assignments that may
+                # be unexpected by the user.
+                if assignee in context.used_variables:
+                    # TODO: Start a new block here.
+                    raise ValueError("write after use of " + assignee +
+                                         " in the same block")
+                if assignee in context.variable_map:
+                    raise ValueError("multiple assignments to " + assignee)
+                context.variable_map[assignee] = inst_id
+                self._all_var_names.add(assignee)
+            for used_variable in inst.get_read_variables():
+                context.used_variables.add(used_variable)
+                self._all_var_names.add(used_variable)
+            # Add to instruction map.
+            self._instruction_map[inst_id] = inst.copy(id=inst_id)
+            context.instruction_ids.add(inst_id)
+
+    def fresh_var_name(self, prefix="temp"):
+        """Return a variable name that is not guaranteed not to be in
+        use and not to be generated in the future."""
+        from pytools import generate_unique_names
+        for possible_var in generate_unique_names(str(prefix)):
+            if possible_var not in self._all_var_names \
+                    and possible_var not in self._all_generated_var_names:
+                self._all_generated_var_names.add(possible_var)
+                return possible_var
+
+    def fresh_var(self, prefix="temp"):
+        from pymbolic import var
+        return var(self.fresh_var_name(prefix))
+
+    def yield_state(expression, component_id, time, time_id):
+        """Yield a value."""
+        self._add_and_get_ids(YieldState(
+                expression=expression,
+                component_id=component_id,
+                time=time,
+                time_id=time_id))
+
+    def __enter__(self):
+        new_context = NewCodeBuilder.CodeBuilderContext()
+        self.contexts.append(new_context)
+        return self
+
+    def __exit__(self, *ignored):
+        pass
 
 
 # {{{ graphviz / dot export
