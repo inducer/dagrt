@@ -41,7 +41,7 @@ def test_NewCodeBuilder_yield(python_method_impl):
     with NewCodeBuilder() as builder:
         builder.yield_state(1, 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
-        builder.instructions, builder.execution_depends_on)
+        builder.state_dependencies, builder.instructions)
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == 1
 
@@ -51,7 +51,7 @@ def test_NewCodeBuilder_assign(python_method_impl):
         builder(var('x'), 1)
         builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
-        builder.instructions, builder.execution_depends_on)
+        builder.state_dependencies, builder.instructions)
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == 1
 
@@ -59,25 +59,25 @@ def test_NewCodeBuilder_assign(python_method_impl):
 def test_NewCodeBuilder_condition(python_method_impl):
     with NewCodeBuilder() as builder:
         builder(var('x'), 1)
-        with builder._if(var('x'), '==', 1):
+        with builder.if_(var('x'), '==', 1):
             builder(var('x'), 2)
         builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
-        builder.instructions, builder.execution_depends_on)
+        builder.state_dependencies, builder.instructions)
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == 2
 
 
 def test_NewCodeBuilder_condition_with_else(python_method_impl):
-    with NewCodeBuilder() as cb:
-        cb(var('x'), 1)
-        with cb._if(var('x'), '!=', 1):
-            cb(var('x'), 2)
-        with cb._else():
-            cb(var('x'), 3)
-        cb.yield_state(var('x'), 'x', 0, 'final')
+    with NewCodeBuilder() as builder:
+        builder(var('x'), 1)
+        with builder.if_(var('x'), '!=', 1):
+            builder(var('x'), 2)
+        with builder.else_():
+            builder(var('x'), 3)
+        builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
-        cb.instructions, cb.execution_depends_on)
+        builder.state_dependencies, builder.instructions)
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == 3
 
@@ -85,29 +85,29 @@ def test_NewCodeBuilder_condition_with_else(python_method_impl):
 def test_NewCodeBuilder_nested_condition(python_method_impl):
     with NewCodeBuilder() as builder:
         builder(var('x'), 1)
-        with builder._if(var('x'), '==', 1):
+        with builder.if_(var('x'), '==', 1):
             builder(var('x'), 2)
-            with builder._if(var('x'), '==', 2):
+            with builder.if_(var('x'), '==', 2):
                 builder(var('x'), 3)
             builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
-        builder.instructions, builder.execution_depends_on)
+        builder.state_dependencies, builder.instructions)
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == 3
 
 
 def test_NewCodeBuilder_nested_condition_with_else(python_method_impl):
-    with NewCodeBuilder() as cb:
-        cb(var('x'), 1)
-        with cb._if(var('x'), '==', 1):
-            cb(var('x'), 2)
-            with cb._if(var('x'), '!=', 2):
-                cb(var('x'), 3)
-            with cb._else():
-                cb(var('x'), 4)
-            cb.yield_state(var('x'), 'x', 0, 'final')
+    with NewCodeBuilder() as builder:
+        builder(var('x'), 1)
+        with builder.if_(var('x'), '==', 1):
+            builder(var('x'), 2)
+            with builder.if_(var('x'), '!=', 2):
+                builder(var('x'), 3)
+            with builder.else_():
+                builder(var('x'), 4)
+            builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
-        cb.instructions, cb.execution_depends_on)
+        builder.state_dependencies, builder.instructions)
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == 4
 

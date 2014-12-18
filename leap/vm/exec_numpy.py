@@ -192,6 +192,9 @@ class NumpyInterpreter(object):
         else:
             return None, insn.else_depends_on
 
+    def exec_Nop(self, insn):
+        pass
+
     # }}}
 
 # }}}

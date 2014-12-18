@@ -32,7 +32,7 @@ from leap.method.ab.utils import make_ab_coefficients
 from leap.method import Method
 from pymbolic import var
 from pymbolic.primitives import CallWithKwargs, Comparison
-from leap.vm.language import CodeBuilder
+
 
 __doc__ = """
 .. autoclass:: AdamsBashforthTimeStepper
@@ -70,9 +70,9 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         self.coeffs = numpy.asarray(make_ab_coefficients(order))[::-1]
 
     def __call__(self, component_id):
-        from leap.vm.language import If, TimeIntegratorCode, CodeBuilder
+        from leap.vm.language import If, TimeIntegratorCode, NewCodeBuilder
 
-        cbuild = CodeBuilder()
+        cbuild = NewCodeBuilder()
 
         from pymbolic import var
 
@@ -80,7 +80,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         # Declare variables
         self.step = var('<p>step')
-        self.function = var('<func>') + component_id
+        self.function = var('<func>' + component_id)
         self.rhs = var('<p>f_n')
         self.history = \
             [var('<p>f_n_minus_' + str(i)) for i in range(self.order - 1, 0, -1)]
@@ -89,14 +89,16 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         self.dt = var('<dt>')
 
         # Initialization
-        with CodeBuilder(state="initialization") as cb:
+        with NewCodeBuilder(label="initialization") as cb:
             cb(self.step, 1)
 
         cb_init = cb
+
+        steps = self.order
         
-        with CodeBuilder(state="primary") as cb:
+        with NewCodeBuilder(label="primary") as cb:
             cb(self.rhs, self.eval_rhs(self.t, self.state))
-            with cb.if_(self.step, "<", self.order):
+            with cb.if_(self.step, "<", steps):
                 self.rk_bootstrap(cb)
                 cb(self.step, self.step + 1)
             with cb.else_():
@@ -106,14 +108,16 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                 cb.fence()
                 # Rotate history.
                 for i in range(len(self.history)):
+                    cb.fence()
                     cb(self.history[i], history[i + 1])
             cb(self.t, self.t + self.dt)
-            cb.yield_state(expression=self.state, time_id='', time=self.t)
+            cb.yield_state(expression=self.state, component_id=component_id,
+                           time_id='', time=self.t)
 
         cb_primary = cb
 
         return TimeIntegratorCode.create_with_init_and_step(
-                instructions=cbuild.instructions,
+                instructions=cb_init.instructions | cb_primary.instructions,
                 initialization_dep_on=cb_init.state_dependencies,
                 step_dep_on=cb_primary.state_dependencies,
                 step_before_fail=True)
@@ -131,8 +135,8 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         # Save the current RHS to the AB history
 
         for i in range(len(self.history)):
-            with cb.if_(self.step, "==", i):
-                cb(self.history[i], current_rhs)
+            with cb.if_(self.step, "==", i + 1):
+                cb(self.history[i], self.rhs)
         
         rk_tableau, rk_coeffs = self.get_rk_tableau_and_coeffs(self.order)
 

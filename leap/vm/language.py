@@ -181,6 +181,11 @@ class Nop(Instruction):
 
     def visit_expressions(self, visitor):
         pass
+
+    def __str__(self):
+        return 'nop'
+
+    exec_method = six.moves.intern("exec_Nop")
     
 
 # {{{ assignments
@@ -747,23 +752,14 @@ class NewCodeBuilder(object):
     class Context(RecordWithoutPickling):
         """
         Attributes:
-        names of variables being assigned to and corresponding instruction ids
-        prior dependency set
-        head context
         """
-        def __init__(self, prior_dependencies=[]):
+        def __init__(self, lead_instruction_ids=[], variable_map={},
+                     used_variables=[]):
             RecordWithoutPickling.__init__(self,
-                prior_dependencies=frozenset(prior_dependencies),
-                variable_map={},
-                variable_uses=set(),
-                context_instruction_ids=set())
-
-    class IfContext(Context):
-
-        def __init__(self, conditional_id):
-            CodeBuilderContext.__init__(self,
-                prior_dependencies=[conditional_id],
-                conditional_id=conditional_id)
+                lead_instruction_ids=frozenset(lead_instruction_ids),
+                context_instruction_ids=set(lead_instruction_ids),
+                variable_map=dict(variable_map),
+                used_variables=set(used_variables))
 
     def __init__(self, label="state"):
         self.label = label
@@ -773,29 +769,15 @@ class NewCodeBuilder(object):
         self._all_var_names = set()
         self._all_generated_var_names = set()
 
-    @property
-    def instructions(self):
-        return frozenset(self._instruction_map.values())
-
     def fence(self):
         """
         Enter a new logical block of instructions. Force all prior
         instructions to execute before subsequent ones.
         """
-        self._enforce_dependencies_on_current_context()
-        context = self._contexts[-1]
-        nop_id_set = self._add_and_get_ids(
-            Nop(depends_on=list(context.context_instruction_ids)))
-        self._contexts[-1] = NewCodeBuilder.CodeBuilderContext(nop_id_set)
-
-    def _enforce_dependencies_on_current_context(self):
-        # Enforce the single-writer heuristic on the current context.
-        pass
+        self._make_new_context_with_inst(Nop())
 
     @contextmanager
     def if_(self, *condition_arg):
-        self.fence()
-
         """Create a new block that is conditionally executed."""
         if len(condition_arg) == 1:
             condition = condition_arg[0]
@@ -803,86 +785,87 @@ class NewCodeBuilder(object):
             from pymbolic.primitives import Comparison
             condition = Comparison(*condition_arg)
         else:
-            raise ValueError("Unrecognized condition format")
-
+            raise ValueError("Unrecognized condition expression")
         # Create a conditional instruction: then and else are empty.
-        context = self._contexts[-1]
-        conditional_id, = self._add_and_get_ids(
-            If(depends_on=list(context.context_instruction_ids),
-               then_depends_on=[], else_depends_on=[],
-               condition=condition))
-        self._contexts[-1] = NewCodeBuilder.IfContext(conditional_id)
-        contexts.append(NewCodeBuilder.CodeBuilderContext())
+        conditional = If(condition=condition, then_depends_on=[],
+                         else_depends_on=[])
+        conditional_id = self._make_new_context_with_inst(conditional)
+        self._contexts.append(NewCodeBuilder.Context())
         yield
-        # Then depends on is the same as the instruction ids for the
-        # last inserted context.
+        # Update then_depends_on.
         then_context = self._contexts.pop()
         self._instruction_map[conditional_id] = \
             self._instruction_map[conditional_id].copy(
-            then_depends_on=list())
+            then_depends_on=list(then_context.context_instruction_ids))
 
     @contextmanager
     def else_(self):
         """Create the "else" portion of a conditionally executed
         block.
         """
-        # Ensure that the last inserted instruction at this context
-        # level was an If.
-        assert isinstance(self.contexts[-1], NewCodeBuilder.IfContext)
+        conditional_id = one(self._contexts[-1].lead_instruction_ids)
+        assert isinstance(self._instruction_map[conditional_id], If)
         self._contexts.append(NewCodeBuilder.Context())
         yield
         else_context = self._contexts.pop()
-        conditional_id = self._contexts[-1].conditional_id
         self._instruction_map[conditional_id] = \
             self._instruction_map[conditional_id].copy(
-            else_depends_on=list())
-        # Create a new merged context.
-        self._contexts[-1] = NewCodeBuilder.Context(
-            prior_dependencies=[conditional_id])
-
-    def _make_dependencies(self, variable_names=[]):
-        prior_dependencies = list(self._contexts[-1].prior_dependencies)
-        write_dependencies = set()
-        variable_map = self._contexts[-1].variable_map
-        for variable_name in variable_names:
-            if variable_name in variable_map:
-                write_dependencies |= variable_map[variable_name]
-        return prior_dependencies + list[write_dependencies]
+            else_depends_on=list(else_context.context_instruction_ids))
+        self.fence()
 
     def _next_instruction_id(self):
         self._instruction_count += 1
-        return "inst_" + str(self._instruction_count)
+        return self.label + "_" + str(self._instruction_count)
 
     def __call__(self, assignee, expression):
         """Assign a value."""
         from pymbolic.primitives import Variable
         assert isinstance(assignee, Variable)
-        self._add_and_get_ids(AssignExpression(
+        self._add_inst_to_context(AssignExpression(
                 assignee=assignee.name,
                 expression=expression))
 
-    def _add_and_get_ids(self, *instructions):
-        variable_map = {}
+    def _add_inst_to_context(self, inst):
+        inst_id = self._next_instruction_id()
         context = self._contexts[-1]
-        for inst in instructions:
-            inst_id = self._next_instruction_id()
-            for assignee in inst.get_assignees():
-                # Warn about potential ordering of assignments that may
-                # be unexpected by the user.
-                if assignee in context.used_variables:
-                    # TODO: Start a new block here.
-                    raise ValueError("write after use of " + assignee +
-                                         " in the same block")
-                if assignee in context.variable_map:
-                    raise ValueError("multiple assignments to " + assignee)
-                context.variable_map[assignee] = inst_id
-                self._all_var_names.add(assignee)
-            for used_variable in inst.get_read_variables():
-                context.used_variables.add(used_variable)
-                self._all_var_names.add(used_variable)
-            # Add to instruction map.
-            self._instruction_map[inst_id] = inst.copy(id=inst_id)
-            context.instruction_ids.add(inst_id)
+        dependencies = set(context.lead_instruction_ids)
+        # Verify that assignees are not being places after uses of the
+        # assignees in this context.
+        for assignee in inst.get_assignees():
+            # Warn about potential ordering of assignments that may
+            # be unexpected by the user.
+            if assignee in context.used_variables:
+                raise ValueError("write after use of " + assignee +
+                                 " in the same block")
+            if assignee in context.variable_map:
+                raise ValueError("multiple assignments to " + assignee)
+        # Create the set of dependencies based on the set of used
+        # variables.
+        for used_variable in inst.get_read_variables():
+            if used_variable in context.variable_map:
+                dependencies.add(context.variable_map[used_variable])
+        # Update context and global information.
+        context.context_instruction_ids.add(inst_id)
+        context.variable_map.update((assignee, inst_id)
+                                    for assignee in inst.get_assignees())
+        context.used_variables |= inst.get_read_variables()
+        self._all_var_names |= inst.get_assignees()
+        self._instruction_map[inst_id] = \
+            inst.copy(id=inst_id, depends_on=list(dependencies))
+        return inst_id
+
+    def _make_new_context_with_inst(self, inst):
+        assert isinstance(inst, (Nop, If))
+        inst_id = self._next_instruction_id()
+        context = self._contexts[-1]
+        new_context = NewCodeBuilder.Context(
+            lead_instruction_ids=[inst_id],
+            used_variables=inst.get_read_variables())
+        self._instruction_map[inst_id] = \
+            inst.copy(id=inst_id,
+                      depends_on=list(context.context_instruction_ids))
+        self._contexts[-1] = new_context
+        return inst_id
 
     def fresh_var_name(self, prefix="temp"):
         """Return a variable name that is not guaranteed not to be in
@@ -898,22 +881,22 @@ class NewCodeBuilder(object):
         from pymbolic import var
         return var(self.fresh_var_name(prefix))
 
-    def yield_state(expression, component_id, time, time_id):
+    def yield_state(self, expression, component_id, time, time_id):
         """Yield a value."""
-        self._add_and_get_ids(YieldState(
+        self._add_inst_to_context(YieldState(
                 expression=expression,
                 component_id=component_id,
                 time=time,
                 time_id=time_id))
 
     def __enter__(self):
-        new_context = NewCodeBuilder.CodeBuilderContext()
-        self.contexts.append(new_context)
+        self._contexts.append(NewCodeBuilder.Context())
         return self
 
     def __exit__(self, *ignored):
-        pass
-
+        self.fence()
+        self.state_dependencies = list(self._contexts[-1].lead_instruction_ids)
+        self.instructions = set(self._instruction_map.values())
 
 # {{{ graphviz / dot export
 
@@ -979,7 +962,7 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
         for insn_2 in dep_graph.get(insn_1, set()):
             lines.append("%s -> %s" % (insn_2, insn_1))
 
-    for (insn_1, insn_2), annot in annotation_dep_graph.iteritems():
+    for (insn_1, insn_2), annot in six.iteritems(annotation_dep_graph):
             lines.append(
                     "%s -> %s  [label=\"%s\", style=dashed]"
                     % (insn_2, insn_1, annot))

@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 from pytools import RecordWithoutPickling, memoize_method
 from leap.vm.utils import get_unique_name, get_variables, TODO
-from leap.vm.language import AssignExpression, AssignRHS
+from leap.vm.language import AssignExpression
 from pymbolic.mapper.stringifier import StringifyMapper
 from textwrap import TextWrapper
 from cgi import escape
@@ -112,25 +112,6 @@ class AssignInst(Inst):
         if isinstance(assignment, AssignExpression):
             return '{name} <- {expr}'.format(name=assignment.assignee,
                 expr=string_mapper(assignment.expression))
-        if isinstance(assignment, AssignRHS):
-            lines = []
-            time = string_mapper(assignment.t)
-            rhs = assignment.component_id
-            for assignee, arguments in \
-                    zip(assignment.assignees, assignment.rhs_arguments):
-                arg_list = []
-                for arg_pair in arguments:
-                    name = arg_pair[0]
-                    expr = string_mapper(arg_pair[1])
-                    arg_list.append(name + '=' + expr)
-                args = ', '.join(arg_list)
-                if len(args) == 0:
-                    lines.append('{name} <- {rhs}({t})'.format(name=assignee,
-                        rhs=rhs, t=time))
-                else:
-                    lines.append('{name} <- {rhs}({t}, {args})'.format(
-                                name=assignee, rhs=rhs, t=time, args=args))
-            return '\n'.join(lines)
         raise TODO('Implement string representation for all assignment types')
 
 

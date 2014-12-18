@@ -23,7 +23,7 @@ THE SOFTWARE.
 """
 
 from leap.vm.language import (
-        Instruction, AssignExpression, AssignSolvedRHS,
+        Instruction, AssignExpression, AssignSolved,
         If, YieldState, Raise, FailStep)
 from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import get_unique_name, is_state_variable
@@ -505,7 +505,7 @@ class ControlFlowGraphAssembler(object):
                         component_id=instruction.component_id,
                         expression=instruction.expression)
 
-            elif isinstance(instruction, (AssignExpression, AssignSolvedRHS)):
+            elif isinstance(instruction, (AssignExpression, AssignSolved)):
                 main_bb.add_assignment(instruction)
 
             elif isinstance(instruction, Raise):

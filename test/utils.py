@@ -45,14 +45,14 @@ def python_method_impl_codegen(code, **kwargs):
 def execute_and_return_single_result(python_method_impl, code):
     interpreter = python_method_impl(code, function_map={})
     interpreter.set_up(t_start=0, dt_start=0, context={})
-    events = [event for event in interpreter.run(max_steps=2)]
-    assert len(events) == 3
-    assert isinstance(events[0], interpreter.StepCompleted)
-    assert events[0].current_state == 'initialization'
-    assert isinstance(events[1], interpreter.StateComputed)
-    assert isinstance(events[2], interpreter.StepCompleted)
-    assert events[2].current_state == 'primary'
-    return events[1].state_component
+    events = []
+    has_state_component = False
+    for event in interpreter.run(max_steps=1):
+        if isinstance(event, interpreter.StateComputed):
+            has_state_component = True
+            state_component = event.state_component
+    assert has_state_component
+    return state_component
 
 
 class Problem(object):
@@ -116,7 +116,8 @@ def check_simple_convergence(method, method_impl, expected_order,
         y = problem.initial()
         final_t = problem.t_end
 
-        interp = method_impl(code, function_map={component_id: problem})
+        interp = method_impl(code,
+                             function_map={"<func>" + component_id: problem})
         interp.set_up(t_start=t, dt_start=dt, context={component_id: y})
 
         times = []
@@ -127,7 +128,7 @@ def check_simple_convergence(method, method_impl, expected_order,
                 values.append(event.state_component[0])
                 times.append(event.t)
 
-        assert abs(times[-1] - final_t) < 1e-10
+        assert abs(times[-1] - final_t) / final_t < 0.1
 
         times = np.array(times)
 
