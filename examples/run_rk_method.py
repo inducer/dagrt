@@ -66,7 +66,6 @@ def main(show_dag=False, plot_solution=False):
 
         interp = NumpyInterpreter(code, function_map={component_id: rhs})
         interp.set_up(t_start=t, dt_start=dt, context={component_id: y})
-        interp.initialize()
 
         times = []
         values = []

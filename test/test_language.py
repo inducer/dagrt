@@ -31,27 +31,32 @@ from pymbolic import var
 from leap.vm.exec_numpy import NumpyInterpreter  # noqa
 from leap.vm.codegen import PythonCodeGenerator  # noqa
 
+from utils import (  # noqa
+        python_method_impl_interpreter as pmi_int,
+        python_method_impl_codegen as pmi_cg)
 
-def test_NewCodeBuilder_yield(execute_and_return_single_result):
+from utils import execute_and_return_single_result
+
+def test_NewCodeBuilder_yield(python_method_impl):
     with NewCodeBuilder() as builder:
         builder.yield_state(1, 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
         builder.instructions, builder.execution_depends_on)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == 1
 
 
-def test_NewCodeBuilder_assign(execute_and_return_single_result):
+def test_NewCodeBuilder_assign(python_method_impl):
     with NewCodeBuilder() as builder:
         builder(var('x'), 1)
         builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
         builder.instructions, builder.execution_depends_on)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == 1
 
 
-def test_NewCodeBuilder_condition(execute_and_return_single_result):
+def test_NewCodeBuilder_condition(python_method_impl):
     with NewCodeBuilder() as builder:
         builder(var('x'), 1)
         with builder._if(var('x'), '==', 1):
@@ -59,11 +64,11 @@ def test_NewCodeBuilder_condition(execute_and_return_single_result):
         builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
         builder.instructions, builder.execution_depends_on)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == 2
 
 
-def test_NewCodeBuilder_condition_with_else(execute_and_return_single_result):
+def test_NewCodeBuilder_condition_with_else(python_method_impl):
     with NewCodeBuilder() as cb:
         cb(var('x'), 1)
         with cb._if(var('x'), '!=', 1):
@@ -73,11 +78,11 @@ def test_NewCodeBuilder_condition_with_else(execute_and_return_single_result):
         cb.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
         cb.instructions, cb.execution_depends_on)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == 3
 
 
-def test_NewCodeBuilder_nested_condition(execute_and_return_single_result):
+def test_NewCodeBuilder_nested_condition(python_method_impl):
     with NewCodeBuilder() as builder:
         builder(var('x'), 1)
         with builder._if(var('x'), '==', 1):
@@ -87,12 +92,11 @@ def test_NewCodeBuilder_nested_condition(execute_and_return_single_result):
             builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
         builder.instructions, builder.execution_depends_on)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == 3
 
 
-def test_NewCodeBuilder_nested_condition_with_else(
-        execute_and_return_single_result):
+def test_NewCodeBuilder_nested_condition_with_else(python_method_impl):
     with NewCodeBuilder() as cb:
         cb(var('x'), 1)
         with cb._if(var('x'), '==', 1):
@@ -104,7 +108,7 @@ def test_NewCodeBuilder_nested_condition_with_else(
             cb.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
         cb.instructions, cb.execution_depends_on)
-    result = execute_and_return_single_result(code)
+    result = execute_and_return_single_result(python_method_impl, code)
     assert result == 4
 
 

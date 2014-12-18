@@ -27,6 +27,34 @@ THE SOFTWARE.
 import numpy as np
 
 
+# {{{ things to pass for python_method_impl
+
+def python_method_impl_interpreter(code, **kwargs):
+    from leap.vm.exec_numpy import NumpyInterpreter
+    return NumpyInterpreter(code, **kwargs)
+
+
+def python_method_impl_codegen(code, **kwargs):
+    from leap.vm.codegen import PythonCodeGenerator
+    codegen = PythonCodeGenerator(class_name='Method')
+    return codegen.get_class(code)(**kwargs)
+
+# }}}
+
+
+def execute_and_return_single_result(python_method_impl, code):
+    interpreter = python_method_impl(code, function_map={})
+    interpreter.set_up(t_start=0, dt_start=0, context={})
+    events = [event for event in interpreter.run(max_steps=2)]
+    assert len(events) == 3
+    assert isinstance(events[0], interpreter.StepCompleted)
+    assert events[0].current_state == 'initialization'
+    assert isinstance(events[1], interpreter.StateComputed)
+    assert isinstance(events[2], interpreter.StepCompleted)
+    assert events[2].current_state == 'primary'
+    return events[1].state_component
+
+
 class Problem(object):
     """
     .. attribute :: t_start
@@ -90,7 +118,6 @@ def check_simple_convergence(method, method_impl, expected_order,
 
         interp = method_impl(code, function_map={component_id: problem})
         interp.set_up(t_start=t, dt_start=dt, context={component_id: y})
-        interp.initialize()
 
         times = []
         values = []

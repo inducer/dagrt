@@ -31,6 +31,10 @@ import numpy
 import pytest
 from pytools import memoize_method
 
+from utils import (  # noqa
+        python_method_impl_interpreter as pmi_int,
+        python_method_impl_codegen as pmi_cg)
+
 
 class MultirateTimestepperAccuracyChecker(object):
     """Check that the multirate timestepper has the advertised accuracy."""
@@ -75,7 +79,6 @@ class MultirateTimestepperAccuracyChecker(object):
         y = self.ode.initial_values
         method.set_up(t_start=t, dt_start=dt,
                 context={'fast': y[0], 'slow': y[1]})
-        method.initialize()
         return method
 
     def get_error(self, dt, name=None, plot_solution=False):
@@ -168,6 +171,15 @@ def test_multirate_accuracy(python_method_impl, order, system):
         MultirateTimestepperAccuracyChecker(
             methods[name], order, step_ratio, ode=system(),
             method_impl=python_method_impl)()
+
+
+def test_diagram_generation():
+    from leap.method.ab.multirate.methods import methods
+    from leap.method.ab.multirate.processors import MRABToTeXProcessor
+
+    for name, method in methods.items():
+        mrab2tex = MRABToTeXProcessor(method, 3, no_mixing=True)
+        mrab2tex.run()
 
 
 if __name__ == "__main__":

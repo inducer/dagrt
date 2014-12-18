@@ -15,7 +15,7 @@ of companion matrices, and more.
 
 leap is under the MIT license.
 
-leap requires Python 2.7 or above.
+leap requires Python 2.6 or newer.
 
 Resources:
 
