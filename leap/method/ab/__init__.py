@@ -105,7 +105,6 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                 history = self.history + [self.rhs]
                 ab_sum = sum(self.coeffs[i] * history[i] for i in range(steps))
                 cb(self.state, self.state + self.dt * ab_sum)
-                cb.fence()
                 # Rotate history.
                 for i in range(len(self.history)):
                     cb.fence()
