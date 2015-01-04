@@ -114,7 +114,6 @@ class AssignInst(Inst):
                 expr=string_mapper(assignment.expression))
         if isinstance(assignment, AssignSolved):
             raise TODO("Stringify AssignSolved")
-        raise TODO('Implement string representation for all assignment types')
 
 
 class YieldStateInst(Inst):

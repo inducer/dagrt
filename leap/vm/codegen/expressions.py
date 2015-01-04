@@ -23,7 +23,7 @@ THE SOFTWARE.
 """
 
 from pymbolic.mapper.stringifier import (
-        StringifyMapper, PREC_NONE)
+        StringifyMapper, PREC_NONE, PREC_CALL)
 import numpy as np
 
 
@@ -66,8 +66,32 @@ class FortranExpressionMapper(StringifyMapper):
             return super(FortranExpressionMapper, self).map_foreign(
                     expr, enclosing_prec)
 
+    TARGET_PREFIX = "<target>"
+
     def map_variable(self, expr, enclosing_prec):
-        return self._name_manager[expr.name]
+        if expr.name.startswith(self.TARGET_PREFIX):
+            return expr.name[len(self.TARGET_PREFIX):]
+        else:
+            return self._name_manager[expr.name]
+
+    def map_lookup(self, expr, enclosing_prec, *args, **kwargs):
+        return self.parenthesize_if_needed(
+                self.format("%s%%%s",
+                    self.rec(expr.aggregate, PREC_CALL, *args, **kwargs),
+                    expr.name),
+                enclosing_prec, PREC_CALL)
+
+    def map_subscript(self, expr, enclosing_prec, *args, **kwargs):
+        if isinstance(expr.index, tuple):
+            index_str = self.join_rec(", ", expr.index, PREC_NONE, *args, **kwargs)
+        else:
+            index_str = self.rec(expr.index, PREC_NONE, *args, **kwargs)
+
+        return self.parenthesize_if_needed(
+                self.format("%s(%s)",
+                    self.rec(expr.aggregate, PREC_CALL, *args, **kwargs),
+                    index_str),
+                enclosing_prec, PREC_CALL)
 
     def map_numpy_array(self, expr, *args):
         if len(expr.shape) > 1:

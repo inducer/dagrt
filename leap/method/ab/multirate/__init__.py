@@ -6,7 +6,7 @@ from __future__ import division
 
 __copyright__ = """
 Copyright (C) 2007 Andreas Kloeckner
-Copyright (C) 2014 Matt Wala
+Copyright (C) 2014, 2015 Matt Wala
 """
 
 __license__ = """
@@ -36,7 +36,6 @@ from leap.method.ab.utils import make_generic_ab_coefficients, linear_comb
 from leap.method.ab.multirate.methods import (HIST_NAMES, HIST_F2F, HIST_S2F,
                                               HIST_F2S, HIST_S2S)
 from leap.method.ab.multirate.processors import MRABProcessor
-from leap.vm.language import SimpleCodeBuilder
 from pymbolic import var
 
 
@@ -63,14 +62,17 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         self.t = var('<t>')
         self.dt = var('<dt>')
         self.step = var('<p>step')
+
         # Slow and fast components
         self.slow = var('<state>slow')
         self.fast = var('<state>fast')
+
         # Individual component functions
         self.f2f = var('<func>f2f')
         self.s2f = var('<func>s2f')
         self.s2s = var('<func>s2s')
         self.f2s = var('<func>f2s')
+
         # Current values of components
         self.current_rhss = {
             HIST_F2F: var('<p>f2f_n'),
@@ -115,71 +117,21 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                 HIST_F2S: False
                 }
 
-    def emit_initialization(self, cbuild):
-        """Initialize method variables. Returns the initialization list."""
+    @memoize_method
+    def get_coefficients(self, for_fast_history, hist_head_time_level,
+                         start_level, end_level, order):
 
-        # Initial value of RK y vector
-        with SimpleCodeBuilder(cbuild) as builder:
-            builder.assign(self.step, 0)
+        history_times = numpy.arange(0, -order, -1, dtype=numpy.float64)
 
-        # Initial value of RK derivatives
-            for hist_component, function in self.component_functions.items():
-                assignee = self.current_rhss[hist_component]
-                builder.assign(assignee,
-                               function(t=self.t, s=self.slow, f=self.fast))
+        if for_fast_history:
+            history_times /= self.substep_count
 
-        return builder.last_added_instruction_id
+        history_times += hist_head_time_level/self.substep_count
 
-    def emit_small_rk_step(self, builder, t, name_prefix):
-        """Emit a single step of an RK method."""
+        t_start = start_level / self.substep_count
+        t_end = end_level / self.substep_count
 
-        rk_tableau, rk_coeffs = self.get_rk_tableau_and_coeffs(self.max_order)
-
-        make_stage_history = lambda prefix: \
-            [var(prefix + str(i)) for i in range(len(rk_tableau))]
-        stage_rhss = {
-            HIST_F2F: make_stage_history(name_prefix + '_rk_f2f_'),
-            HIST_S2F: make_stage_history(name_prefix + '_rk_s2f_'),
-            HIST_F2S: make_stage_history(name_prefix + '_rk_f2s_'),
-            HIST_S2S: make_stage_history(name_prefix + '_rk_s2s_')
-            }
-
-        for stage_number, (c, coeffs) in enumerate(rk_tableau):
-            if len(coeffs) == 0:
-                assert c == 0
-                for component in HIST_NAMES:
-                    builder.assign(stage_rhss[component][stage_number],
-                                   self.current_rhss[component])
-            else:
-                stage_s = self.slow + sum(self.small_dt * coeff *
-                                          (stage_rhss[HIST_S2S][k] +
-                                           stage_rhss[HIST_F2S][k])
-                                          for k, coeff in enumerate(coeffs))
-
-                stage_f = self.fast + sum(self.small_dt * coeff *
-                                          (stage_rhss[HIST_S2F][k] +
-                                           stage_rhss[HIST_F2F][k])
-                                          for k, coeff in enumerate(coeffs))
-
-                for component, function in self.component_functions.items():
-                    builder.assign(stage_rhss[component][stage_number],
-                                   function(t=t + c * self.small_dt,
-                                            s=stage_s, f=stage_f))
-
-        builder.assign(self.slow, self.slow + self.small_dt *
-                       sum(coeff * (stage_rhss[HIST_F2S][k] +
-                                    stage_rhss[HIST_S2S][k])
-                       for k, coeff in enumerate(rk_coeffs)))
-
-        builder.assign(self.fast, self.fast + self.small_dt *
-                       sum(coeff * (stage_rhss[HIST_F2F][k] +
-                                    stage_rhss[HIST_S2F][k])
-                       for k, coeff in enumerate(rk_coeffs)))
-
-        for hist_component, function in self.component_functions.items():
-            assignee = self.current_rhss[hist_component]
-            builder.assign(assignee, function(t=t + self.small_dt,
-                                    s=self.slow, f=self.fast))
+        return make_generic_ab_coefficients(history_times, t_start, t_end)
 
     def compute_history_assignments(self):
         """
@@ -212,112 +164,140 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         return assign_before
 
-    def emit_startup(self, cbuild):
+    def emit_initialization(self, cb):
+        """Initialize method variables."""
+        cb(self.step, 0)
+        # Initial value of RK derivatives
+        for hist_component, function in self.component_functions.items():
+            assignee = self.current_rhss[hist_component]
+            cb(assignee, function(t=self.t, s=self.slow, f=self.fast))
+
+    def emit_small_rk_step(self, cb, t, name_prefix):
+        """Emit a single step of an RK method."""
+
+        rk_tableau, rk_coeffs = self.get_rk_tableau_and_coeffs(self.max_order)
+
+        make_stage_history = lambda prefix: \
+            [var(prefix + str(i)) for i in range(len(rk_tableau))]
+        stage_rhss = {
+            HIST_F2F: make_stage_history(name_prefix + '_rk_f2f_'),
+            HIST_S2F: make_stage_history(name_prefix + '_rk_s2f_'),
+            HIST_F2S: make_stage_history(name_prefix + '_rk_f2s_'),
+            HIST_S2S: make_stage_history(name_prefix + '_rk_s2s_')
+            }
+
+        for stage_number, (c, coeffs) in enumerate(rk_tableau):
+            if len(coeffs) == 0:
+                assert c == 0
+                for component in HIST_NAMES:
+                    cb(stage_rhss[component][stage_number],
+                       self.current_rhss[component])
+            else:
+                stage_s = self.slow + sum(self.small_dt * coeff *
+                                          (stage_rhss[HIST_S2S][k] +
+                                           stage_rhss[HIST_F2S][k])
+                                          for k, coeff in enumerate(coeffs))
+
+                stage_f = self.fast + sum(self.small_dt * coeff *
+                                          (stage_rhss[HIST_S2F][k] +
+                                           stage_rhss[HIST_F2F][k])
+                                          for k, coeff in enumerate(coeffs))
+
+                for component, function in self.component_functions.items():
+                    cb(stage_rhss[component][stage_number],
+                       function(t=t + c * self.small_dt, s=stage_s, f=stage_f))
+
+        cb.fence()
+
+        cb(self.slow, self.slow + self.small_dt *
+                      sum(coeff * (stage_rhss[HIST_F2S][k] +
+                                    stage_rhss[HIST_S2S][k])
+                      for k, coeff in enumerate(rk_coeffs)))
+
+        cb(self.fast, self.fast + self.small_dt *
+                      sum(coeff * (stage_rhss[HIST_F2F][k] +
+                                   stage_rhss[HIST_S2F][k])
+                      for k, coeff in enumerate(rk_coeffs)))
+
+        for hist_component, function in self.component_functions.items():
+            assignee = self.current_rhss[hist_component]
+            cb(assignee, function(t=t + self.small_dt, s=self.slow,
+                                  f=self.fast))
+
+    def emit_rk_startup(self, cb):
         """Initialize the stepper with an RK method. Return the code that
         computes the startup history."""
-
-        from pymbolic.primitives import Comparison
 
         initialization_steps = self.max_order - 1
         assert initialization_steps > 0
 
         assign_before = self.compute_history_assignments()
 
-        with SimpleCodeBuilder(cbuild) as builder:
-            for substep_index in range(self.substep_count):
-                # Add any assignments that need to be run ahead of this
-                # substep.
-                for step in range(initialization_steps):
-                    substep = step * self.substep_count + substep_index
-                    if not assign_before[substep]:
-                        continue
-                    with builder.condition(Comparison(self.step, "==", step)):
-                        for name, component in assign_before[substep].items():
-                            builder.assign(name, self.current_rhss[component])
+        for substep_index in range(self.substep_count):
+            # Add any assignments that need to be run ahead of this
+            # substep.
+            for step in range(initialization_steps):
+                substep = step * self.substep_count + substep_index
+                if not assign_before[substep]:
+                    continue
+                with cb.if_(self.step, "==", step):
+                    for name, component in assign_before[substep].items():
+                        cb(name, self.current_rhss[component])
 
-                # Emit the RK substep body.
-                time = self.t + substep_index * self.small_dt
-                name_prefix = 'substep' + str(substep_index)
-                self.emit_small_rk_step(builder, time, name_prefix)
+            # Emit the RK substep body.
+            time = self.t + substep_index * self.small_dt
+            name_prefix = 'substep' + str(substep_index)
+            self.emit_small_rk_step(cb, time, name_prefix)
 
-            # Increment the current step after taking all the substeps.
-            builder.assign(self.step, self.step + 1)
+        # Increment the current step after taking all the substeps.
+        cb(self.step, self.step + 1)
 
-        return builder.last_added_instruction_id
+        return cb
 
-    def emit_ab_method(self, cbuild):
+    def emit_ab_method(self, cb):
         """Add code for the main Adams-Bashforth method."""
         rhss = [self.f2f, self.s2f, self.f2s, self.s2s]
-        codegen = MRABCodeEmitter(self, cbuild, (self.fast, self.slow), self.t, rhss)
+        codegen = MRABCodeEmitter(self, cb, (self.fast, self.slow), self.t, rhss)
         codegen.run()
-        return codegen.get_instructions()
 
-    def emit_main_branch(self, cbuild, startup, main_code):
-        """Add code that determines whether to perform RK initialization or
-        step into the main method."""
-
-        from leap.vm.language import If
-        from pymbolic.primitives import Comparison
-
-        branch = cbuild.add_and_get_ids(
-            If(condition=Comparison(self.step, "<", self.max_order - 1),
-               then_depends_on=startup,
-               else_depends_on=main_code))
-        cbuild.commit()
-
-        return branch
-
-    @memoize_method
-    def get_coefficients(self, for_fast_history, hist_head_time_level,
-                         start_level, end_level, order):
-
-        history_times = numpy.arange(0, -order, -1, dtype=numpy.float64)
-
-        if for_fast_history:
-            history_times /= self.substep_count
-
-        history_times += hist_head_time_level/self.substep_count
-
-        t_start = start_level / self.substep_count
-        t_end = end_level / self.substep_count
-
-        return make_generic_ab_coefficients(history_times, t_start, t_end)
-
-    def emit_epilogue(self, cbuild, glue):
-        with SimpleCodeBuilder(cbuild, glue) as builder:
-            builder.yield_state(self.slow, "slow", self.t + self.dt, "final")
-            builder.yield_state(self.fast, "fast", self.t + self.dt, "final")
-            builder.assign(self.t, self.t + self.dt)
-
-        return builder.last_added_instruction_id
+    def emit_epilogue(self, cb):
+        """Add code that finished a timestep."""
+        cb.yield_state(self.slow, "slow", self.t + self.dt, "final")
+        cb.yield_state(self.fast, "fast", self.t + self.dt, "final")
+        cb.fence()
+        cb(self.t, self.t + self.dt)
 
     def __call__(self):
-        from leap.vm.language import CodeBuilder, TimeIntegratorCode
+        from leap.vm.language import TimeIntegratorCode, NewCodeBuilder
 
-        cbuild = CodeBuilder()
-        initialization = self.emit_initialization(cbuild)
+        with NewCodeBuilder(label="initialization") as cb_init:
+            self.emit_initialization(cb_init)
+
         if self.max_order > 1:
-            startup = self.emit_startup(cbuild)
-            main_code = self.emit_ab_method(cbuild)
-            glue = self.emit_main_branch(cbuild, startup, main_code)
-            epilogue = self.emit_epilogue(cbuild, glue)
+            with NewCodeBuilder(label="primary") as cb_primary:
+                with cb_primary.if_(self.step, "<", self.max_order - 1):
+                    self.emit_rk_startup(cb_primary)
+                with cb_primary.else_():
+                    self.emit_ab_method(cb_primary)
+                self.emit_epilogue(cb_primary)
         else:
-            main_code = self.emit_ab_method(cbuild)
-            epilogue = self.emit_epilogue(cbuild, main_code)
+            with NewCodeBuilder(label="primary") as cb_primary:
+                self.emit_ab_method(cb_primary)
+                self.emit_epilogue(cb_primary)
 
         return TimeIntegratorCode.create_with_init_and_step(
-                instructions=cbuild.instructions,
-                initialization_dep_on=initialization,
-                step_dep_on=epilogue,
+                instructions=cb_init.instructions | cb_primary.instructions,
+                initialization_dep_on=cb_init.state_dependencies,
+                step_dep_on=cb_primary.state_dependencies,
                 step_before_fail=False)
 
 
 class MRABCodeEmitter(MRABProcessor):
 
-    def __init__(self, stepper, cbuild, y, t, rhss):
+    def __init__(self, stepper, cb, y, t, rhss):
         MRABProcessor.__init__(self, stepper.method, stepper.substep_count)
         self.stepper = stepper
-        self.cbuild = cbuild
+        self.cb = cb
         self.t_start = t
 
         # Mapping from method variable names to code variable names
@@ -344,8 +324,7 @@ class MRABCodeEmitter(MRABProcessor):
             from string import ascii_letters
             from pymbolic import var
             prefix = "".join([c for c in name if c in ascii_letters])
-            self.name_to_variable[name] = \
-                var(self.cbuild.fresh_var_name(prefix))
+            self.name_to_variable[name] = var(self.cb.fresh_var_name(prefix))
         return self.name_to_variable[name]
 
     def run(self):
@@ -353,19 +332,10 @@ class MRABCodeEmitter(MRABProcessor):
 
         # Update the slow and fast components.
         from leap.method.ab.multirate.methods import CO_FAST, CO_SLOW
-        from leap.vm.language import AssignExpression
-
-        self.last_step = self.cbuild.add_and_get_ids(
-            AssignExpression(self.last_y[CO_SLOW].name,
-            self.context[self.method.result_slow], depends_on=self.last_step),
-            AssignExpression(self.last_y[CO_FAST].name,
-            self.context[self.method.result_fast], depends_on=self.last_step))
-
-        self.cbuild.commit()
+        self.cb(self.last_y[CO_SLOW], self.context[self.method.result_slow])
+        self.cb(self.last_y[CO_FAST], self.context[self.method.result_fast])
 
     def integrate_in_time(self, insn):
-        from leap.vm.language import AssignExpression
-
         from leap.method.ab.multirate.methods import CO_FAST
         from leap.method.ab.multirate.methods import \
             HIST_F2F, HIST_S2F, HIST_F2S, HIST_S2S
@@ -404,14 +374,12 @@ class MRABCodeEmitter(MRABProcessor):
                 linear_comb(self_coefficients, self_history)
                 + linear_comb(cross_coefficients, cross_history))
 
+        needs_fence = insn.result_name in self.name_to_variable
         new_y_var = self.get_variable(insn.result_name)
 
-        new_y = self.cbuild.add_and_get_ids(AssignExpression(new_y_var.name,
-                    my_new_y, depends_on=self.last_step))
-
-        self.last_step = new_y
-
-        self.cbuild.commit()
+        if needs_fence:
+            self.cb.fence()
+        self.cb(new_y_var, my_new_y)
 
         self.context[insn.result_name] = new_y_var
         self.var_time_level[insn.result_name] = end_time_level
@@ -419,8 +387,6 @@ class MRABCodeEmitter(MRABProcessor):
         MRABProcessor.integrate_in_time(self, insn)
 
     def history_update(self, insn):
-        from leap.vm.language import AssignExpression
-
         time_slow = self.var_time_level[insn.slow_arg]
 
         t = (self.t_start
@@ -433,21 +399,14 @@ class MRABCodeEmitter(MRABProcessor):
         reverse_hist = hist[::-1]
 
         # Move all the histories by one step forward
-        assignments = []
         for h, h_next in zip(reverse_hist, reverse_hist[1:]):
-            assignments += self.cbuild.add_and_get_ids(AssignExpression(h.name,
-                                h_next, depends_on=self.last_step + assignments))
+            self.cb.fence()
+            self.cb(h, h_next)
 
         # Compute the new RHS
-        assignments += self.cbuild.add_and_get_ids(
-            AssignExpression(assignee=hist[0].name,
-                expression=rhs(t=t, f=self.context[insn.fast_arg],
-                               s=self.context[insn.slow_arg]),
-                depends_on=self.last_step + assignments))
-
-        self.last_step = assignments
-
-        self.cbuild.commit()
+        self.cb.fence()
+        self.cb(hist[0], rhs(t=t, f=self.context[insn.fast_arg],
+                             s=self.context[insn.slow_arg]))
 
         if self.stepper.hist_is_fast[insn.which]:
             self.hist_head_time_level[insn.which] += 1
@@ -455,6 +414,3 @@ class MRABCodeEmitter(MRABProcessor):
             self.hist_head_time_level[insn.which] += self.stepper.substep_count
 
         MRABProcessor.history_update(self, insn)
-
-    def get_instructions(self):
-        return self.last_step

@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from __future__ import division, with_statement
+from __future__ import division, with_statement, print_function
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
 
@@ -25,6 +25,7 @@ THE SOFTWARE.
 """
 
 import sys
+import pytest
 
 from leap.vm.language import AssignExpression, If, YieldState, FailStep, Raise
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
@@ -48,13 +49,16 @@ def test_basic_codegen():
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
     method = Method({})
+    print(codegen(code))
     method.set_up(t_start=0, dt_start=0, context={})
-    method.initialize()
-    hist = [s for s in method.run(t_end=0)]
-    assert len(hist) == 2
-    assert isinstance(hist[0], method.StateComputed)
-    assert hist[0].state_component == 0
-    assert isinstance(hist[1], method.StepCompleted)
+    hist = [s for s in method.run(max_steps=2)]
+    assert len(hist) == 3
+    assert isinstance(hist[0], method.StepCompleted)
+    assert hist[0].current_state == 'initialization'
+    assert isinstance(hist[1], method.StateComputed)
+    assert hist[1].state_component == 0
+    assert isinstance(hist[2], method.StepCompleted)
+    assert hist[2].current_state == 'primary'
 
 
 def test_basic_conditional_codegen():
@@ -77,12 +81,11 @@ def test_basic_conditional_codegen():
     Method = codegen.get_class(code)
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={'y': 6})
-    method.initialize()
-    hist = [s for s in method.run(t_end=0)]
-    assert len(hist) == 2
-    assert isinstance(hist[0], method.StateComputed)
-    assert hist[0].state_component == 1
-    assert isinstance(hist[1], method.StepCompleted)
+    hist = [s for s in method.run(max_steps=2)]
+    assert len(hist) == 3
+    assert isinstance(hist[1], method.StateComputed)
+    assert hist[1].state_component == 1
+    assert isinstance(hist[2], method.StepCompleted)
 
 
 def test_basic_assign_rhs_codegen():
@@ -118,12 +121,11 @@ def test_basic_assign_rhs_codegen():
 
     method = Method({'y': y, 'yy': yy})
     method.set_up(t_start=0, dt_start=0, context={'y': 0})
-    method.initialize()
-    hist = [s for s in method.run(t_end=0)]
-    assert len(hist) == 2
-    assert isinstance(hist[0], method.StateComputed)
-    assert hist[0].state_component == 12
-    assert isinstance(hist[1], method.StepCompleted)
+    hist = [s for s in method.run(max_steps=2)]
+    assert len(hist) == 3
+    assert isinstance(hist[1], method.StateComputed)
+    assert hist[1].state_component == 12
+    assert isinstance(hist[2], method.StepCompleted)
 
 
 def test_basic_raise_codegen():
@@ -140,9 +142,12 @@ def test_basic_raise_codegen():
     Method = codegen.get_class(code)
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={})
-    method.initialize()
     try:
-        for result in method.run(t_end=0):
+        # initialization
+        for result in method.run_single_step():
+            pass
+        # first primary step
+        for result in method.run_single_step():
             assert False
     except method.TimeStepUnderflow:
         pass
@@ -163,8 +168,14 @@ def test_basic_fail_step_codegen():
     Method = codegen.get_class(code)
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={})
-    method.initialize()
-    assert isinstance(next(method.run(t_end=0)), method.StepFailed)
+    print(codegen(code))
+
+    for evt in method.run_single_step():
+        pass
+
+    with pytest.raises(method.FailStepException):
+        for evt in method.run_single_step():
+            print(evt)
 
 
 def test_local_name_distinctness():
@@ -185,11 +196,10 @@ def test_local_name_distinctness():
     Method = codegen.get_class(code)
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={})
-    method.initialize()
-    hist = list(method.run(t_end=0))
-    assert len(hist) == 2
-    assert isinstance(hist[0], method.StateComputed)
-    assert hist[0].state_component == 1
+    hist = list(method.run(max_steps=2))
+    assert len(hist) == 3
+    assert isinstance(hist[1], method.StateComputed)
+    assert hist[1].state_component == 1
 
 
 def test_global_name_distinctness():
@@ -210,11 +220,10 @@ def test_global_name_distinctness():
     Method = codegen.get_class(code)
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={})
-    method.initialize()
-    hist = list(method.run(t_end=0))
-    assert len(hist) == 2
-    assert isinstance(hist[0], method.StateComputed)
-    assert hist[0].state_component == 1
+    hist = list(method.run(max_steps=2))
+    assert len(hist) == 3
+    assert isinstance(hist[1], method.StateComputed)
+    assert hist[1].state_component == 1
 
 
 def test_function_name_distinctness():
@@ -234,11 +243,10 @@ def test_function_name_distinctness():
     method = Method({'<func>y^': lambda: 0,
                      '<func>y*': lambda: 1})
     method.set_up(t_start=0, dt_start=0, context={})
-    method.initialize()
-    hist = list(method.run(t_end=0))
-    assert len(hist) == 2
-    assert isinstance(hist[0], method.StateComputed)
-    assert hist[0].state_component == 1
+    hist = list(method.run(max_steps=2))
+    assert len(hist) == 3
+    assert isinstance(hist[1], method.StateComputed)
+    assert hist[1].state_component == 1
 
 
 if __name__ == "__main__":

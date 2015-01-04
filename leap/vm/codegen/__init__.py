@@ -24,9 +24,7 @@ THE SOFTWARE.
 
 from . import analysis
 from . import python
-from . import fortran
 
 
 CodeGenerationError = analysis.CodeGenerationError
 PythonCodeGenerator = python.PythonCodeGenerator
-FortranCodeGenerator = fortran.FortranCodeGenerator

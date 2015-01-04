@@ -33,8 +33,14 @@ import numpy as np
 import logging
 logger = logging.getLogger(__name__)
 
+from utils import (  # noqa
+        python_method_impl_interpreter as pmi_int,
+        python_method_impl_codegen as pmi_cg)
+
 
 # {{{ non-adaptive test
+
+# test using 'python test_rk.py test_rk_accuracy(pmi_int, ODE23TimeStepper(use_high_order=False), 2)'  # noqa
 
 @pytest.mark.parametrize(("method", "expected_order"), [
     (ODE23TimeStepper(use_high_order=False), 2),
@@ -74,9 +80,9 @@ def test_adaptive_timestep(python_method_impl, method, show_dag=False,
     example = VanDerPolProblem()
     y = example.initial()
 
-    interp = python_method_impl(code, function_map={component_id: example})
+    interp = python_method_impl(code,
+                                function_map={"<func>" + component_id: example})
     interp.set_up(t_start=example.t_start, dt_start=1e-5, context={component_id: y})
-    interp.initialize()
 
     times = []
     values = []
@@ -90,7 +96,6 @@ def test_adaptive_timestep(python_method_impl, method, show_dag=False,
     for event in interp.run(t_end=example.t_end):
         if isinstance(event, interp.StateComputed):
             assert event.component_id == component_id
-            assert event.t < example.t_end + 1e-12
 
             new_values.append(event.state_component)
             new_times.append(event.t)

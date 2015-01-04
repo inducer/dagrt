@@ -29,8 +29,7 @@ import pytest
 
 from leap.vm.language import YieldState
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
-from leap.vm.codegen.fortran import (
-        FortranCodeGenerator, FortranType, FortranCallCode)
+import leap.vm.codegen.fortran as f
 from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
 
 
@@ -50,9 +49,10 @@ def test_basic_codegen():
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'],
             step_before_fail=False)
-    codegen = FortranCodeGenerator("simple",
+    codegen = f.CodeGenerator("simple",
             ode_component_type_map={
-                "state": FortranType('real (kind=8)', (200,))
+                "state": f.ArrayType(
+                    f.BuiltinType('real (kind=8)'), (200,))
                 })
     print(codegen(code))
 
@@ -81,6 +81,13 @@ def run_fortran(sources):
         if stderr_data:
             raise RuntimeError("Fortran code has non-empty stderr:\n"+stderr_data)
 
+        if stdout_data:
+            print("Fortran code said this on stdout: -----------------------------",
+                    file=sys.stderr)
+            print(stdout_data, file=sys.stderr)
+            print("---------------------------------------------------------------",
+                    file=sys.stderr)
+
         return p.returncode, stdout_data, stderr_data
 
 
@@ -103,21 +110,24 @@ def test_rk_codegen(min_order, stepper):
     """
 
     component_id = 'y'
+    rhs_function = '<func>y'
 
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs)
-    freg = register_ode_rhs(base_function_registry, component_id)
-    freg = freg.register_codegen(component_id, "fortran",
-            FortranCallCode("""
+    freg = register_ode_rhs(base_function_registry, component_id,
+                            identifier=rhs_function)
+    freg = freg.register_codegen(rhs_function, "fortran",
+            f.CallCode("""
                 ${result} = -2*${y}
                 """))
 
     code = stepper(component_id)
 
-    codegen = FortranCodeGenerator(
+    codegen = f.CodeGenerator(
             'RKMethod',
             ode_component_type_map={
-                component_id: FortranType('real (kind=8)', (2,))
+                component_id: f.ArrayType(
+                    f.BuiltinType('real (kind=8)'), (2,))
                 },
             function_registry=freg,
             module_preamble="""
@@ -142,34 +152,39 @@ def test_rk_codegen_fancy():
     """
 
     component_id = 'y'
+    rhs_function = '<func>y'
 
     stepper = ODE23TimeStepper(use_high_order=True)
 
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs,
             register_function)
-    freg = register_ode_rhs(base_function_registry, component_id)
-    freg = freg.register_codegen(component_id, "fortran",
-            FortranCallCode("""
+    freg = register_ode_rhs(base_function_registry, component_id,
+                            identifier=rhs_function)
+    freg = freg.register_codegen(rhs_function, "fortran",
+            f.CallCode("""
                 ${result} = -2*${y}
                 """))
     freg = register_function(freg, "notify_pre_state_update", ())
     freg = freg.register_codegen("notify_pre_state_update", "fortran",
-            FortranCallCode("""
+            f.CallCode("""
                 write(*,*) 'before state update'
                 """))
     freg = register_function(freg, "notify_post_state_update", ())
     freg = freg.register_codegen("notify_post_state_update", "fortran",
-            FortranCallCode("""
+            f.CallCode("""
                 write(*,*) 'after state update'
                 """))
 
     code = stepper(component_id)
 
-    codegen = FortranCodeGenerator(
+    codegen = f.CodeGenerator(
             'RKMethod',
             ode_component_type_map={
-                component_id: FortranType('real (kind=8)', (2,))
+                component_id: f.ArrayType(
+                    f.BuiltinType('real (kind=8)'),
+                    (2,)
+                    )
                 },
             function_registry=freg,
             module_preamble="""
@@ -177,7 +192,7 @@ def test_rk_codegen_fancy():
                 """,
             call_before_state_update="notify_pre_state_update",
             call_after_state_update="notify_post_state_update",
-            extra_arguments=("region",),
+            extra_arguments="region",
             extra_argument_decl="""
                 type(region_type), pointer :: region
                 """)
@@ -224,15 +239,17 @@ def test_multirate_codegen():
                 input_component_ids=("slow", "fast"),
                 input_component_names=("s", "f"))
         freg = freg.register_codegen(func_name, "fortran",
-                FortranCallCode("""
+                f.CallCode("""
                     ${result} = -2*${f} + ${s}
                     """))
 
-    codegen = FortranCodeGenerator(
+    codegen = f.CodeGenerator(
             'RKMethod',
             ode_component_type_map={
-                "slow": FortranType('real (kind=8)', (200,), ),
-                "fast": FortranType('real (kind=8)', (300,), )
+                "slow": f.ArrayType(
+                    f.BuiltinType('real (kind=8)'), (200,)),
+                "fast": f.ArrayType(
+                    f.BuiltinType('real (kind=8)'), (300,))
                 },
             function_registry=freg,
             module_preamble="""

@@ -23,36 +23,18 @@ THE SOFTWARE.
 """
 
 import pytest
-from leap.vm.exec_numpy import NumpyInterpreter
-from leap.vm.codegen import PythonCodeGenerator
 
 
 @pytest.fixture(params=["interpreter", "codegen"])
 def python_method_impl(request):
     kind = request.param
 
-    def make_method_from_code(code, **kwargs):
-
-        if kind == "interpreter":
-            return NumpyInterpreter(code, **kwargs)
-        elif kind == "codegen":
-            codegen = PythonCodeGenerator(class_name='Method')
-            return codegen.get_class(code)(**kwargs)
-
-    return make_method_from_code
-
-
-@pytest.fixture()
-def execute_and_return_single_result(python_method_impl):
-
-    def run(code):
-        interpreter = python_method_impl(code, function_map={})
-        interpreter.set_up(t_start=0, dt_start=0, context={})
-        interpreter.initialize()
-        events = [event for event in interpreter.run(t_end=0)]
-        assert len(events) == 2
-        assert isinstance(events[0], interpreter.StateComputed)
-        assert isinstance(events[1], interpreter.StepCompleted)
-        return events[0].state_component
-
-    return run
+    from utils import (
+            python_method_impl_interpreter,
+            python_method_impl_codegen)
+    if kind == "interpreter":
+        return python_method_impl_interpreter
+    elif kind == "codegen":
+        return python_method_impl_codegen
+    else:
+        assert False
