@@ -4,7 +4,7 @@ from __future__ import division
 
 __copyright__ = """
 Copyright (C) 2007 Andreas Kloeckner
-Copyright (C) 2014 Matt Wala
+Copyright (C) 2014, 2015 Matt Wala
 """
 
 __license__ = """
@@ -31,7 +31,7 @@ import numpy
 from leap.method.ab.utils import make_ab_coefficients
 from leap.method import Method
 from pymbolic import var
-from pymbolic.primitives import CallWithKwargs, Comparison
+from pymbolic.primitives import CallWithKwargs
 
 
 __doc__ = """
@@ -70,9 +70,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         self.coeffs = numpy.asarray(make_ab_coefficients(order))[::-1]
 
     def __call__(self, component_id):
-        from leap.vm.language import If, TimeIntegratorCode, NewCodeBuilder
-
-        cbuild = NewCodeBuilder()
+        from leap.vm.language import TimeIntegratorCode, NewCodeBuilder
 
         from pymbolic import var
 
@@ -95,7 +93,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         cb_init = cb
 
         steps = self.order
-        
+
         with NewCodeBuilder(label="primary") as cb:
             cb(self.rhs, self.eval_rhs(self.t, self.state))
             with cb.if_(self.step, "<", steps):
@@ -136,7 +134,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         for i in range(len(self.history)):
             with cb.if_(self.step, "==", i + 1):
                 cb(self.history[i], self.rhs)
-        
+
         rk_tableau, rk_coeffs = self.get_rk_tableau_and_coeffs(self.order)
 
         # Stage loop (taken from EmbeddedButcherTableauMethod)

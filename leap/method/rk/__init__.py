@@ -2,7 +2,10 @@
 
 from __future__ import division
 
-__copyright__ = "Copyright (C) 2007-2013 Andreas Kloeckner"
+__copyright__ = """
+Copyright (C) 2007-2013 Andreas Kloeckner
+Copyright (C) 2014, 2015 Matt Wala
+"""
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -24,7 +27,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from leap.method import Method
+from leap.method import Method, TimeStepUnderflow
+from leap.vm.language import NewCodeBuilder
+
 
 __doc__ = """
 .. autoclass:: ODE23TimeStepper
@@ -36,9 +41,11 @@ __doc__ = """
 # {{{ Embedded Runge-Kutta schemes base class
 
 class EmbeddedRungeKuttaMethod(Method):
+
     def __init__(self, use_high_order=True,
             atol=0, rtol=0, max_dt_growth=5, min_dt_shrinkage=0.1,
             limiter_name=None):
+
         self.limiter_name = limiter_name
 
         self.use_high_order = use_high_order
@@ -52,261 +59,160 @@ class EmbeddedRungeKuttaMethod(Method):
 
 
 class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
+
     def __call__(self, component_id):
         """
-        :arg component_id: an identifier to be used for the single state component
-            supported.
+        :arg component_id: an identifier to be used for the single state
+            component supported.
         """
-        from leap.vm.language import (
-                AssignNorm, AssignExpression,
-                YieldState, If, Raise, FailStep,
-                TimeIntegratorCode,
-                CodeBuilder)
-
-        from pymbolic.primitives import CallWithKwargs
-
-        cbuild = CodeBuilder()
-
-        add_and_get_ids = cbuild.add_and_get_ids
-
+        from leap.vm.language import TimeIntegratorCode
         from pymbolic import var
 
-        dt = var("<dt>")
-        t = var("<t>")
-        last_rhs = var("<p>last_rhs_"+component_id)
-        local_last_rhs = var('last_rhs_' + component_id)
-        state = var("<state>"+component_id)
+        # Set up variables.
 
-        dep_inf_exclude_names = ["<t>", "<dt>", state.name, last_rhs.name]
+        self.component_id = component_id
+
+        self.dt = var("<dt>")
+        self.t = var("<t>")
+        self.last_rhs = var("<p>last_rhs_" + component_id)
+        self.state = var("<state>" + component_id)
+        self.rhs_func = var("<func>" + component_id)
+
+        local_last_rhs = var('last_rhs_' + component_id)
 
         if self.limiter_name is not None:
-            limiter = var("<func>"+self.limiter_name)
+            limiter = var("<func>" + self.limiter_name)
         else:
             limiter = lambda x: x
 
-        initialization_dep_on = add_and_get_ids(
-            AssignExpression(
-                assignee=last_rhs.name,
-                expression=CallWithKwargs(
-                    function=var(component_id), parameters=(),
-                    kw_parameters={"t": var("<t>"), component_id: state})
-                ))
+        self.limiter_func = limiter
 
-        cbuild.commit()
+        # Initialization.
 
-        rhss = []
+        with NewCodeBuilder("initialization") as cb:
+            cb(self.last_rhs, self.call_rhs(self.t, self.state))
 
-        all_rhs_eval_ids = []
+        cb_init = cb
 
-        # {{{ stage loop
+        # Primary.
 
-        for istage, (c, coeffs) in enumerate(self.butcher_tableau):
-            if len(coeffs) == 0:
-                assert c == 0
-                add_and_get_ids(
-                    AssignExpression(local_last_rhs.name, last_rhs))
-                this_rhs = local_last_rhs
-            else:
-                stage_state = limiter(
-                        state + sum(
-                            dt * coeff * rhss[j]
+        with NewCodeBuilder("primary") as cb:
+            rhss = []
+            # {{{ stage loop
+            last_stage = len(self.butcher_tableau) - 1
+            for stage_num, (c, coeffs) in enumerate(self.butcher_tableau):
+                if len(coeffs) == 0:
+                    assert c == 0
+                    cb(local_last_rhs, self.last_rhs)
+                    this_rhs = local_last_rhs
+                else:
+                    stage_state = limiter(
+                        self.state + sum(
+                            self.dt * coeff * rhss[j]
                             for j, coeff in enumerate(coeffs)))
 
-                rhs_id = "rhs%d" % istage
-                rhs_insn_id = "ev_rhs%d" % istage
-                all_rhs_eval_ids.append(rhs_insn_id)
+                    if stage_num == last_stage:
+                        high_order_estimate = var("high_order_estimate")
+                        cb(high_order_estimate, stage_state)
 
-                add_and_get_ids(
-                    AssignExpression(
-                        assignee=rhs_id,
-                        expression=CallWithKwargs(function=var(component_id),
-                            parameters=(), kw_parameters={"t": t + c * dt,
-                                component_id: stage_state}),
-                        id=rhs_insn_id)
-                    )
-
-                this_rhs = var(rhs_id)
-
-            rhss.append(this_rhs)
-
-        # }}}
-
-        last_rhs_assignment_id, = add_and_get_ids(
-                AssignExpression(last_rhs.name, this_rhs))
-
-        if not self.adaptive:
-            if self.use_high_order:
-                coeffs = self.high_order_coeffs
-            else:
-                coeffs = self.low_order_coeffs
-
-            add_and_get_ids(
-                    AssignExpression(
-                        state.name, limiter(
-                            state + sum(
-                                dt * coeff * rhss[j]
-                                for j, coeff in enumerate(coeffs))),
-                        id="update_state",
-                        # don't change state before all RHSs are done using it
-                        depends_on=all_rhs_eval_ids),
-
-                    YieldState(
-                        id="ret_state",
-                        time_id="final",
-                        time=t + dt,
-                        component_id=component_id,
-                        expression=state,
-                        depends_on=["update_state"]),
-
-                    AssignExpression(
-                        "<t>", t + dt,
-                        id="increment_t",
-                        depends_on=["update_state", "ret_state"],
-                        ),
-                    )
-
-            cbuild.infer_single_writer_dependencies(exclude=dep_inf_exclude_names)
-            cbuild.commit()
-
-            return TimeIntegratorCode.create_with_init_and_step(
-                    instructions=cbuild.instructions,
-                    initialization_dep_on=initialization_dep_on,
-                    step_dep_on=[
-                        "ret_state",
-                        last_rhs_assignment_id,
-                        "increment_t"],
-                    step_before_fail=False)
-
-        else:
-            # {{{ step size adaptation
-
-            from leap.method import TimeStepUnderflow
-
-            from pymbolic.primitives import Min, Max, Comparison, LogicalOr
-            add_and_get_ids(
-                    AssignExpression(
-                        "high_order_end_state", state + sum(
-                                dt * coeff * rhss[j]
-                                for j, coeff in enumerate(self.high_order_coeffs)),
-                        id="compute_hes"),
-                    AssignExpression(
-                        "low_order_end_state", state + sum(
-                                dt * coeff * rhss[j]
-                                for j, coeff in enumerate(self.low_order_coeffs)),
-                        id="compute_les"),
-                    AssignNorm("norm_start_state", state,
-                        id="compute_state_norm"),
-                    AssignNorm("norm_end_state", var("low_order_end_state")),
-                    AssignNorm(
-                        "rel_error_raw", (
-                            var("high_order_end_state") - var("low_order_end_state")
-                            ) / (
-                                var("<builtin>len")(state)**0.5
-                                *
-                                (self.atol + self.rtol * Max((
-                                    var("norm_start_state"),
-                                    var("norm_end_state"))))
-                                )
-                            ),
-                    If(
-                        condition=Comparison(var("rel_error_raw"), "==", 0),
-                        then_depends_on=["rel_err_zero"],
-                        else_depends_on=["rel_err_nonzero"],
-                        id="rel_error_zero_check"),
-                    # then
-                    AssignExpression("rel_error", var("rel_error_raw"),
-                        id="rel_err_nonzero"),
-                    # else
-                    AssignExpression("rel_error", 1e-14,
-                        id="rel_err_zero"),
-                    # endif
-
-                    If(
-                        condition=LogicalOr((
-                            Comparison(var("rel_error"), ">", 1),
-                            var("<builtin>isnan")(var("rel_error"))
-                            )),
-                        then_depends_on=["rej_step"],
-                        else_depends_on=["acc_adjust_dt", last_rhs_assignment_id,
-                            "ret_state", "increment_t"],
-                        depends_on=["rel_error_zero_check"],
-                        id="reject_check"),
-                    # then
-                    # reject step
-
-                    If(
-                        condition=var("<builtin>isnan")(var("rel_error")),
-                        then_depends_on=["min_adjust_dt"],
-                        else_depends_on=["rej_adjust_dt"],
-                        depends_on=["rel_error_zero_check"],
-                        id="adjust_dt"),
-                    # then
-                    AssignExpression("<dt>",
-                        self.min_dt_shrinkage*dt,
-                        id="min_adjust_dt"),
-                    # else
-                    AssignExpression("<dt>",
-                        Max((
-                            0.9 * dt * var("rel_error")**(-1/self.low_order),
-                            self.min_dt_shrinkage * dt)),
-                        id="rej_adjust_dt"),
-                    # endif
-
-                    If(
-                        condition=Comparison(t + dt, "==", t),
-                        then_depends_on=["tstep_underflow"],
-                        else_depends_on=[],
-                        id="check_underflow",
-                        depends_on=["adjust_dt"]),
-                    # then
-                    Raise(TimeStepUnderflow, id="tstep_underflow"),
-                    # endif
-
-                    FailStep(
-                        id="rej_step",
-                        depends_on=["check_underflow"]),
-
-                    # else
-                    # accept step
-
-                    AssignExpression("<dt>",
-                        Min((
-                            0.9 * dt * var("rel_error")**(-1/self.high_order),
-                            self.max_dt_growth * dt)),
-                        id="acc_adjust_dt",
-                        depends_on=["increment_t"],
-                        ),
-                    AssignExpression(
-                        state.name, limiter(var("high_order_end_state")),
-                        id="update_state",
-                        depends_on=["compute_les", "compute_hes",
-                            "compute_state_norm"]),
-
-                    YieldState(
-                        id="ret_state",
-                        time_id="final",
-                        time=t + dt,
-                        component_id=component_id,
-                        expression=state,
-                        depends_on=["update_state"]),
-
-                    AssignExpression(
-                        "<t>", t + dt,
-                        id="increment_t",
-                        depends_on=["ret_state"]),
-                    # endif
-                    )
-
-            cbuild.infer_single_writer_dependencies(exclude=dep_inf_exclude_names)
-            cbuild.commit()
-
-            return TimeIntegratorCode.create_with_init_and_step(
-                    instructions=cbuild.instructions,
-                    initialization_dep_on=initialization_dep_on,
-                    step_dep_on=["reject_check"],
-                    step_before_fail=False)
-
+                    this_rhs = var("rhs_" + str(stage_num))
+                    cb(this_rhs, self.call_rhs(self.t + c * self.dt,
+                                               high_order_estimate
+                                                   if stage_num == last_stage
+                                                   else stage_state))
+                rhss.append(this_rhs)
             # }}}
+
+            low_order_estimate = var('low_order_estimate')
+            cb(low_order_estimate, self.state +
+               sum(self.dt * coeff * rhss[j] for j, coeff in
+                   enumerate(self.low_order_coeffs)))
+
+            if not self.adaptive:
+                self.finish_nonadaptive(cb, high_order_estimate, rhss[-1],
+                                        low_order_estimate)
+            else:
+                self.finish_adaptive(cb, high_order_estimate, rhss[-1],
+                                     low_order_estimate)
+
+        cb_primary = cb
+
+        return TimeIntegratorCode.create_with_init_and_step(
+            instructions=cb_init.instructions | cb_primary.instructions,
+            initialization_dep_on=cb_init.state_dependencies,
+            step_dep_on=cb_primary.state_dependencies,
+            step_before_fail=False)
+
+    def finish_nonadaptive(self, cb, high_order_estimate, high_order_rhs,
+                           low_order_estimate):
+        cb.fence()
+        if not self.use_high_order:
+            cb(self.last_rhs,
+               self.call_rhs(self.t + self.dt, low_order_estimate))
+            cb(self.state, low_order_estimate)
+        else:
+            cb(self.last_rhs, high_order_rhs)
+            cb(self.state, high_order_estimate)
+        cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
+        cb.fence()
+        cb(self.t, self.t + self.dt)
+
+    def finish_adaptive(self, cb, high_order_estimate, high_order_rhs,
+                        low_order_estimate):
+        from pymbolic import var
+        from pymbolic.primitives import Comparison, LogicalOr, Max, Min
+
+        norm_start_state = var('norm_start_state')
+        norm_end_state = var('norm_end_state')
+        rel_error_raw = var('rel_error_raw')
+        rel_error = var('rel_error')
+
+        cb.fence()
+
+        norm = lambda expr: var('<builtin>norm')(expr, ord=2)
+        cb(norm_start_state, norm(self.state))
+        cb(norm_end_state, norm(low_order_estimate))
+        cb(rel_error_raw, norm((high_order_estimate - low_order_estimate) /
+                               (var('<builtin>len')(self.state) ** 0.5 *
+                                (self.atol + self.rtol *
+                                 Max((norm_start_state, norm_end_state))
+                                 ))))
+
+        # TODO: Use a ternary operator to assign to rel_error.
+        with cb.if_(rel_error_raw, '==', 0):
+            cb(rel_error, 1.0e-14)
+        with cb.else_():
+            cb(rel_error, rel_error_raw)
+
+        with cb.if_(LogicalOr((Comparison(rel_error, ">", 1),
+                               var('<builtin>isnan')(rel_error)))):
+
+            with cb.if_(var('<builtin>isnan')(rel_error)):
+                cb(self.dt, self.min_dt_shrinkage * self.dt)
+            with cb.else_():
+                cb(self.dt, Max((0.9 * self.dt *
+                                 rel_error ** (-1 / self.low_order),
+                                 self.min_dt_shrinkage * self.dt)))
+
+            with cb.if_(self.t + self.dt, '==', self.t):
+                cb.raise_(TimeStepUnderflow)
+            with cb.else_():
+                cb.fail_step()
+
+        with cb.else_():
+            cb(high_order_estimate, self.limiter_func(high_order_estimate))
+            self.finish_nonadaptive(cb, high_order_estimate, high_order_rhs,
+                                    low_order_estimate)
+            cb.fence()
+            cb(self.dt,
+               Min((0.9 * self.dt * rel_error ** (-1 / self.high_order),
+                    self.max_dt_growth * self.dt)))
+
+    def call_rhs(self, t, y):
+        from pymbolic.primitives import CallWithKwargs
+        return CallWithKwargs(function=self.rhs_func,
+                              parameters=(),
+                              kw_parameters={'t': t, self.component_id: y})
 
 # }}}
 
