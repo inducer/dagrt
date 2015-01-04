@@ -45,7 +45,6 @@ def python_method_impl_codegen(code, **kwargs):
 def execute_and_return_single_result(python_method_impl, code):
     interpreter = python_method_impl(code, function_map={})
     interpreter.set_up(t_start=0, dt_start=0, context={})
-    events = []
     has_state_component = False
     for event in interpreter.run(max_steps=1):
         if isinstance(event, interpreter.StateComputed):

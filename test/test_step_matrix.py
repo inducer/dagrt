@@ -59,7 +59,7 @@ def test_step_matrix(method, show_matrix=True, show_dag=False):
     def rhs_sym(t, y):
         return var("lambda")*y
 
-    finder = StepMatrixFinder(code, function_map={component_id: rhs_sym})
+    finder = StepMatrixFinder(code, function_map={"<func>" + component_id: rhs_sym})
 
     mat = finder.get_state_step_matrix("primary")
 
@@ -77,7 +77,7 @@ def test_step_matrix(method, show_matrix=True, show_dag=False):
     def rhs(t, y):
         return lambda_*y
 
-    interp = NumpyInterpreter(code, function_map={component_id: rhs})
+    interp = NumpyInterpreter(code, function_map={"<func>" + component_id: rhs})
     interp.set_up(t_start=0, dt_start=dt, context={component_id: 15})
 
     assert interp.next_state == "initialization"

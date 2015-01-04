@@ -110,11 +110,13 @@ def test_rk_codegen(min_order, stepper):
     """
 
     component_id = 'y'
+    rhs_function = '<func>y'
 
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs)
-    freg = register_ode_rhs(base_function_registry, component_id)
-    freg = freg.register_codegen(component_id, "fortran",
+    freg = register_ode_rhs(base_function_registry, component_id,
+                            identifier=rhs_function)
+    freg = freg.register_codegen(rhs_function, "fortran",
             f.CallCode("""
                 ${result} = -2*${y}
                 """))
@@ -150,14 +152,16 @@ def test_rk_codegen_fancy():
     """
 
     component_id = 'y'
+    rhs_function = '<func>y'
 
     stepper = ODE23TimeStepper(use_high_order=True)
 
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs,
             register_function)
-    freg = register_ode_rhs(base_function_registry, component_id)
-    freg = freg.register_codegen(component_id, "fortran",
+    freg = register_ode_rhs(base_function_registry, component_id,
+                            identifier=rhs_function)
+    freg = freg.register_codegen(rhs_function, "fortran",
             f.CallCode("""
                 ${result} = -2*${y}
                 """))

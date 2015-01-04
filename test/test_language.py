@@ -37,6 +37,7 @@ from utils import (  # noqa
 
 from utils import execute_and_return_single_result
 
+
 def test_NewCodeBuilder_yield(python_method_impl):
     with NewCodeBuilder() as builder:
         builder.yield_state(1, 'x', 0, 'final')
