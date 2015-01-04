@@ -431,23 +431,16 @@ class TimeIntegratorCode(RecordWithoutPickling):
     .. attribute:: initial_state
 
         the name of the starting state
-
-    .. attribute:: step_before_fail
-
-        is a boolean that indicates whether the described
-        method may generate state updates for a time step it later decides
-        to fail
     """
 
     @classmethod
     def create_with_steady_state(cls, dep_on, instructions):
         states = {'main': TimeIntegratorState(dep_on, next_state='main')}
-        return cls(instructions, states, 'main', step_before_fail=True)
+        return cls(instructions, states, 'main')
 
     @classmethod
-    def create_with_init_and_step(cls,
-            initialization_dep_on, step_dep_on, instructions,
-            step_before_fail=True):
+    def create_with_init_and_step(cls, initialization_dep_on,
+                                  step_dep_on, instructions):
         states = {}
         states['initialization'] = TimeIntegratorState(
                 initialization_dep_on,
@@ -457,15 +450,13 @@ class TimeIntegratorCode(RecordWithoutPickling):
                 step_dep_on,
                 next_state='primary')
 
-        return cls(instructions, states, 'initialization',
-                   step_before_fail)
+        return cls(instructions, states, 'initialization')
 
-    def __init__(self, instructions, states, initial_state, step_before_fail):
+    def __init__(self, instructions, states, initial_state):
         assert not isinstance(states, list)
         RecordWithoutPickling.__init__(self, instructions=instructions,
                                        states=states,
-                                       initial_state=initial_state,
-                                       step_before_fail=step_before_fail)
+                                       initial_state=initial_state)
 
     @property
     @memoize_method

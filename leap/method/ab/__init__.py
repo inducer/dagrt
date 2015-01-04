@@ -116,8 +116,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         return TimeIntegratorCode.create_with_init_and_step(
                 instructions=cb_init.instructions | cb_primary.instructions,
                 initialization_dep_on=cb_init.state_dependencies,
-                step_dep_on=cb_primary.state_dependencies,
-                step_before_fail=True)
+                step_dep_on=cb_primary.state_dependencies)
 
     def eval_rhs(self, t, y):
         """Return a node that evaluates the RHS at the given time and

@@ -288,8 +288,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         return TimeIntegratorCode.create_with_init_and_step(
                 instructions=cb_init.instructions | cb_primary.instructions,
                 initialization_dep_on=cb_init.state_dependencies,
-                step_dep_on=cb_primary.state_dependencies,
-                step_before_fail=False)
+                step_dep_on=cb_primary.state_dependencies)
 
 
 class MRABCodeEmitter(MRABProcessor):
