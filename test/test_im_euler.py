@@ -73,7 +73,6 @@ def test_im_euler_accuracy(show_dag=False, plot_solution=False):
                                   function_map={'<func>' + component_id: rhs},
                                   solver_map={'newton': ScipyRootSolver()})
         interp.set_up(t_start=t, dt_start=dt, context={component_id: y})
-        interp.initialize()
 
         times = []
         values = []

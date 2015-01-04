@@ -772,6 +772,8 @@ class NewCodeBuilder(object):
                 assignee=assignee.name,
                 expression=expression))
 
+    assign = __call__
+
     def _add_inst_to_context(self, inst):
         inst_id = self._next_instruction_id()
         context = self._contexts[-1]
@@ -827,6 +829,12 @@ class NewCodeBuilder(object):
     def fresh_var(self, prefix="temp"):
         from pymbolic import var
         return var(self.fresh_var_name(prefix))
+
+    def assign_solved(self, assignee, solve_component, expression, guess,
+                      solver_id):
+        self._add_inst_to_context(AssignSolved(
+                assignee=assignee.name, solve_component=solve_component,
+                expression=expression, guess=guess, solver_id=solver_id))
 
     def yield_state(self, expression, component_id, time, time_id):
         """Yield a value."""

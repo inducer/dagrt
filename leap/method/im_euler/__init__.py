@@ -25,7 +25,7 @@ THE SOFTWARE.
 """
 
 from leap.method import Method
-from leap.vm.language import (TimeIntegratorCode, CodeBuilder, SimpleCodeBuilder)
+from leap.vm.language import TimeIntegratorCode, NewCodeBuilder
 from pymbolic import var
 from pymbolic.primitives import CallWithKwargs
 
@@ -42,40 +42,37 @@ class ImplicitEulerMethod(Method):
         self._rhs = var('<func>' + component_id)
         self._component_id = component_id
 
-        cbuild = CodeBuilder()
+        with NewCodeBuilder(label="primary") as cb:
+            self._make_primary(cb)
 
-        primary = self._make_primary(cbuild)
+        return TimeIntegratorCode.create_with_steady_state(
+            dep_on=cb.state_dependencies,
+            instructions=cb.instructions)
 
-        return TimeIntegratorCode.create_with_init_and_step(
-            instructions=cbuild.instructions,
-            initialization_dep_on=frozenset(),
-            step_dep_on=primary,
-            step_before_fail=False)
-
-    def _make_primary(self, cbuild):
+    def _make_primary(self, builder):
         """Add code to drive the primary stage."""
         from leap.vm.expression import collapse_constants
 
-        with SimpleCodeBuilder(cbuild) as builder:
-            solve_component = var('next_state')
-            solve_expression = collapse_constants(
-                solve_component - self._state - self._dt *
-                CallWithKwargs(
-                    function=self._rhs,
-                    parameters=(),
-                    kw_parameters={
-                        't': self._t + self._dt,
-                        self._component_id: solve_component
-                        }),
-                [solve_component],
-                builder.assign,
-                builder.fresh_var)
-            
-            builder.assign_solved(self._state, solve_component,
-                                  solve_expression, self._state,
-                                  'newton')
-            builder.yield_state(self._state, self._component_id,
-                                self._t + self._dt, 'final')
-            builder.assign(self._t, self._t + self._dt)
+        solve_component = var('next_state')
+        solve_expression = collapse_constants(
+            solve_component - self._state - self._dt *
+            CallWithKwargs(
+                function=self._rhs,
+                parameters=(),
+                kw_parameters={
+                    't': self._t + self._dt,
+                    self._component_id: solve_component
+                    }),
+            [solve_component],
+            builder.assign,
+            builder.fresh_var)
 
-        return builder.last_added_instruction_id
+        builder.fence()            
+        builder.assign_solved(self._state, solve_component,
+                              solve_expression, self._state,
+                              'newton')
+
+        builder.yield_state(self._state, self._component_id,
+                            self._t + self._dt, 'final')
+        builder.fence()
+        builder.assign(self._t, self._t + self._dt)
