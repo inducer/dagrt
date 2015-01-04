@@ -271,6 +271,9 @@ class StepMatrixFinder(object):
     def exec_AssignExpression(self, insn):
         self.context[insn.assignee] = self.eval_mapper(insn.expression)
 
+    def exec_Nop(self, insn):
+        pass
+
     def exec_YieldState(self, insn):
         pass
 
