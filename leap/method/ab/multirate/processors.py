@@ -133,8 +133,8 @@ class MRABToTeXProcessor(MRABProcessor):
 
         self.result.append(
                 "\mrabintegrate {%s}{%f}{%f}{%s} {%f}{%s} {%f}{%s}"
-                % (insn.result_name.replace("y_", ""), 
-                    self.eval_expr(insn.start)/self.substep_count, 
+                % (insn.result_name.replace("y_", ""),
+                    self.eval_expr(insn.start)/self.substep_count,
                     self.eval_expr(insn.end)/self.substep_count,
                     self_name,
                     src_self_where, src_self_speed,
