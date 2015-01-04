@@ -28,7 +28,6 @@ THE SOFTWARE.
 from pytools import RecordWithoutPickling, memoize_method
 from leap.vm.utils import get_variables
 from contextlib import contextmanager
-from pymbolic.primitives import Variable
 from pytools import one
 
 import logging
@@ -176,17 +175,20 @@ class Nop(Instruction):
 
     def get_assignees(self):
         return frozenset([])
-    
+
     get_read_variables = get_assignees
 
     def visit_expressions(self, visitor):
         pass
 
+    def map_expressions(self, mapper):
+        return self.copy()
+
     def __str__(self):
         return 'nop'
 
     exec_method = six.moves.intern("exec_Nop")
-    
+
 
 # {{{ assignments
 
@@ -669,84 +671,6 @@ class CodeBuilder(object):
 # }}}
 
 
-class SimpleCodeBuilder(object):
-    """Provide a simplified interface to timestepper description generation in
-    the leap language."""
-
-    def __init__(self, cbuild, state):
-        self.cbuild = cbuild
-        self._dependencies = frozenset(dependencies)
-        self._added_instructions = False
-        self._dependency_stack = [frozenset()]
-
-    @property
-    def last_added_instruction_id(self):
-        """Return a singleton list containing the last instruction id
-        created by this object."""
-        return [one(self._dependency_stack[-1])]
-
-    @property
-    def _next_dependency_set(self):
-        return self._dependencies | self._dependency_stack[-1]
-
-    def _update_dependency_stack(self, instruction_ids):
-        self._dependency_stack[-1] = frozenset(instruction_ids)
-
-    def assign(self, assignee, expression):
-        """
-        Append an AssigneExpression instruction to the current build group.
-
-        assignee is a Variable instance. expression is a Pymbolic expression.
-        """
-        assert isinstance(assignee, Variable)
-        instruction_ids = self.cbuild.add_and_get_ids(
-            AssignExpression(assignee=assignee.name,
-                             expression=expression,
-                             depends_on=self._next_dependency_set)
-            )
-        self._update_dependency_stack(instruction_ids)
-        return instruction_ids
-
-    def yield_state(self, expression, component_id, time, time_id):
-        """
-        Append a YieldState instruction to the current build group.
-        """
-        instruction_ids = self.cbuild.add_and_get_ids(
-            YieldState(expression=expression, component_id=component_id,
-                       time=time, time_id=time_id,
-                       depends_on=self._next_dependency_set)
-            )
-        self._update_dependency_stack(instruction_ids)
-        return instruction_ids
-
-    @contextmanager
-    def condition(self, expression):
-        """
-        Start a block of instructions that are executed conditionally based on
-        the supplied pymbolic expression.
-        """
-        try:
-            self._dependency_stack.append(frozenset())
-            yield
-        finally:
-            then_depends_on = self._next_dependency_set
-            self._dependency_stack.pop()
-            depends_on = self._next_dependency_set
-            conditional_ids = self.cbuild.add_and_get_ids(
-                If(condition=expression,
-                   then_depends_on=then_depends_on,
-                   else_depends_on=[],
-                   depends_on=depends_on))
-            self._update_dependency_stack(conditional_ids)
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *ignored):
-        assert len(self._dependency_stack) == 1
-        self.cbuild.commit()
-
-
 class NewCodeBuilder(object):
 
     class Context(RecordWithoutPickling):
@@ -889,6 +813,12 @@ class NewCodeBuilder(object):
                 time=time,
                 time_id=time_id))
 
+    def fail_step(self):
+        self._add_inst_to_context(FailStep())
+
+    def raise_(self, error):
+        self._add_inst_to_context(Raise(error))
+
     def __enter__(self):
         self._contexts.append(NewCodeBuilder.Context())
         return self
@@ -897,6 +827,7 @@ class NewCodeBuilder(object):
         self.fence()
         self.state_dependencies = list(self._contexts[-1].lead_instruction_ids)
         self.instructions = set(self._instruction_map.values())
+
 
 # {{{ graphviz / dot export
 
