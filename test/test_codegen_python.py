@@ -44,8 +44,7 @@ def test_basic_codegen():
     cbuild.commit()
     code = TimeIntegratorCode.create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'],
-            step_before_fail=False)
+            instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
     method = Method({})
@@ -75,8 +74,7 @@ def test_basic_conditional_codegen():
     cbuild.commit()
     code = TimeIntegratorCode.create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'],
-            step_before_fail=False)
+            instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
     method = Method({})
@@ -108,8 +106,7 @@ def test_basic_assign_rhs_codegen():
     cbuild.commit()
     code = TimeIntegratorCode.create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'],
-            step_before_fail=False)
+            instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
 
@@ -136,8 +133,7 @@ def test_basic_raise_codegen():
     cbuild.commit()
     code = TimeIntegratorCode.create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=["raise"],
-            step_before_fail=False)
+            instructions=cbuild.instructions, step_dep_on=["raise"])
     codegen = PythonCodeGenerator(class_name="Method")
     Method = codegen.get_class(code)
     method = Method({})
@@ -162,8 +158,7 @@ def test_basic_fail_step_codegen():
     cbuild.commit()
     code = TimeIntegratorCode.create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=["fail"],
-            step_before_fail=False)
+            instructions=cbuild.instructions, step_dep_on=["fail"])
     codegen = PythonCodeGenerator(class_name="Method")
     Method = codegen.get_class(code)
     method = Method({})
@@ -190,8 +185,7 @@ def test_local_name_distinctness():
     cbuild.commit()
     code = TimeIntegratorCode.create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'],
-            step_before_fail=False)
+            instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
     method = Method({})
@@ -214,8 +208,7 @@ def test_global_name_distinctness():
     cbuild.commit()
     code = TimeIntegratorCode.create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'],
-            step_before_fail=False)
+            instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
     method = Method({})
@@ -236,8 +229,7 @@ def test_function_name_distinctness():
     cbuild.commit()
     code = TimeIntegratorCode.create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'],
-            step_before_fail=False)
+            instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)
     method = Method({'<func>y^': lambda: 0,

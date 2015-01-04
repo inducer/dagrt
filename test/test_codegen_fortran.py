@@ -47,8 +47,7 @@ def test_basic_codegen():
     cbuild.commit()
     code = TimeIntegratorCode.create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'],
-            step_before_fail=False)
+            instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = f.CodeGenerator("simple",
             ode_component_type_map={
                 "state": f.ArrayType(
