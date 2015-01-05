@@ -57,6 +57,57 @@ class EmbeddedRungeKuttaMethod(Method):
         self.max_dt_growth = max_dt_growth
         self.min_dt_shrinkage = min_dt_shrinkage
 
+    def finish_adaptive(self, cb, high_order_estimate, high_order_rhs,
+                        low_order_estimate):
+        from pymbolic import var
+        from pymbolic.primitives import Comparison, LogicalOr, Max, Min
+
+        norm_start_state = var('norm_start_state')
+        norm_end_state = var('norm_end_state')
+        rel_error_raw = var('rel_error_raw')
+        rel_error = var('rel_error')
+
+        cb.fence()
+
+        norm = lambda expr: var('<builtin>norm')(expr, ord=2)
+        cb(norm_start_state, norm(self.state))
+        cb(norm_end_state, norm(low_order_estimate))
+        cb(rel_error_raw, norm((high_order_estimate - low_order_estimate) /
+                               (var('<builtin>len')(self.state) ** 0.5 *
+                                (self.atol + self.rtol *
+                                 Max((norm_start_state, norm_end_state))
+                                 ))))
+
+        # TODO: Use a ternary operator to assign to rel_error.
+        with cb.if_(rel_error_raw, '==', 0):
+            cb(rel_error, 1.0e-14)
+        with cb.else_():
+            cb(rel_error, rel_error_raw)
+
+        with cb.if_(LogicalOr((Comparison(rel_error, ">", 1),
+                               var('<builtin>isnan')(rel_error)))):
+
+            with cb.if_(var('<builtin>isnan')(rel_error)):
+                cb(self.dt, self.min_dt_shrinkage * self.dt)
+            with cb.else_():
+                cb(self.dt, Max((0.9 * self.dt *
+                                 rel_error ** (-1 / self.low_order),
+                                 self.min_dt_shrinkage * self.dt)))
+
+            with cb.if_(self.t + self.dt, '==', self.t):
+                cb.raise_(TimeStepUnderflow)
+            with cb.else_():
+                cb.fail_step()
+
+        with cb.else_():
+            cb(high_order_estimate, self.limiter_func(high_order_estimate))
+            self.finish_solution(cb, high_order_estimate, high_order_rhs,
+                                 low_order_estimate)
+            cb.fence()
+            cb(self.dt,
+               Min((0.9 * self.dt * rel_error ** (-1 / self.high_order),
+                    self.max_dt_growth * self.dt)))
+
 
 class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
 
@@ -129,7 +180,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                    enumerate(self.low_order_coeffs)))
 
             if not self.adaptive:
-                self.finish_nonadaptive(cb, high_order_estimate, rhss[-1],
+                self.finish_solution(cb, high_order_estimate, rhss[-1],
                                         low_order_estimate)
             else:
                 self.finish_adaptive(cb, high_order_estimate, rhss[-1],
@@ -142,8 +193,8 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
             initialization_dep_on=cb_init.state_dependencies,
             step_dep_on=cb_primary.state_dependencies)
 
-    def finish_nonadaptive(self, cb, high_order_estimate, high_order_rhs,
-                           low_order_estimate):
+    def finish_solution(self, cb, high_order_estimate, high_order_rhs,
+                        low_order_estimate):
         cb.fence()
         if not self.use_high_order:
             cb(self.last_rhs,
@@ -155,57 +206,6 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
         cb.fence()
         cb(self.t, self.t + self.dt)
-
-    def finish_adaptive(self, cb, high_order_estimate, high_order_rhs,
-                        low_order_estimate):
-        from pymbolic import var
-        from pymbolic.primitives import Comparison, LogicalOr, Max, Min
-
-        norm_start_state = var('norm_start_state')
-        norm_end_state = var('norm_end_state')
-        rel_error_raw = var('rel_error_raw')
-        rel_error = var('rel_error')
-
-        cb.fence()
-
-        norm = lambda expr: var('<builtin>norm')(expr, ord=2)
-        cb(norm_start_state, norm(self.state))
-        cb(norm_end_state, norm(low_order_estimate))
-        cb(rel_error_raw, norm((high_order_estimate - low_order_estimate) /
-                               (var('<builtin>len')(self.state) ** 0.5 *
-                                (self.atol + self.rtol *
-                                 Max((norm_start_state, norm_end_state))
-                                 ))))
-
-        # TODO: Use a ternary operator to assign to rel_error.
-        with cb.if_(rel_error_raw, '==', 0):
-            cb(rel_error, 1.0e-14)
-        with cb.else_():
-            cb(rel_error, rel_error_raw)
-
-        with cb.if_(LogicalOr((Comparison(rel_error, ">", 1),
-                               var('<builtin>isnan')(rel_error)))):
-
-            with cb.if_(var('<builtin>isnan')(rel_error)):
-                cb(self.dt, self.min_dt_shrinkage * self.dt)
-            with cb.else_():
-                cb(self.dt, Max((0.9 * self.dt *
-                                 rel_error ** (-1 / self.low_order),
-                                 self.min_dt_shrinkage * self.dt)))
-
-            with cb.if_(self.t + self.dt, '==', self.t):
-                cb.raise_(TimeStepUnderflow)
-            with cb.else_():
-                cb.fail_step()
-
-        with cb.else_():
-            cb(high_order_estimate, self.limiter_func(high_order_estimate))
-            self.finish_nonadaptive(cb, high_order_estimate, high_order_rhs,
-                                    low_order_estimate)
-            cb.fence()
-            cb(self.dt,
-               Min((0.9 * self.dt * rel_error ** (-1 / self.high_order),
-                    self.max_dt_growth * self.dt)))
 
     def call_rhs(self, t, y):
         from pymbolic.primitives import CallWithKwargs
