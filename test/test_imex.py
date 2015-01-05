@@ -29,7 +29,7 @@ import pytest
 import sys
 
 from leap.method.rk.imex import KennedyCarpenterIMEXARK4
-from stiff_test_systems import KapsProblem, VanDerPolProblem
+from stiff_test_systems import KapsProblem
 from leap.vm.implicit import GenericNumpySolver
 import scipy.optimize
 
@@ -41,7 +41,8 @@ class ScipyRootSolver(GenericNumpySolver):
 
 
 @pytest.mark.parametrize("problem, method, expected_order", [
-    [KapsProblem(epsilon=0.5), KennedyCarpenterIMEXARK4(), 4]
+    [KapsProblem(epsilon=0.9), KennedyCarpenterIMEXARK4(use_high_order=False), 3],
+    [KapsProblem(epsilon=0.9), KennedyCarpenterIMEXARK4(), 4],
     ])
 def test_convergence(problem, method, expected_order):
     component_id = "y"
@@ -51,7 +52,7 @@ def test_convergence(problem, method, expected_order):
     from pytools.convergence import EOCRecorder
     eocrec = EOCRecorder()
 
-    for n in range(1, 7):
+    for n in range(2, 7):
         dt = 2**(-n)
 
         y_0 = problem.initial()
@@ -64,7 +65,6 @@ def test_convergence(problem, method, expected_order):
                 },
                 solver_map={'solver': ScipyRootSolver()})
         interp.set_up(t_start=t_start, dt_start=dt, context={component_id: y_0})
-        interp.initialize()
 
         times = []
         values = []
@@ -93,61 +93,66 @@ def test_convergence(problem, method, expected_order):
     assert orderest > 0.9 * expected_order
 
 
-@pytest.mark.parametrize("problem, method, rel_error_bound", [
-    [KapsProblem(epsilon=0.001), KennedyCarpenterIMEXARK4(rtol=1.0e-6), 1.0e-6],
-    [VanDerPolProblem(), KennedyCarpenterIMEXARK4(rtol=1.0e-6), None]
+@pytest.mark.parametrize("problem, method", [
+    [KapsProblem(epsilon=0.001), KennedyCarpenterIMEXARK4],
     ])
-def test_kaps_problem(problem, method, rel_error_bound):
+def test_adaptive(problem, method):
     from leap.vm.exec_numpy import NumpyInterpreter
 
     component_id = 'y'
 
-    y_0 = problem.initial()
     t_start = problem.t_start
     t_end = problem.t_end
-    dt = 1.0e-2
+    dt = 1.0e-1
 
-    code = method(component_id, solver_id='solver')
+    tols = [10.0 ** (-j) for j in range(1, 5)]
 
-    interp = NumpyInterpreter(code, function_map={
-            '<func>expl_' + component_id: problem.nonstiff,
-            '<func>impl_' + component_id: problem.stiff
-            },
-            solver_map={'solver': ScipyRootSolver()})
-    interp.set_up(t_start=t_start, dt_start=dt, context={component_id: y_0})
-    interp.initialize()
+    from pytools.convergence import EOCRecorder
+    eocrec = EOCRecorder()
 
-    times = []
-    values = []
+    # Test that tightening the tolerance will decrease the overall error.
+    for atol in tols:
+        code = method(atol=atol)(component_id, solver_id='solver')
 
-    new_times = []
-    new_values = []
+        interp = NumpyInterpreter(code, function_map={
+                '<func>expl_' + component_id: problem.nonstiff,
+                '<func>impl_' + component_id: problem.stiff
+                }, solver_map={'solver': ScipyRootSolver()})
+        interp.set_up(t_start=t_start, dt_start=dt,
+                      context={component_id: problem.initial()})
 
-    for event in interp.run(t_end=t_end):
-        clear_flag = False
-        if isinstance(event, interp.StateComputed):
-            assert event.component_id == component_id
-            new_values.append(event.state_component)
-            new_times.append(event.t)
-        elif isinstance(event, interp.StepCompleted):
-            values.extend(new_values)
-            times.extend(new_times)
-            clear_flag = True
-        elif isinstance(event, interp.StepFailed):
-            clear_flag = True
-        if clear_flag:
-            del new_times[:]
-            del new_values[:]
+        times = []
+        values = []
 
-    times = np.array(times)
-    values = np.array(values)
-    assert abs(times[-1] - t_end) < 1e-10
-    try:
+        new_times = []
+        new_values = []
+
+        for event in interp.run(t_end=t_end):
+            clear_flag = False
+            if isinstance(event, interp.StateComputed):
+                assert event.component_id == component_id
+                new_values.append(event.state_component)
+                new_times.append(event.t)
+            elif isinstance(event, interp.StepCompleted):
+                values.extend(new_values)
+                times.extend(new_times)
+                clear_flag = True
+            elif isinstance(event, interp.StepFailed):
+                clear_flag = True
+            if clear_flag:
+                del new_times[:]
+                del new_values[:]
+
+        times = np.array(times)
+        values = np.array(values)
         exact = problem.exact(times[-1])
-        rel_error = np.linalg.norm(values[-1] - exact) / np.linalg.norm(exact)
-        assert rel_error < rel_error_bound
-    except NotImplementedError:
-        pass
+        error = np.linalg.norm(values[-1] - exact)
+        eocrec.add_data_point(atol, error)
+
+    print("Error vs. tolerance")
+    print(eocrec.pretty_print())
+    order = eocrec.estimate_order_of_convergence()[0, 1]
+    assert order > 0.9
 
 
 if __name__ == "__main__":
