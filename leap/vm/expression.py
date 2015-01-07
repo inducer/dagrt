@@ -28,6 +28,7 @@ THE SOFTWARE.
 from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
 from pymbolic.mapper.dependency import DependencyMapper
 from pymbolic.mapper import CombineMapper, IdentityMapper
+from pymbolic.mapper.unifier import UnidirectionalUnifier
 from pymbolic.primitives import Variable, is_constant
 
 import logging
@@ -81,7 +82,6 @@ class EvaluationMapper(EvaluationMapperBase):
     def map_call_with_kwargs(self, expr):
         return self.map_generic_call(expr.function.name, expr.parameters,
                                      expr.kw_parameters)
-
 
 
 class _ConstantFindingMapper(CombineMapper):
@@ -222,5 +222,55 @@ def collapse_constants(expression, free_variables, assign_func, new_var_func):
     for variable, expr in variable_map.items():
         assign_func(variable, expr)
     return new_expression
+
+
+class _UnidirectionalUnifierWithFunctionCalls(UnidirectionalUnifier):
+    """This class extends the unification mapper to handle terms with
+    function calls. The function symbols are assumed to be constants.
+    """
+
+    def map_call(self, expr, other, urecs):
+
+        if not isinstance(expr, type(other)):
+            return []
+
+        if expr.function != other.function:
+            return []
+
+        expr_parameters = expr.parameters
+        other_parameters = other.parameters
+
+        if len(expr_parameters) != len(other_parameters):
+            return []
+
+        from pymbolic.primitives import CallWithKwargs
+
+        if isinstance(expr, CallWithKwargs):
+            from operator import itemgetter
+
+            if set(expr.kw_parameters.keys()) != set(other.kw_parameters.keys()):
+                return []
+
+            expr_parameters += tuple(val for key, val in
+                                     sorted(expr.kw_parameters.items(),
+                                            key=itemgetter(0)))
+            other_parameters += tuple(val for key, val in
+                                      sorted(other.kw_parameters.items(),
+                                             key=itemgetter(0)))
+
+        for expr_param, other_param in zip(expr_parameters, other_parameters):
+            urecs = self.rec(expr_param, other_param, urecs)
+
+        return urecs
+
+    map_call_with_kwargs = map_call
+
+
+def unify(lhs, rhs, free_variable_names):
+    unifier = _UnidirectionalUnifierWithFunctionCalls(free_variable_names)
+    records = unifier(lhs, rhs)
+    if not records:
+        raise ValueError("Cannot unify expressions.")
+    return dict((key.name, val) for key, val in records[0].equations)
 
 # vim: foldmethod=marker

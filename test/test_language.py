@@ -121,7 +121,6 @@ def test_collapse_constants():
     dt = var("dt")
     expr = y - f(t + dt, y)
     from leap.vm.expression import collapse_constants
-    from pymbolic import var
 
     def new_var_func():
         return var("var")
@@ -131,6 +130,24 @@ def test_collapse_constants():
         assert expr == t + dt
 
     collapse_constants(expr, [y], assign_func, new_var_func)
+
+
+def test_unify():
+    from pymbolic import var
+    f = var("f")
+    y = var("y")
+    h = var("h")
+    t = var("t")
+    hh = var("hh")
+    tt = var("tt")
+    lhs = y - h * f(t, y)
+    rhs = - hh * f(tt, y) + y
+
+    from leap.vm.expression import unify
+    subst = unify(lhs, rhs, ["t", "h"])
+    assert len(subst) == 2
+    assert subst["h"] == hh
+    assert subst["t"] == tt
 
 
 if __name__ == "__main__":
