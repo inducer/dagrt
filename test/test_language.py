@@ -150,6 +150,24 @@ def test_unify():
     assert subst["t"] == tt
 
 
+def test_get_variables():
+    from pymbolic import var
+    f = var('f')
+    x = var('x')
+    from leap.vm.utils import get_variables
+    assert get_variables(f(x)) == frozenset(['x'])
+    assert get_variables(f(t=x)) == frozenset(['x'])
+
+
+def test_get_variables_with_function_symbols():
+    from pymbolic import var
+    f = var('f')
+    x = var('x')
+    from leap.vm.utils import get_variables
+    assert get_variables(f(x), include_function_symbols=True) == \
+        frozenset(['f', 'x'])
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])

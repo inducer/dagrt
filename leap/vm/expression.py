@@ -50,11 +50,6 @@ class ExtendedDependencyMapper(DependencyMapper):
             return super(ExtendedDependencyMapper, self).map_foreign(expr)
 
 
-variable_mapper = ExtendedDependencyMapper(include_subscripts=False,
-                                           include_lookups=False,
-                                           include_calls="descend_args")
-
-
 class EvaluationMapper(EvaluationMapperBase):
 
     def __init__(self, context, functions):
