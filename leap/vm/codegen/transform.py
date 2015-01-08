@@ -176,7 +176,7 @@ class FunctionCallIsolator(IdentityMapper):
 
         from leap.vm.language import AssignExpression
         new_insn = AssignExpression(
-                tmp_var_name, rec_result,
+                tmp_var_name, rec_result, id=tmp_insn_id,
                 depends_on=base_deps | frozenset(sub_extra_deps))
 
         self.new_instructions.append(new_insn)
