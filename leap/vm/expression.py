@@ -268,7 +268,7 @@ def unify(lhs, rhs, free_variable_names):
     `rhs`, modulo associativity and commutativity.
 
     This does not support full unification. In particular, it is
-    assumed no free variable in `lhs` is found in `rhs`.
+    assumed no free variable appears in `rhs`.
 
     Return a map from variable names in `free_variable_names` to
     expressions.
