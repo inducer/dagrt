@@ -30,9 +30,11 @@ from pymbolic.mapper.dependency import DependencyMapper
 from pymbolic.mapper import CombineMapper, IdentityMapper
 from pymbolic.mapper.unifier import UnidirectionalUnifier
 from pymbolic.primitives import Variable, is_constant
+from pymbolic.parser import Parser
 
 import logging
 import operator
+import pytools.lex
 import six.moves
 
 logger = logging.getLogger(__name__)
@@ -262,10 +264,56 @@ class _UnidirectionalUnifierWithFunctionCalls(UnidirectionalUnifier):
 
 
 def unify(lhs, rhs, free_variable_names):
+    """Attempt to match the free variables found in `lhs` to terms in
+    `rhs`, modulo associativity and commutativity.
+
+    This does not support full unification. In particular, it is
+    assumed no free variable in `lhs` is found in `rhs`.
+
+    Return a map from variable names in `free_variable_names` to
+    expressions.
+
+    """
     unifier = _UnidirectionalUnifierWithFunctionCalls(free_variable_names)
     records = unifier(lhs, rhs)
     if not records:
         raise ValueError("Cannot unify expressions.")
     return dict((key.name, val) for key, val in records[0].equations)
+
+
+def _hack_lex_table(lex_table):
+    new_lex_table = []
+    for entry in lex_table:
+        if entry[0] == "identifier":
+            entry = ("identifier", ("|", entry[1],
+                    pytools.lex.RE("{[<>:a-zA-Z0-9_]*}")))
+        new_lex_table.append(entry)
+    return new_lex_table
+
+
+class _ExtendedParser(Parser):
+    lex_table = _hack_lex_table(Parser.lex_table)
+
+
+class _RenameVariableMapper(IdentityMapper):
+
+    def __init__(self, rename_func):
+        self.rename_func = rename_func
+
+    def map_variable(self, expr):
+        from pymbolic import var
+        return var(self.rename_func(expr.name))
+
+
+def parse(str_expr):
+    """Return a pymbolic expression constructed from the string. Values
+    between curly braces '{' and '}' are parsed as variable names.
+    """
+    parser = _ExtendedParser()
+    renamer = _RenameVariableMapper(lambda s: s[1:-1]
+                                    if s.startswith('{') and s.endswith('}')
+                                    else s)
+    return renamer(parser(str_expr))
+
 
 # vim: foldmethod=marker
