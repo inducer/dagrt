@@ -113,61 +113,6 @@ def test_NewCodeBuilder_nested_condition_with_else(python_method_impl):
     assert result == 4
 
 
-def test_collapse_constants():
-    from pymbolic import var
-    f = var("f")
-    y = var("y")
-    t = var("t")
-    dt = var("dt")
-    expr = y - f(t + dt, y)
-    from leap.vm.expression import collapse_constants
-
-    def new_var_func():
-        return var("var")
-
-    def assign_func(variable, expr):
-        assert variable == var("var")
-        assert expr == t + dt
-
-    collapse_constants(expr, [y], assign_func, new_var_func)
-
-
-def test_unify():
-    from pymbolic import var
-    f = var("f")
-    y = var("y")
-    h = var("h")
-    t = var("t")
-    hh = var("hh")
-    tt = var("tt")
-    lhs = y - h * f(t, y)
-    rhs = - hh * f(tt, y) + y
-
-    from leap.vm.expression import unify
-    subst = unify(lhs, rhs, ["t", "h"])
-    assert len(subst) == 2
-    assert subst["h"] == hh
-    assert subst["t"] == tt
-
-
-def test_get_variables():
-    from pymbolic import var
-    f = var('f')
-    x = var('x')
-    from leap.vm.utils import get_variables
-    assert get_variables(f(x)) == frozenset(['x'])
-    assert get_variables(f(t=x)) == frozenset(['x'])
-
-
-def test_get_variables_with_function_symbols():
-    from pymbolic import var
-    f = var('f')
-    x = var('x')
-    from leap.vm.utils import get_variables
-    assert get_variables(f(x), include_function_symbols=True) == \
-        frozenset(['f', 'x'])
-
-
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])
