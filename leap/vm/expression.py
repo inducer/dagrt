@@ -286,7 +286,7 @@ def _hack_lex_table(lex_table):
     for entry in lex_table:
         if entry[0] == "identifier":
             entry = ("identifier", ("|", entry[1],
-                    pytools.lex.RE("{[<>:a-zA-Z0-9_]*}")))
+                    pytools.lex.RE("`[<>:a-zA-Z0-9_]*`")))
         new_lex_table.append(entry)
     return new_lex_table
 
@@ -307,11 +307,11 @@ class _RenameVariableMapper(IdentityMapper):
 
 def parse(str_expr):
     """Return a pymbolic expression constructed from the string. Values
-    between curly braces '{' and '}' are parsed as variable names.
+    between backticks ("`") are parsed as variable names.
     """
     parser = _ExtendedParser()
     renamer = _RenameVariableMapper(lambda s: s[1:-1]
-                                    if s.startswith('{') and s.endswith('}')
+                                    if s.startswith('`') and s.endswith('`')
                                     else s)
     return renamer(parser(str_expr))
 
