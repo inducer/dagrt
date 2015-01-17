@@ -44,7 +44,7 @@ def test_collapse_constants():
     collapse_constants(expr, [y], assign_func, new_var_func)
 
 
-def test_unify():
+def test_match():
     from pymbolic import var
     f = var("f")
     y = var("y")
@@ -55,8 +55,8 @@ def test_unify():
     lhs = y - h * f(t, y)
     rhs = - hh * f(tt, y) + y
 
-    from leap.vm.expression import unify
-    subst = unify(lhs, rhs, ["t", "h"])
+    from leap.vm.expression import match
+    subst = match(lhs, rhs, ["t", "h"])
     assert len(subst) == 2
     assert subst["h"] == hh
     assert subst["t"] == tt

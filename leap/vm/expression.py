@@ -62,6 +62,12 @@ class EvaluationMapper(EvaluationMapperBase):
         EvaluationMapperBase.__init__(self, context)
         self.functions = functions
 
+    def map_variable(self, expr):
+        if expr.name in self.context:
+            return self.context[expr.name]
+        elif expr.name in self.functions:
+            return self.functions[expr.name]
+
     def map_generic_call(self, function_name, parameters, kw_parameters):
         if function_name in self.functions:
             function = self.functions[function_name]
@@ -263,19 +269,19 @@ class _UnidirectionalUnifierWithFunctionCalls(UnidirectionalUnifier):
     map_call_with_kwargs = map_call
 
 
-def unify(lhs, rhs, free_variable_names):
-    """Attempt to match the free variables found in `lhs` to terms in
-    `rhs`, modulo associativity and commutativity.
+def match(template, expression, free_variable_names):
+    """Attempt to match the free variables found in `template` to terms in
+    `expression`, modulo associativity and commutativity.
 
-    This does not support full unification. In particular, it is
-    assumed no free variable appears in `rhs`.
+    This implements a one-way unification algorithm, matching free
+    variables in `template` to subexpressions of `expression`.
 
     Return a map from variable names in `free_variable_names` to
     expressions.
 
     """
     unifier = _UnidirectionalUnifierWithFunctionCalls(free_variable_names)
-    records = unifier(lhs, rhs)
+    records = unifier(template, expression)
     if not records:
         raise ValueError("Cannot unify expressions.")
     return dict((key.name, val) for key, val in records[0].equations)
@@ -285,6 +291,7 @@ def _hack_lex_table(lex_table):
     new_lex_table = []
     for entry in lex_table:
         if entry[0] == "identifier":
+            # Allow backticks to delimit identifiers.
             entry = ("identifier", ("|", entry[1],
                     pytools.lex.RE("`[<>:a-zA-Z0-9_]*`")))
         new_lex_table.append(entry)
@@ -295,7 +302,7 @@ class _ExtendedParser(Parser):
     lex_table = _hack_lex_table(Parser.lex_table)
 
 
-class _RenameVariableMapper(IdentityMapper):
+class RenameVariableMapper(IdentityMapper):
 
     def __init__(self, rename_func):
         self.rename_func = rename_func
@@ -310,9 +317,9 @@ def parse(str_expr):
     between backticks ("`") are parsed as variable names.
     """
     parser = _ExtendedParser()
-    renamer = _RenameVariableMapper(lambda s: s[1:-1]
-                                    if s.startswith('`') and s.endswith('`')
-                                    else s)
+    renamer = RenameVariableMapper(lambda s: s[1:-1]
+                                   if s.startswith('`') and s.endswith('`')
+                                   else s)
     return renamer(parser(str_expr))
 
 
