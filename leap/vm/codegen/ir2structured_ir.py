@@ -99,13 +99,18 @@ def _check_for_if_then_else_node(node):
 
 
 def _check_for_block_node(node):
+    visited_nodes = set([node])
+
     # Follow the predecessors.
     predecessor_nodes = []
     current_node = node
     while len(current_node.predecessors) == 1 and \
           len(one(current_node.predecessors).successors) == 1:
         current_node = one(current_node.predecessors)
+        if current_node in visited_nodes:
+            return None
         predecessor_nodes.append(current_node)
+        visited_nodes.add(current_node)
 
     # Follow the successors.
     successor_nodes = []
@@ -113,7 +118,10 @@ def _check_for_block_node(node):
     while len(current_node.successors) == 1 and \
           len(one(current_node.successors).predecessors) == 1:
         current_node = one(current_node.successors)
+        if current_node in visited_nodes:
+            return None
         successor_nodes.append(current_node)
+        visited_nodes.add(current_node)
 
     # Check if a sequence has been detected.
     if not predecessor_nodes and not successor_nodes:

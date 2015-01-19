@@ -357,6 +357,21 @@ def test_complex_structural_extraction_3():
     assert isinstance(inner_if_node.node_list[1], SingleNode)
 
 
+def test_cycle_detection():
+    sym_tab = SymbolTable()
+    main = Function("f", sym_tab)
+
+    blocks = [BasicBlock(i, main) for i in range(3)]
+    blocks[0].add_jump(blocks[1])
+    blocks[1].add_jump(blocks[2])
+    blocks[2].add_jump(blocks[1])
+    main.assign_entry_block(blocks[0])
+
+    structural_extractor = StructuralExtractor()
+    control_tree = structural_extractor(main)
+    assert isinstance(control_tree, UnstructuredIntervalNode)
+
+
 def test_python_line_wrapping():
     """Check that the line wrapper breaks a line up correctly."""
     from leap.vm.codegen.python import wrap_line
