@@ -89,6 +89,8 @@ def _check_for_if_then_else_node(node):
     successors = then_node.successors | else_node.successors
     if len(successors) > 1:
         return None
+    if then_node.successors != else_node.successors:
+        return None
     if successors:
         merge_node = one(successors)
 
