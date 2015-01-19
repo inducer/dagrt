@@ -90,7 +90,7 @@ class NumpyInterpreter(object):
         self.context = {}
         self.next_state = self.code.initial_state
         builtins = {
-                "<builtin>len": len,
+                "<builtin>len": np.size,
                 "<builtin>isnan": np.isnan,
                 "<builtin>norm": np.linalg.norm,
                 "<builtin>dot_product": np.vdot
