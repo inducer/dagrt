@@ -62,6 +62,10 @@ class ControlNode(RecordWithoutPickling):
     # RecordWithoutPickling.__repr__() is really slow on control trees.
     __repr__ = object.__repr__
 
+    def blocks(self):
+        """Return the set of basic blocks numbers in this node."""
+        raise NotImplementedError()
+
 
 class SingleNode(ControlNode):
     """Represents a single basic block.
@@ -77,8 +81,19 @@ class SingleNode(ControlNode):
                                          entry_block=basic_block,
                                          exit_block=basic_block)
 
+    def block(self):
+        return frozenset([self.basic_block.number])
 
-class BlockNode(ControlNode):
+
+class ComplexControlNode(ControlNode):
+
+    def blocks(self):
+        import operator
+        from six.moves import reduce
+        return reduce(operator.or_, [child.blocks() for child in self.nodes])
+
+
+class BlockNode(ComplexControlNode):
     """Represents a straight line sequence of control nodes.
 
     Nodes B_1, B_2, ..., B_n form a block if B_2, B_3, ..., B_{n-1} are
@@ -91,10 +106,16 @@ class BlockNode(ControlNode):
     def __init__(self, node_list):
         if not node_list:
             raise ValueError('empty node list')
+
+        if hasattr(node_list[-1], "exit_block"):
+            exit_block = node_list[-1].exit_block
+        else:
+            exit_block = None
+
         super(BlockNode, self).__init__(nodes=set(node_list),
                                         node_list=list(node_list),
                                         entry_block=node_list[0].entry_block,
-                                        exit_block=node_list[-1].exit_block)
+                                        exit_block=exit_block)
 
         self.predecessors |= node_list[0].predecessors
         self.update_predecessors(node_list[0])
@@ -103,7 +124,7 @@ class BlockNode(ControlNode):
         self.update_successors(node_list[-1])
 
 
-class IfThenNode(ControlNode):
+class IfThenNode(ComplexControlNode):
     """Represents an if-then control structure.
 
     Distinct nodes A and B form an if-then control structure if B is
@@ -134,7 +155,7 @@ class IfThenNode(ControlNode):
         self.update_successors(then_node)
 
 
-class IfThenElseNode(ControlNode):
+class IfThenElseNode(ComplexControlNode):
     """Represents an if-then-else control structure.
 
     Distinct nodes A, B, C form an if-then-else control structure if
@@ -167,7 +188,7 @@ class IfThenElseNode(ControlNode):
         self.update_successors(else_node)
 
 
-class UnstructuredIntervalNode(ControlNode):
+class UnstructuredIntervalNode(ComplexControlNode):
     """Represents a set of nodes with a single entry point for which no more
     specific high level control structure can be assigned.
     """
