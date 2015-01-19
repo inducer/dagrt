@@ -35,13 +35,15 @@ from pymbolic import var
 from utils import execute_and_return_single_result
 
 
-@pytest.mark.parametrize(('len_'), [0, 1, 2])
-def test_len(python_method_impl, len_):
-    test_vector = np.ones(len_)
+@pytest.mark.parametrize(('obj, len_'), [(np.ones(0), 0),
+                                         (np.ones(1), 1),
+                                         (np.ones(2), 2),
+                                         (6.0, 1)])
+def test_len(python_method_impl, obj, len_):
     cbuild = CodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_1', assignee='x',
-                         expression=var('<builtin>len')(test_vector)),
+                         expression=var('<builtin>len')(obj)),
         YieldState(id='return', time=0, time_id='final',
                    expression=var('x'), component_id='<state>',
                    depends_on=['assign_1']))
@@ -51,7 +53,7 @@ def test_len(python_method_impl, len_):
             instructions=cbuild.instructions)
 
     result = execute_and_return_single_result(python_method_impl, code)
-    assert result == len(test_vector)
+    assert result == len_
 
 
 @pytest.mark.parametrize(('value'), [0, float('nan')])

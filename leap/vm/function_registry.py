@@ -199,7 +199,7 @@ class _DotProduct(Function):
 
 
 class _Len(Function):
-    """len(state)`` returns the number of degrees of freedom in *x* """
+    """len(x)`` returns the number of degrees of freedom in *x* """
 
     identifier = "<builtin>len"
     arg_names = ("x",)
@@ -248,7 +248,7 @@ def _make_bfr():
     for func, py_pattern in [
             (_Norm(), "{numpy}.linalg.norm({args})"),
             (_DotProduct(), "{numpy}.vdot({args})"),
-            (_Len(), "len({args})"),
+            (_Len(), "{numpy}.size({args})"),
             (_IsNaN(), "{numpy}.isnan({args})"),
             ]:
 
