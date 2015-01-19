@@ -89,34 +89,59 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         # Initialization
         with NewCodeBuilder(label="initialization") as cb:
             cb(self.step, 1)
-
         cb_init = cb
 
         steps = self.order
 
+        # Primary
         with NewCodeBuilder(label="primary") as cb:
             cb(self.rhs, self.eval_rhs(self.t, self.state))
-            with cb.if_(self.step, "<", steps):
-                self.rk_bootstrap(cb)
-                cb(self.step, self.step + 1)
-            with cb.else_():
-                history = self.history + [self.rhs]
-                ab_sum = sum(self.coeffs[i] * history[i] for i in range(steps))
-                cb(self.state, self.state + self.dt * ab_sum)
-                # Rotate history.
-                for i in range(len(self.history)):
-                    cb.fence()
-                    cb(self.history[i], history[i + 1])
+            cb.fence()
+            history = self.history + [self.rhs]
+            ab_sum = sum(self.coeffs[i] * history[i] for i in range(steps))
+            cb(self.state, self.state + self.dt * ab_sum)
+            # Rotate history.
+            for i in range(len(self.history)):
+                cb.fence()
+                cb(self.history[i], history[i + 1])
             cb(self.t, self.t + self.dt)
             cb.yield_state(expression=self.state, component_id=component_id,
                            time_id='', time=self.t)
-
         cb_primary = cb
 
-        return TimeIntegratorCode.create_with_init_and_step(
+        if steps == 1:
+            # The first order method requires no bootstrapping.
+            return TimeIntegratorCode.create_with_init_and_step(
                 instructions=cb_init.instructions | cb_primary.instructions,
                 initialization_dep_on=cb_init.state_dependencies,
                 step_dep_on=cb_primary.state_dependencies)
+
+        # Bootstrap
+        with NewCodeBuilder(label="bootstrap") as cb:
+            self.rk_bootstrap(cb)
+            cb(self.t, self.t + self.dt)
+            cb.yield_state(expression=self.state, component_id=component_id,
+                           time_id='', time=self.t)
+            cb(self.step, self.step + 1)
+            with cb.if_(self.step, "==", steps):
+                cb.state_transition("primary")
+        cb_bootstrap = cb
+
+        from leap.vm.language import TimeIntegratorState
+
+        make_state = lambda cb, next_state: \
+                     TimeIntegratorState(cb.state_dependencies, next_state)
+
+        states = {}
+        states["initialization"] = make_state(cb_init, "bootstrap")
+        states["bootstrap"] = make_state(cb_bootstrap, "bootstrap")
+        states["primary"] = make_state(cb_primary, "primary")
+
+        return TimeIntegratorCode(
+            instructions=cb_init.instructions | cb_bootstrap.instructions |
+            cb_primary.instructions,
+            states=states,
+            initial_state="initialization")
 
     def eval_rhs(self, t, y):
         """Return a node that evaluates the RHS at the given time and
@@ -127,6 +152,8 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
     def rk_bootstrap(self, cb):
         """Initialize the timestepper with an RK method."""
+
+        cb(self.rhs, self.eval_rhs(self.t, self.state))
 
         # Save the current RHS to the AB history
 
