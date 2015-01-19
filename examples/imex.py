@@ -62,7 +62,7 @@ def solver(f, j, t, u_n, x, c):
     I = np.eye(len(u_n))
     u = u_n
     while True:
-        M = I - c * j(t, x)
+        M = I - c * j(t, u)
         r = -(u - u_n) + x + c * f(t=t, y=u)
         d = nla.solve(M, r)
         u = u + d
