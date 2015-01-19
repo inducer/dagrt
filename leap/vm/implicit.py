@@ -47,7 +47,6 @@ class ScipySolverGenerator(object):
 
     """
 
-    # TODO: Support root finding in multiple dimensions
     def __init__(self, expression_template, solve_component, solver_id="solver",
                  function_registry=base_function_registry):
         """
