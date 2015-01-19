@@ -41,7 +41,34 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
     Applied Numerical Mathematics
     Volume 44, Issues 1-2, January 2003, Pages 139-181
     http://dx.doi.org/10.1016/S0168-9274(02)00138-1
+
+    Context:
+        state: The value that is integrated
+        rhs_expl_func: The explicit right hand side function
+        rhs_impl_func: The implicit right hand side function
     """
+
+    def __init__(self, component_id, **kwargs):
+        EmbeddedRungeKuttaMethod.__init__(self, **kwargs)
+
+        self.dt = var('<dt>')
+        self.t = var('<t>')
+        self.state = var('<state>' + component_id)
+        self.component_id = component_id
+
+        # Saved implicit and explicit right hand sides
+        self.rhs_expl = var('<p>rhs_expl')
+        self.rhs_impl = var('<p>rhs_impl')
+
+        if self.limiter_name is not None:
+            limiter = var("<func>" + self.limiter_name)
+        else:
+            limiter = lambda x: x
+        self.limiter_func = limiter
+
+        # Implicit and explicit right hand side functions
+        self.rhs_expl_func = var('<func>expl_' + self.component_id)
+        self.rhs_impl_func = var('<func>impl_' + self.component_id)
 
     def call_rhs(self, t, y, rhs):
         return CallWithKwargs(rhs, parameters=(),
@@ -54,12 +81,12 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
                                          else low_order_estimate
         cb(self.state, next_state)
         cb(self.rhs_expl, self.call_rhs(self.t + self.dt, self.state,
-                                        self.rhs_expl_function))
+                                        self.rhs_expl_func))
         if self.use_high_order:
             cb(self.rhs_impl, high_order_implicit_rhs)
         else:
             cb(self.rhs_impl, self.call_rhs(self.t + self.dt, self.state,
-                                            self.rhs_impl_function))
+                                            self.rhs_impl_func))
         cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
         cb.fence()
         cb(self.t, self.t + self.dt)
@@ -83,15 +110,13 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
                 assert len(coeffs_expl) == len(explicit_rhss)
                 assert len(coeffs_impl) == len(implicit_rhss)
 
-                args = [(1, self.state)] + [
-                    (self.dt * coeff, erhs)
+                sub_y_args = [(self.dt * coeff, erhs)
                     for coeff, erhs in zip(
                         coeffs_expl + coeffs_impl,
                         explicit_rhss + implicit_rhss)
                     if coeff]
 
-                sub_y = cb.fresh_var('sub_y')
-                cb(sub_y, sum(arg[0] * arg[1] for arg in args))
+                sub_y = sum(arg[0] * arg[1] for arg in sub_y_args)
 
                 # Compute the next implicit right hand side for the stage value.
                 # TODO: Compute a guess parameter using stage value predictors.
@@ -100,19 +125,18 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
                 solve_expression = collapse_constants(
                     solve_component - self.call_rhs(
                         self.t + c * self.dt,
-                        sub_y + self.gamma * self.dt * solve_component,
-                        self.rhs_impl_function),
-                    [solve_component], cb.assign, cb.fresh_var)
+                        self.state + sub_y + self.gamma * self.dt * solve_component,
+                        self.rhs_impl_func),
+                    [solve_component, self.state], cb.assign, cb.fresh_var)
                 cb.assign_solved(this_rhs_impl, solve_component,
-                                 solve_expression, implicit_rhss[-1],
-                                 self.solver_id)
+                                 solve_expression, implicit_rhss[-1], 0)
 
                 # Compute the next explicit right hand side for the stage value.
                 this_rhs_expl = cb.fresh_var('rhs_expl')
                 cb.assign(this_rhs_expl, self.call_rhs(
                           self.t + c * self.dt,
-                          sub_y + self.gamma * self.dt * this_rhs_impl,
-                          self.rhs_expl_function))
+                          self.state + sub_y + self.gamma * self.dt * this_rhs_impl,
+                          self.rhs_expl_func))
 
             explicit_rhss.append(this_rhs_expl)
             implicit_rhss.append(this_rhs_impl)
@@ -142,42 +166,33 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
             self.finish_adaptive(cb, high_order_estimate,
                                  high_order_implicit_rhs, low_order_estimate)
 
-    def __call__(self, component_id, solver_id):
-        self.dt = var('<dt>')
-        self.t = var('<t>')
-        self.state = var('<state>' + component_id)
-        self.component_id = component_id
-        self.solver_id = solver_id
+    def implicit_expression(self, expression_tag=None):
+        from leap.vm.expression import parse
+        return (parse("`solve_component` - `{rhs_impl}`(t=t, {component_id}="
+                      "`{state}` + sub_y + coeff * `solve_component`)".format(
+                          component_id=self.component_id,
+                          rhs_impl=self.rhs_impl_func.name,
+                          state=self.state.name)), "solve_component")
 
+    def generate(self, solver_hook):
         from leap.vm.language import NewCodeBuilder, TimeIntegratorCode
-
-        # Saved implicit and explicit right hand sides
-        self.rhs_expl = var('<p>rhs_expl')
-        self.rhs_impl = var('<p>rhs_impl')
-
-        if self.limiter_name is not None:
-            limiter = var("<func>" + self.limiter_name)
-        else:
-            limiter = lambda x: x
-        self.limiter_func = limiter
-
-        # Implicit and explicit right hand side functions
-        self.rhs_expl_function = var('<func>expl_' + self.component_id)
-        self.rhs_impl_function = var('<func>impl_' + self.component_id)
 
         with NewCodeBuilder(label="initialization") as cb_init:
             cb_init.assign(self.rhs_expl, self.call_rhs(
-                    self.t, self.state, self.rhs_expl_function))
+                    self.t, self.state, self.rhs_expl_func))
             cb_init.assign(self.rhs_impl, self.call_rhs(
-                    self.t, self.state, self.rhs_impl_function))
+                    self.t, self.state, self.rhs_impl_func))
 
         with NewCodeBuilder(label="primary") as cb_primary:
             self.emit_primary(cb_primary)
 
-        return TimeIntegratorCode.create_with_init_and_step(
+        from leap.vm.implicit import replace_AssignSolved
+        code = TimeIntegratorCode.create_with_init_and_step(
             instructions=cb_init.instructions | cb_primary.instructions,
             initialization_dep_on=cb_init.state_dependencies,
             step_dep_on=cb_primary.state_dependencies)
+
+        return replace_AssignSolved(code, solver_hook)
 
 
 class KennedyCarpenterIMEXARK4(KennedyCarpenterIMEXRungeKuttaBase):

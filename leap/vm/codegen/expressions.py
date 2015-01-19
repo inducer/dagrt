@@ -137,6 +137,8 @@ class PythonExpressionMapper(StringifyMapper):
             return super(PythonExpressionMapper, self).map_foreign(expr, *args)
 
     def map_variable(self, expr, enclosing_prec):
+        if expr.name.startswith("<func>"):
+            return self._name_manager.name_function(expr.name)
         return self._name_manager[expr.name]
 
     def map_numpy_array(self, expr, *args):
@@ -168,7 +170,7 @@ class PythonExpressionMapper(StringifyMapper):
                         expr=self.rec(val, PREC_NONE))
                     for name, val in kwargs.items()]
 
-            return 'self._functions.{rhs}({args})'.format(
+            return '{rhs}({args})'.format(
                     rhs=self._name_manager.name_function(symbol.name),
                     args=", ".join(args_strs))
 

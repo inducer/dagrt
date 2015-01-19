@@ -7,8 +7,9 @@
 * Step matrix finder
 * Fix ERK efficiency/reused subexpressions
 
-* Single writer ideas
-    - warn if a value is not defined yet
-    - check for circular dependencies
-    - copy_fence instruction for introducing temporaries and copies
-    - nice visualization
+* Solver ideas:
+    - Remove AssignSolved, replace with AssignExpression
+* Method ideas:
+    - Simplify interface. Deprecate set_up(). Don't pass two separate contexts.
+* AB ideas
+    - Implement transitions, add an RK state and a Primary state

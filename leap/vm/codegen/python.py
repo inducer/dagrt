@@ -114,7 +114,7 @@ class PythonNameManager(object):
         self._global_map = KeyToUniqueNameMap(forced_prefix='self.global_',
                                               start={'<t>': 'self.t',
                                                      '<dt>': 'self.dt'})
-        self.function_map = KeyToUniqueNameMap()
+        self.function_map = KeyToUniqueNameMap(forced_prefix="self._functions.")
 
     def name_global(self, name):
         """Return the identifier for a global variable."""
@@ -250,12 +250,12 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         emit('self._functions = self._function_symbol_container()')
         for function_id in self._name_manager.function_map:
             py_function_id = self._name_manager.name_function(function_id)
-            emit('self._functions.{py_function_id} = function_map["{function_id}"]'
+            emit('{py_function_id} = function_map["{function_id}"]'
                     .format(
                         py_function_id=py_function_id,
                         function_id=function_id))
         emit("")
-        emit("self.state_info = "+repr(dict(
+        emit("self.state_transition_table = "+repr(dict(
             (state_name, (
                 state.next_state,
                 BareExpression("self.state_"+state_name)))
@@ -320,7 +320,8 @@ class PythonCodeGenerator(StructuredCodeGenerator):
     def _emit_run_single_step(self):
         emit = PythonFunctionEmitter('run_single_step', ('self',))
 
-        emit('self.next_state, state_func = self.state_info[self.next_state]')
+        emit('self.next_state, state_func = '
+             'self.state_transition_table[self.next_state]')
 
         emit('for evt in state_func():')
         with Indentation(emit):

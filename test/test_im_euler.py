@@ -25,31 +25,30 @@ THE SOFTWARE.
 """
 
 import sys
-
-from leap.method.im_euler import ImplicitEulerMethod
-from leap.vm.implicit import GenericNumpySolver
 import numpy as np
-import scipy.optimize
+
+from utils import (  # noqa
+        python_method_impl_interpreter as pmi_int,
+        python_method_impl_codegen as pmi_cg)
 
 
-class ScipyRootSolver(GenericNumpySolver):
-
-    def run_solver(self, func, guess):
-        return scipy.optimize.root(func, guess).x
-
-
-def test_im_euler_accuracy(show_dag=False, plot_solution=False):
+def test_im_euler_accuracy(python_method_impl, show_dag=False,
+                           plot_solution=False):
     component_id = "y"
-    method = ImplicitEulerMethod()
-    code = method(component_id)
+
+    from leap.method.im_euler import ImplicitEulerMethod
+    from leap.vm.implicit import ScipySolverGenerator
+
+    method = ImplicitEulerMethod(component_id)
+    sgen = ScipySolverGenerator(*method.implicit_expression())
+    solver = sgen.get_compiled_solver()
+    code = method.generate(sgen)
 
     expected_order = 1
 
     if show_dag:
         from leap.vm.language import show_dependency_graph
         show_dependency_graph(code)
-
-    from leap.vm.exec_numpy import NumpyInterpreter
 
     h = -0.5
     y_0 = 1.0
@@ -69,9 +68,10 @@ def test_im_euler_accuracy(show_dag=False, plot_solution=False):
         y = y_0
         final_t = 1
 
-        interp = NumpyInterpreter(code,
-                                  function_map={'<func>' + component_id: rhs},
-                                  solver_map={'newton': ScipyRootSolver()})
+        interp = python_method_impl(code,
+            function_map={method.rhs_func.name: rhs,
+                          sgen.solver_func.name: solver})
+
         interp.set_up(t_start=t, dt_start=dt, context={component_id: y})
 
         times = []

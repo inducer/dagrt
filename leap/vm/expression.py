@@ -302,7 +302,7 @@ class _ExtendedParser(Parser):
     lex_table = _hack_lex_table(Parser.lex_table)
 
 
-class RenameVariableMapper(IdentityMapper):
+class _RenameVariableMapper(IdentityMapper):
 
     def __init__(self, rename_func):
         self.rename_func = rename_func
@@ -312,14 +312,24 @@ class RenameVariableMapper(IdentityMapper):
         return var(self.rename_func(expr.name))
 
 
+def substitute(expr, substitution_dict):
+    """
+    Perform substitution in `expr` based on `substitution_dict`.
+    """
+    renamer = _RenameVariableMapper(lambda s: substitution_dict[s]
+                                    if s in substitution_dict
+                                    else s)
+    return renamer(expr)
+
+
 def parse(str_expr):
     """Return a pymbolic expression constructed from the string. Values
     between backticks ("`") are parsed as variable names.
     """
     parser = _ExtendedParser()
-    renamer = RenameVariableMapper(lambda s: s[1:-1]
-                                   if s.startswith('`') and s.endswith('`')
-                                   else s)
+    renamer = _RenameVariableMapper(lambda s: s[1:-1]
+                                    if s.startswith('`') and s.endswith('`')
+                                    else s)
     return renamer(parser(str_expr))
 
 

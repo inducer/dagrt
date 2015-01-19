@@ -30,25 +30,26 @@ import sys
 
 from leap.method.rk.imex import KennedyCarpenterIMEXARK4
 from stiff_test_systems import KapsProblem
-from leap.vm.implicit import GenericNumpySolver
-import scipy.optimize
+from leap.vm.implicit import ScipySolverGenerator
+
+from utils import (  # noqa
+        python_method_impl_interpreter as pmi_int,
+        python_method_impl_codegen as pmi_cg)
 
 
-class ScipyRootSolver(GenericNumpySolver):
-
-    def run_solver(self, func, guess):
-        return scipy.optimize.root(func, guess, method='broyden1').x
+_component_id = "y"
 
 
 @pytest.mark.parametrize("problem, method, expected_order", [
-    [KapsProblem(epsilon=0.9), KennedyCarpenterIMEXARK4(use_high_order=False), 3],
-    [KapsProblem(epsilon=0.9), KennedyCarpenterIMEXARK4(), 4],
+    [KapsProblem(epsilon=0.9), KennedyCarpenterIMEXARK4(_component_id,
+                                                        use_high_order=False), 3],
+    [KapsProblem(epsilon=0.9), KennedyCarpenterIMEXARK4(_component_id), 4],
     ])
-def test_convergence(problem, method, expected_order):
-    component_id = "y"
-    code = method(component_id, solver_id='solver')
+def test_convergence(python_method_impl, problem, method, expected_order):
+    sgen = ScipySolverGenerator(*method.implicit_expression())
+    solver_func = sgen.get_compiled_solver()
+    code = method.generate(sgen)
 
-    from leap.vm.exec_numpy import NumpyInterpreter
     from pytools.convergence import EOCRecorder
     eocrec = EOCRecorder()
 
@@ -59,12 +60,13 @@ def test_convergence(problem, method, expected_order):
         t_start = problem.t_start
         t_end = problem.t_end
 
-        interp = NumpyInterpreter(code, function_map={
-                '<func>expl_' + component_id: problem.nonstiff,
-                '<func>impl_' + component_id: problem.stiff
-                },
-                solver_map={'solver': ScipyRootSolver()})
-        interp.set_up(t_start=t_start, dt_start=dt, context={component_id: y_0})
+        interp = python_method_impl(code, function_map={
+            method.rhs_expl_func.name: problem.nonstiff,
+            method.rhs_impl_func.name: problem.stiff,
+            sgen.solver_func.name: solver_func
+        })
+
+        interp.set_up(t_start=t_start, dt_start=dt, context={_component_id: y_0})
 
         times = []
         values = []
@@ -96,10 +98,7 @@ def test_convergence(problem, method, expected_order):
 @pytest.mark.parametrize("problem, method", [
     [KapsProblem(epsilon=0.001), KennedyCarpenterIMEXARK4],
     ])
-def test_adaptive(problem, method):
-    from leap.vm.exec_numpy import NumpyInterpreter
-
-    component_id = 'y'
+def test_adaptive(python_method_impl, problem, method):
 
     t_start = problem.t_start
     t_end = problem.t_end
@@ -112,14 +111,17 @@ def test_adaptive(problem, method):
 
     # Test that tightening the tolerance will decrease the overall error.
     for atol in tols:
-        code = method(atol=atol)(component_id, solver_id='solver')
+        generator = method(_component_id, atol=atol)
+        sgen = ScipySolverGenerator(*generator.implicit_expression())
+        code = generator.generate(sgen)
 
-        interp = NumpyInterpreter(code, function_map={
-                '<func>expl_' + component_id: problem.nonstiff,
-                '<func>impl_' + component_id: problem.stiff
-                }, solver_map={'solver': ScipyRootSolver()})
+        interp = python_method_impl(code, function_map={
+            generator.rhs_expl_func.name: problem.nonstiff,
+            generator.rhs_impl_func.name: problem.stiff,
+            sgen.solver_func.name: sgen.get_compiled_solver()
+        })
         interp.set_up(t_start=t_start, dt_start=dt,
-                      context={component_id: problem.initial()})
+                      context={_component_id: problem.initial()})
 
         times = []
         values = []
@@ -130,7 +132,7 @@ def test_adaptive(problem, method):
         for event in interp.run(t_end=t_end):
             clear_flag = False
             if isinstance(event, interp.StateComputed):
-                assert event.component_id == component_id
+                assert event.component_id == _component_id
                 new_values.append(event.state_component)
                 new_times.append(event.t)
             elif isinstance(event, interp.StepCompleted):

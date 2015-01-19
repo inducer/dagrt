@@ -79,12 +79,11 @@ class NumpyInterpreter(object):
         """
     # }}}
 
-    def __init__(self, code, function_map, solver_map={}):
+    def __init__(self, code, function_map):
         """
         :arg code: an instance of :class:`leap.vm.TimeIntegratorCode`
         :arg function_map: a mapping from function identifiers to functions
         """
-        self.solvers = solver_map
         self.code = code
         from leap.vm.language import ExecutionController
         self.exec_controller = ExecutionController(code)
@@ -171,13 +170,7 @@ class NumpyInterpreter(object):
     # {{{ execution methods
 
     def exec_AssignSolved(self, insn):
-        guess = self.eval_mapper(insn.guess)
-        solver = self.solvers[insn.solver_id]
-        result = solver.solve(insn.expression,
-                              insn.solve_component,
-                              self.context,
-                              self.functions, guess)
-        self.context[insn.assignee] = result
+        raise RuntimeError("Encountered AssignSolved.")
 
     def exec_YieldState(self, insn):
         return self.StateComputed(

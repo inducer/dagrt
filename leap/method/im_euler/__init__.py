@@ -31,48 +31,59 @@ from pymbolic.primitives import CallWithKwargs
 
 
 class ImplicitEulerMethod(Method):
+    """
+    Context:
+       state: The value that is integrated
+       rhs_func: The right hand side function
+    """
 
-    def __call__(self, component_id):
+    def __init__(self, component_id):
+        self.component_id = component_id
+        self.dt = var('<dt>')
+        self.t = var('<t>')
+        self.state = var('<state>' + component_id)
+        self.rhs_func = var('<func>' + component_id)
+
+    def generate(self, solver_hook):
         """Return code that implements the implicit Euler method for the single
         state component supported."""
-
-        self._dt = var('<dt>')
-        self._t = var('<t>')
-        self._state = var('<state>' + component_id)
-        self._rhs = var('<func>' + component_id)
-        self._component_id = component_id
 
         with NewCodeBuilder(label="primary") as cb:
             self._make_primary(cb)
 
-        return TimeIntegratorCode.create_with_steady_state(
+        code = TimeIntegratorCode.create_with_steady_state(
             dep_on=cb.state_dependencies,
             instructions=cb.instructions)
 
+        from leap.vm.implicit import replace_AssignSolved
+
+        return replace_AssignSolved(code, solver_hook)
+
     def _make_primary(self, builder):
         """Add code to drive the primary stage."""
-        from leap.vm.expression import collapse_constants
 
         solve_component = var('next_state')
-        solve_expression = collapse_constants(
-            solve_component - self._state - self._dt *
-            CallWithKwargs(
-                function=self._rhs,
-                parameters=(),
-                kw_parameters={
-                    't': self._t + self._dt,
-                    self._component_id: solve_component
-                    }),
-            [solve_component],
-            builder.assign,
-            builder.fresh_var)
+        solve_expression = solve_component - self.state - \
+                           self.dt * CallWithKwargs(
+                               function=self.rhs_func,
+                               parameters=(),
+                               kw_parameters={
+                                   't': self.t + self.dt,
+                                   self.component_id: solve_component
+                               })
 
-        builder.fence()            
-        builder.assign_solved(self._state, solve_component,
-                              solve_expression, self._state,
-                              'newton')
+        builder.assign_solved(self.state, solve_component,
+                              solve_expression, self.state, 0)
 
-        builder.yield_state(self._state, self._component_id,
-                            self._t + self._dt, 'final')
+        builder.yield_state(self.state, self.component_id,
+                            self.t + self.dt, 'final')
         builder.fence()
-        builder.assign(self._t, self._t + self._dt)
+        builder.assign(self.t, self.t + self.dt)
+
+    def implicit_expression(self, expression_tag=None):
+        from leap.vm.expression import parse
+        return (parse("`solve_component` + state + dt * `{rhs}`(t=t,"
+                      "{component_id}=`solve_component`)".format(
+                          rhs=self.rhs_func.name,
+                          component_id=self.component_id)),
+                "solve_component")
