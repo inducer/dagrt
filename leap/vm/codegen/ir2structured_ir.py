@@ -63,6 +63,9 @@ def _check_for_if_then_else_node(node):
     if len(node.successors) != 2:
         return None
 
+    if not hasattr(node, "exit_block") or not node.exit_block:
+        return None
+
     # Get then and else nodes.
     branch = node.exit_block.code[-1]
     assert isinstance(branch, BranchInst)
@@ -114,11 +117,6 @@ def _check_for_block_node(node):
 
     # Check if a sequence has been detected.
     if not predecessor_nodes and not successor_nodes:
-        return None
-
-    # Check if the sequence is single-exit.
-    last_node = successor_nodes[-1] if successor_nodes else node
-    if not hasattr(last_node, "exit_block"):
         return None
 
     # Construct the block.
