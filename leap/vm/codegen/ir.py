@@ -274,6 +274,22 @@ class ReturnInst(TerminatorInst):
         return 'return'
 
 
+class StateTransitionInst(TerminatorInst):
+    """Triggers a state transition event."""
+
+    def __init__(self, next_state, block=None):
+        super(StateTransitionInst, self).__init__(next_state=next_state,
+                                                  block=block)
+
+    def get_defined_variables(self):
+        return frozenset()
+
+    get_used_variables = get_defined_variables
+    get_jump_targets = get_defined_variables
+
+    def __str__(self):
+        return 'transition to ' + self.next_state
+
 # }}}
 
 
@@ -400,6 +416,9 @@ class BasicBlock(object):
 
     def add_fail_step(self):
         self.add_instruction(FailStepInst())
+
+    def add_state_transition(self, next_state):
+        self.add_instruction(StateTransitionInst(next_state))
 
     def __str__(self):
         lines = []

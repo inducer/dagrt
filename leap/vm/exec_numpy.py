@@ -33,6 +33,12 @@ class FailStepException(Exception):
     pass
 
 
+class TransitionEvent(Exception):
+
+    def __init__(self, next_state):
+        self.next_state = next_state
+
+
 # {{{ interpreter
 
 class NumpyInterpreter(object):
@@ -137,6 +143,9 @@ class NumpyInterpreter(object):
                 yield self.StepFailed(t=self.context["<t>"])
                 continue
 
+            except TransitionEvent as evt:
+                self.next_state = evt.next_state
+
             yield self.StepCompleted(
                     t=self.context["<t>"],
                     current_state=cur_state,
@@ -194,6 +203,9 @@ class NumpyInterpreter(object):
 
     def exec_Nop(self, insn):
         pass
+
+    def exec_StateTransition(self, insn):
+        raise TransitionEvent(insn.next_state)
 
     # }}}
 
@@ -286,6 +298,9 @@ class StepMatrixFinder(object):
     def exec_If(self, insn):
         raise RuntimeError("matrices don't represent conditionals well, "
                 "so StepMatrixFinder cannot support them")
+
+    def exec_StateTransition(self, insn):
+        pass
 
     # }}}
 

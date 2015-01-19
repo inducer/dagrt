@@ -76,11 +76,20 @@ class StepFailed(namedtuple("StepFailed", ["t"])):
         Floating point number.
     """
 
+
 class TimeStepUnderflow(RuntimeError):
     pass
 
+
 class FailStepException(RuntimeError):
     pass
+
+
+class TransitionEvent(Exception):
+
+    def __init__(self, next_state):
+        self.next_state = next_state
+
 
 class _function_symbol_container(object):
     pass
@@ -309,6 +318,10 @@ class PythonCodeGenerator(StructuredCodeGenerator):
                 emit('yield self.StepFailed(t=self.t)')
                 emit('continue')
 
+            emit('except self.TransitionEvent as evt:')
+            with Indentation(emit):
+                emit('self.next_state = evt.next_state')
+
             emit('yield self.StepCompleted(t=self.t, '
                 'current_state=cur_state, next_state=self.next_state)')
 
@@ -400,5 +413,11 @@ class PythonCodeGenerator(StructuredCodeGenerator):
 
     def emit_fail_step(self):
         self._emit('raise self.FailStepException()')
+        if not self._has_yield_inst:
+            self._emit('yield')
+
+    def emit_state_transition(self, next_state):
+        assert '\'' not in next_state
+        self._emit('raise self.TransitionEvent(\'' + next_state + '\')')
         if not self._has_yield_inst:
             self._emit('yield')

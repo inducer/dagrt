@@ -42,11 +42,12 @@ def python_method_impl_codegen(code, **kwargs):
 # }}}
 
 
-def execute_and_return_single_result(python_method_impl, code):
+def execute_and_return_single_result(python_method_impl, code, initial_context={},
+                                     max_steps=1):
     interpreter = python_method_impl(code, function_map={})
-    interpreter.set_up(t_start=0, dt_start=0, context={})
+    interpreter.set_up(t_start=0, dt_start=0, context=initial_context)
     has_state_component = False
-    for event in interpreter.run(max_steps=1):
+    for event in interpreter.run(max_steps=max_steps):
         if isinstance(event, interpreter.StateComputed):
             has_state_component = True
             state_component = event.state_component

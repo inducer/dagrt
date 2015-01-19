@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 from leap.vm.language import (
         Instruction, AssignExpression, AssignSolved,
-        If, YieldState, Raise, FailStep)
+        If, YieldState, Raise, FailStep, StateTransition)
 from .graphs import InstructionDAGIntGraph
 from leap.vm.utils import get_unique_name, is_state_variable
 import leap.vm.codegen.ir as ir
@@ -514,6 +514,10 @@ class ControlFlowGraphAssembler(object):
 
             elif isinstance(instruction, FailStep):
                 main_bb.add_fail_step()
+                break
+
+            elif isinstance(instruction, StateTransition):
+                main_bb.add_state_transition(instruction.next_state)
                 break
 
         if not main_bb.terminated:

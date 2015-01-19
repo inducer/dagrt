@@ -84,6 +84,25 @@ def test_missing_dependency_detection():
         assert False
 
 
+def test_missing_state_detection():
+    """Check that the code generator detects there is a missing state."""
+    from leap.vm.language import NewCodeBuilder
+
+    with NewCodeBuilder(label="state_1") as cb:
+        cb.state_transition("state_2")
+
+    code = TimeIntegratorCode.create_with_steady_state(
+        dep_on=cb.state_dependencies, instructions=cb.instructions)
+
+    from leap.vm.codegen.analysis import verify_code
+    try:
+        verify_code(code)
+    except CodeGenerationError:
+        pass
+    else:
+        assert False
+
+
 def test_basic_structural_extraction():
     """Check that structural extraction correctly detects a basic block."""
     sym_tab = SymbolTable()

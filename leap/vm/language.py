@@ -324,6 +324,31 @@ class Raise(Instruction):
     exec_method = six.moves.intern("exec_Raise")
 
 
+class StateTransition(Instruction):
+    """
+    .. attribute:: next_state
+
+        The name of the next state to enter
+    """
+
+    def __init__(self, next_state, id=None, depends_on=frozenset()):
+        Instruction.__init__(self, next_state=next_state, id=id,
+                             depends_on=depends_on)
+
+    def get_assignees(self):
+        return frozenset()
+
+    get_read_variables = get_assignees
+
+    def map_expressions(self, mapper):
+        pass
+
+    def __str__(self):
+        return "Transition to " + self.next_state
+
+    exec_method = six.moves.intern("exec_StateTransition")
+
+
 class FailStep(Instruction):
     """
     """
@@ -805,10 +830,16 @@ class NewCodeBuilder(object):
                 time_id=time_id))
 
     def fail_step(self):
+        self.fence()
         self._add_inst_to_context(FailStep())
 
     def raise_(self, error):
+        self.fence()
         self._add_inst_to_context(Raise(error))
+
+    def state_transition(self, next_state):
+        self.fence()
+        self._add_inst_to_context(StateTransition(next_state))
 
     def __enter__(self):
         self._contexts.append(NewCodeBuilder.Context())

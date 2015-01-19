@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 from pytools import memoize_method
 from pymbolic.mapper import Collector
-from leap.vm.language import Instruction, If, YieldState
+from leap.vm.language import Instruction, If, YieldState, StateTransition
 from .graphs import InstructionDAGIntGraph
 import six
 
@@ -43,17 +43,21 @@ class InstructionDAGVerifier(object):
         is a human-readable list of errors detected by the verifier.
     """
 
-    def __init__(self, instructions, dependency_lists):
+    def __init__(self, instructions, state_names, dependency_lists):
         """
         :arg instructions: A set of instructions to verify
+        :arg state_names: The list of state names
         :arg dependency_lists: A list of sets of instruction ids. Each set of
-            instruction ids represents the dependencies for a stage.
+            instruction ids represents the dependencies for a state.
         """
         warnings = []
         errors = []
 
         if not self._verify_instructions_well_typed(instructions):
             errors += ['Instructions are not well formed.']
+        elif not self._verify_state_transitions(instructions, state_names):
+            errors += ['A state referenced by a transition instruction'
+                       ' does not exit.']
         elif not self._verify_all_dependencies_exist(instructions,
                                                      *dependency_lists):
             errors += ['Code is missing a dependency.']
@@ -70,6 +74,14 @@ class InstructionDAGVerifier(object):
             # of the input?
             if not isinstance(inst, Instruction):
                 return False
+        return True
+
+    def _verify_state_transitions(self, instructions, states):
+        """Ensure that states referenced by StateTransition exist."""
+        for inst in instructions:
+            if isinstance(inst, StateTransition):
+                if inst.next_state not in states:
+                    return False
         return True
 
     def _verify_all_dependencies_exist(self, instructions, *dependency_lists):
@@ -129,6 +141,7 @@ def verify_code(code):
     from .analysis import InstructionDAGVerifier
     verifier = InstructionDAGVerifier(
             code.instructions,
+            [state for state in code.states.keys()],
             [state.depends_on
                 for state in code.states.values()])
 

@@ -241,6 +241,31 @@ def test_function_name_distinctness():
     assert hist[1].state_component == 1
 
 
+def test_state_transitions(python_method_impl):
+    from leap.vm.language import NewCodeBuilder, TimeIntegratorState
+
+    with NewCodeBuilder(label="state_1") as builder_1:
+        builder_1(var("<state>x"), 1)
+        builder_1.state_transition("state_2")
+    with NewCodeBuilder(label="state_2") as builder_2:
+        builder_2.yield_state(var("<state>x"), 'x', 0, 'final')
+
+    code = TimeIntegratorCode(
+        instructions=builder_1.instructions | builder_2.instructions,
+        states={
+            "state_1": TimeIntegratorState(builder_1.state_dependencies,
+                                           next_state="state_1"),
+            "state_2": TimeIntegratorState(builder_2.state_dependencies,
+                                           next_state="state_2")
+        },
+        initial_state="state_1")
+    from utils import execute_and_return_single_result
+    result = execute_and_return_single_result(python_method_impl, code,
+                                              initial_context={'x': 0},
+                                              max_steps=2)
+    assert result == 1
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])
