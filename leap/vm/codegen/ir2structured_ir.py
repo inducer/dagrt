@@ -39,36 +39,7 @@ def distinct(*items):
 
 # {{{ node check functions
 
-def _check_for_if_then_node(node):
-    if len(node.successors) != 2:
-        return None
-
-    # Get then and merge nodes.
-    then_node, merge_node = tuple(node.successors)
-
-    # Swap then and merge nodes if necessary.
-    if then_node in merge_node.successors:
-        then_node, merge_node = merge_node, then_node
-    elif len(then_node.predecessors) > 1:
-        then_node, merge_node = merge_node, then_node
-
-    if len(then_node.predecessors) != 1:
-        return None
-
-    if len(then_node.successors) > 1:
-        return None
-
-    if len(then_node.successors) == 1 and \
-           merge_node not in then_node.successors:
-        return None
-
-    if not distinct(node, then_node, merge_node):
-        return None
-    
-    return IfThenNode(node, then_node)
-
-
-def _check_for_if_then_else_node(node):
+def _get_successor_then_and_else_nodes(node):
     # Check for branch instruction at the end.
     if len(node.successors) != 2 or not node.exit_block:
         return None
@@ -85,6 +56,41 @@ def _check_for_if_then_else_node(node):
 
     assert then_node.entry_block is then_basic_block
     assert else_node.entry_block is else_basic_block
+
+    return (then_node, else_node)
+
+
+def _check_for_if_then_node(node):
+    then_and_merge = _get_successor_then_and_else_nodes(node)
+
+    if not then_and_merge:
+        return None
+
+    then_node, merge_node = then_and_merge
+
+    if len(then_node.predecessors) != 1:
+        return None
+
+    if len(then_node.successors) > 1:
+        return None
+
+    if len(then_node.successors) == 1 and \
+           merge_node not in then_node.successors:
+        return None
+
+    if not distinct(node, then_node, merge_node):
+        return None
+
+    return IfThenNode(node, then_node)
+
+
+def _check_for_if_then_else_node(node):
+    then_and_else = _get_successor_then_and_else_nodes(node)
+
+    if not then_and_else:
+        return None
+
+    then_node, else_node = then_and_else
 
     # Check for no other predecessors to then and else.
     if len(then_node.predecessors) != 1 or \

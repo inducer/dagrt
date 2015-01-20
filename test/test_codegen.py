@@ -266,7 +266,7 @@ def test_complex_structural_extraction():
     blocks[0].add_branch(None, blocks[1], blocks[3])
     blocks[1].add_branch(None, blocks[2], blocks[5])
     blocks[2].add_jump(blocks[5])
-    blocks[3].add_branch(None, blocks[5], blocks[4])
+    blocks[3].add_branch(None, blocks[4], blocks[5])
     blocks[4].add_jump(blocks[5])
     blocks[5].add_bogus_yield_state()
     main.assign_entry_block(blocks[0])
@@ -409,7 +409,19 @@ def test_if_then_with_dangling_then():
     assert control_tree.node_list[1].blocks() == frozenset([3])
 
 
+def test_if_then_matching_respects_branch_order():
+    sym_tab = SymbolTable()
+    main = Function("f", sym_tab)
+    blocks = [BasicBlock(i, main) for i in range(3)]
+    blocks[0].add_branch(None, blocks[2], blocks[1])
+    blocks[1].add_jump(blocks[2])
+    main.assign_entry_block(blocks[0])
+    structural_extractor = StructuralExtractor()
+    assert isinstance(structural_extractor(main), UnstructuredIntervalNode)
+
+
 def test_python_line_wrapping():
+
     """Check that the line wrapper breaks a line up correctly."""
     from leap.vm.codegen.python import wrap_line
     line = "x += str('' + x + y + zzzzzzzzz)"
