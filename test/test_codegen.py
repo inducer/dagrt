@@ -372,6 +372,43 @@ def test_cycle_detection():
     assert isinstance(control_tree, UnstructuredIntervalNode)
 
 
+def test_if_then_with_dangling_then():
+    """
+       0
+       | \
+       |  1
+       |  |\
+       |  | 2
+       | /
+       |/
+       3
+    """
+    sym_tab = SymbolTable()
+    main = Function("f", sym_tab)
+
+    blocks = [BasicBlock(i, main) for i in range(4)]
+    blocks[0].add_branch(None, blocks[1], blocks[3])
+    blocks[1].add_branch(None, blocks[2], blocks[3])
+
+    main.assign_entry_block(blocks[0])
+    structural_extractor = StructuralExtractor()
+    control_tree = structural_extractor(main)
+
+    assert isinstance(control_tree, BlockNode)
+    assert control_tree.blocks() == frozenset([0, 1, 2, 3])
+
+    assert isinstance(control_tree.node_list[0], IfThenNode)
+    assert control_tree.node_list[0].if_node.blocks() == frozenset([0])
+
+    inner_if = control_tree.node_list[0].then_node
+    assert isinstance(inner_if, IfThenNode)
+    assert inner_if.if_node.blocks() == frozenset([1])
+    assert inner_if.then_node.blocks() == frozenset([2])
+
+    assert isinstance(control_tree.node_list[1], SingleNode)
+    assert control_tree.node_list[1].blocks() == frozenset([3])
+
+
 def test_python_line_wrapping():
     """Check that the line wrapper breaks a line up correctly."""
     from leap.vm.codegen.python import wrap_line

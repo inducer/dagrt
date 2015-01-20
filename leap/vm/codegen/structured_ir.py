@@ -156,7 +156,8 @@ class IfThenNode(ComplexControlNode):
         self.predecessors |= if_node.predecessors
         self.update_predecessors(if_node)
 
-        self.successors |= then_node.successors
+        self.successors |= (if_node.successors | then_node.successors) - \
+                           set([then_node])
         self.update_successors(if_node, exclude=set([then_node]))
         self.update_successors(then_node)
 

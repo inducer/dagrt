@@ -49,13 +49,22 @@ def _check_for_if_then_node(node):
     # Swap then and merge nodes if necessary.
     if then_node in merge_node.successors:
         then_node, merge_node = merge_node, then_node
+    elif len(then_node.predecessors) > 1:
+        then_node, merge_node = merge_node, then_node
 
-    # Check for expected structure.
-    if len(then_node.successors) != 1 or \
-            len(then_node.predecessors) != 1 or \
-            merge_node not in then_node.successors or \
-            not distinct(node, then_node, merge_node):
+    if len(then_node.predecessors) != 1:
         return None
+
+    if len(then_node.successors) > 1:
+        return None
+
+    if len(then_node.successors) == 1 and \
+           merge_node not in then_node.successors:
+        return None
+
+    if not distinct(node, then_node, merge_node):
+        return None
+    
     return IfThenNode(node, then_node)
 
 
@@ -172,8 +181,8 @@ class StructuralExtractor(object):
 
                 # Check for the structural type of the node.
                 new_node = _check_for_block_node(node)
-                new_node = new_node or _check_for_if_then_node(node)
                 new_node = new_node or _check_for_if_then_else_node(node)
+                new_node = new_node or _check_for_if_then_node(node)
 
                 if not new_node:
                     continue
