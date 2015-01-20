@@ -62,6 +62,12 @@ class ControlNode(RecordWithoutPickling):
     # RecordWithoutPickling.__repr__() is really slow on control trees.
     __repr__ = object.__repr__
 
+    def __str__(self):
+        return "<{cls} containing basic block(s) {blocks}>".format(
+            cls=self.__class__.__name__,
+            blocks=", ".join([str(block) for block in sorted(self.blocks())])
+        )
+
     def blocks(self):
         """Return the set of basic blocks numbers in this node."""
         raise NotImplementedError()
@@ -81,7 +87,7 @@ class SingleNode(ControlNode):
                                          entry_block=basic_block,
                                          exit_block=basic_block)
 
-    def block(self):
+    def blocks(self):
         return frozenset([self.basic_block.number])
 
 
