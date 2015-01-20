@@ -32,6 +32,10 @@ class ControlNode(RecordWithoutPickling):
      - nodes: the set of nodes contained by this control node
      - successors: the set of successor nodes
      - predecessors: the set of predecessor nodes
+     - entry_block: the first basic block contained by this control node
+                    in execution sequence, or None if not applicable
+     - exit_block: the last basic block contained by this control node
+                   in execution sequence, or None if not applicable
     """
 
     def __init__(self, **kwargs):
@@ -113,15 +117,10 @@ class BlockNode(ComplexControlNode):
         if not node_list:
             raise ValueError('empty node list')
 
-        if hasattr(node_list[-1], "exit_block"):
-            exit_block = node_list[-1].exit_block
-        else:
-            exit_block = None
-
         super(BlockNode, self).__init__(nodes=set(node_list),
                                         node_list=list(node_list),
                                         entry_block=node_list[0].entry_block,
-                                        exit_block=exit_block)
+                                        exit_block=node_list[-1].exit_block)
 
         self.predecessors |= node_list[0].predecessors
         self.update_predecessors(node_list[0])
@@ -151,7 +150,8 @@ class IfThenNode(ComplexControlNode):
         super(IfThenNode, self).__init__(nodes=set([if_node, then_node]),
                                          if_node=if_node,
                                          then_node=then_node,
-                                         entry_block=if_node.entry_block)
+                                         entry_block=if_node.entry_block,
+                                         exit_block=None)
 
         self.predecessors |= if_node.predecessors
         self.update_predecessors(if_node)
@@ -184,7 +184,8 @@ class IfThenElseNode(ComplexControlNode):
                                              if_node=if_node,
                                              then_node=then_node,
                                              else_node=else_node,
-                                             entry_block=if_node.entry_block)
+                                             entry_block=if_node.entry_block,
+                                             exit_block=None)
 
         self.predecessors |= if_node.predecessors
         self.update_predecessors(if_node)
@@ -200,4 +201,6 @@ class UnstructuredIntervalNode(ComplexControlNode):
     """
 
     def __init__(self, nodes):
-        super(UnstructuredIntervalNode, self).__init__(nodes=set(nodes))
+        super(UnstructuredIntervalNode, self).__init__(nodes=set(nodes),
+                                                       entry_block=None,
+                                                       exit_block=None)

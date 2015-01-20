@@ -60,16 +60,14 @@ def _check_for_if_then_node(node):
 
 
 def _check_for_if_then_else_node(node):
-    if len(node.successors) != 2:
+    # Check for branch instruction at the end.
+    if len(node.successors) != 2 or not node.exit_block:
         return None
 
-    if not hasattr(node, "exit_block") or not node.exit_block:
-        return None
-
-    # Get then and else nodes.
     branch = node.exit_block.code[-1]
     assert isinstance(branch, BranchInst)
 
+    # Get then and else nodes.
     then_basic_block = branch.on_true
     else_basic_block = branch.on_false
     then_node, else_node = tuple(node.successors)
