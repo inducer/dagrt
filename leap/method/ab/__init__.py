@@ -43,23 +43,45 @@ class AdamsBashforthTimeStepperBase(Method):
 
     @staticmethod
     def get_rk_tableau_and_coeffs(order):
-        from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
+        """
+        Source: J. C. Butcher, Numerical Methods for Ordinary Differential
+        Equations, 2nd ed., pages 94 - 99
+        """
         # TODO: Move the tabular data to its own module.
-        if order <= 2:
-            rk_tableau = ODE23TimeStepper.butcher_tableau
-            rk_coeffs = ODE23TimeStepper.low_order_coeffs
+        if order == 2:
+            butcher_tableau = [
+                (0, []),
+                (1/2, [1/2]),
+            ]
+            coeffs = [0, 1]
         elif order == 3:
-            rk_tableau = ODE23TimeStepper.butcher_tableau
-            rk_coeffs = ODE23TimeStepper.high_order_coeffs
+            butcher_tableau = [
+                (0, []),
+                (2/3, [2/3]),
+                (2/3, [1/3, 1/3])
+            ]
+            coeffs = [1/4, 0, 3/4]
         elif order == 4:
-            rk_tableau = ODE45TimeStepper.butcher_tableau
-            rk_coeffs = ODE45TimeStepper.low_order_coeffs
+            butcher_tableau = [
+                (0, []),
+                (1/2, [1/2]),
+                (1/2, [0, 1/2]),
+                (1, [0, 0, 1])
+            ]
+            coeffs = [1/6, 1/3, 1/3, 1/6]
         elif order == 5:
-            rk_tableau = ODE45TimeStepper.butcher_tableau
-            rk_coeffs = ODE45TimeStepper.high_order_coeffs
+            butcher_tableau = [
+                (0, []),
+                (1/4, [1/4]),
+                (1/4, [1/8, 1/8]),
+                (1/2, [0, 0, 1/2]),
+                (3/4, [3/16, -3/8, 3/8, 9/16]),
+                (1, [-3/7, 8/7, 6/7, -12/7, 8/7]),
+            ]
+            coeffs = [7/90, 0, 32/90, 12/90, 32/90, 7/90]
         else:
             raise ValueError('Unsupported order: %s' % order)
-        return (rk_tableau, rk_coeffs)
+        return (butcher_tableau, coeffs)
 
 
 class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
