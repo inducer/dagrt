@@ -38,7 +38,7 @@ __doc__ = """
 """
 
 
-def verify_fsal_condition(times, last_stage_coefficients,
+def verify_first_same_as_last_condition(times, last_stage_coefficients,
                           output_stage_coefficients):
     if not times or not last_stage_coefficients \
             or not output_stage_coefficients:
@@ -170,11 +170,12 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                self.call_rhs(self.t + self.dt, low_order_estimate))
             cb(self.state, low_order_estimate)
         else:
-            # Verify FSAL optimization.
             times, coeffs = tuple(zip(*self.butcher_tableau))
-            assert verify_fsal_condition(times, coeffs[-1], self.high_order_coeffs)
+            assert verify_first_same_as_last_condition(
+                    times, coeffs[-1], self.high_order_coeffs)
             cb(self.last_rhs, high_order_rhs)
             cb(self.state, high_order_estimate)
+
         cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
         cb.fence()
         cb(self.t, self.t + self.dt)
