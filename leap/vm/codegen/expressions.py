@@ -184,6 +184,15 @@ class PythonExpressionMapper(StringifyMapper):
                 expr.function, expr.parameters,
                 expr.kw_parameters)
 
+    def map_if(self, expr, enclosing_prec):
+        from leap.vm.expression import PREC_IFTHENELSE
+        return self.parenthesize_if_needed(
+            "{then} if {cond} else {else_}".format(
+                then=self.rec(expr.then, PREC_IFTHENELSE),
+                cond=self.rec(expr.condition, PREC_IFTHENELSE),
+                else_=self.rec(expr.else_, PREC_IFTHENELSE)),
+            enclosing_prec, PREC_NONE)
+
 # }}}
 
 # vim: foldmethod=marker

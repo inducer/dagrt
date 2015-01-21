@@ -233,4 +233,86 @@ def isolate_function_calls(dag):
 
 # }}}
 
+
+# {{{ expand IfThenElse statements
+
+class IfThenElseExpander(IdentityMapper):
+
+    def __init__(self, new_instructions, insn_id_gen, var_name_gen):
+        super(IfThenElseExpander, self).__init__()
+        self.new_instructions = new_instructions
+        self.insn_id_gen = insn_id_gen
+        self.var_name_gen = var_name_gen
+
+    def map_if(self, expr, base_deps, extra_deps):
+        tmp_result = self.var_name_gen("ifthenelse_result")
+        if_insn_id = self.insn_id_gen("ifthenelse_if")
+        then_insn_id = self.insn_id_gen("ifthenelse_then")
+        else_insn_id = self.insn_id_gen("ifthenelse_else")
+
+        extra_deps.append(if_insn_id)
+
+        sub_condition_deps = []
+        rec_condition = self.rec(expr.condition, base_deps, sub_condition_deps)
+
+        sub_then_deps = []
+        rec_then = self.rec(expr.then, base_deps, sub_then_deps)
+
+        sub_else_deps = []
+        rec_else = self.rec(expr.else_, base_deps, sub_else_deps)
+
+        from leap.vm.language import AssignExpression, If
+
+        self.new_instructions.extend([
+            If(condition=rec_condition,
+               then_depends_on=frozenset([then_insn_id]),
+               else_depends_on=frozenset([else_insn_id]),
+               id=if_insn_id,
+               depends_on=base_deps | frozenset(sub_condition_deps)),
+            AssignExpression(assignee=tmp_result,
+                             expression=rec_then,
+                             id=then_insn_id,
+                             depends_on=base_deps | frozenset(sub_then_deps)),
+            AssignExpression(assignee=tmp_result,
+                             expression=rec_else,
+                             id=else_insn_id,
+                             depends_on=base_deps | frozenset(sub_else_deps))])
+
+        extra_deps.append(if_insn_id)
+
+        from pymbolic import var
+        return var(tmp_result)
+
+
+def expand_IfThenElse(dag):
+    """
+    Turn IfThenElse expressions into values that are computed as a result of an
+    If instruction. This is useful for targets that do not support ternary
+    operators.
+    """
+
+    insn_id_gen = dag.get_insn_id_generator()
+    var_name_gen = dag.get_var_name_generator()
+
+    new_instructions = []
+
+    expander = IfThenElseExpander(
+        new_instructions=new_instructions,
+        insn_id_gen=insn_id_gen,
+        var_name_gen=var_name_gen)
+
+    for insn in dag.instructions:
+        base_deps = insn.depends_on
+        new_deps = []
+
+        new_instructions.append(
+            insn.map_expressions(
+                lambda expr: expander(expr, base_deps, new_deps))
+            .copy(depends_on=insn.depends_on | frozenset(new_deps)))
+
+    return dag.copy(instructions=new_instructions)
+
+# }}}
+
+
 # vim: foldmethod=marker

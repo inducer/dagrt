@@ -184,6 +184,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                         low_order_estimate):
         from pymbolic import var
         from pymbolic.primitives import Comparison, LogicalOr, Max, Min
+        from leap.vm.expression import IfThenElse
 
         norm_start_state = var('norm_start_state')
         norm_end_state = var('norm_end_state')
@@ -201,11 +202,8 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                                  Max((norm_start_state, norm_end_state))
                                  ))))
 
-        # TODO: Use a ternary operator to assign to rel_error.
-        with cb.if_(rel_error_raw, '==', 0):
-            cb(rel_error, 1.0e-14)
-        with cb.else_():
-            cb(rel_error, rel_error_raw)
+        cb(rel_error, IfThenElse(Comparison(rel_error_raw, "==", 0),
+                                 1.0e-14, rel_error_raw))
 
         with cb.if_(LogicalOr((Comparison(rel_error, ">", 1),
                                var('<builtin>isnan')(rel_error)))):

@@ -27,11 +27,16 @@ THE SOFTWARE.
 
 from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
 from pymbolic.mapper.dependency import DependencyMapper
+from pymbolic.primitives import If as IfThenElse # noqa
 
 import logging
 import six.moves
 
 logger = logging.getLogger(__name__)
+
+
+# Precedence constant for IfThenElse.
+PREC_IFTHENELSE = 1
 
 
 class ExtendedDependencyMapper(DependencyMapper):

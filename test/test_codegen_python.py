@@ -266,6 +266,46 @@ def test_state_transitions(python_method_impl):
     assert result == 1
 
 
+def get_IfThenElse_test_code_and_expected_result():
+    from leap.vm.language import NewCodeBuilder
+    from leap.vm.expression import IfThenElse
+
+    with NewCodeBuilder(label="primary") as cb:
+        cb(var("c1"), IfThenElse(True, 0, 1))
+        cb(var("c2"), IfThenElse(False, 0, 1))
+        cb(var("c3"), IfThenElse(IfThenElse(True, True, False), 0, 1))
+        cb(var("c4"), IfThenElse(IfThenElse(False, True, False), 0, 1))
+        cb(var("c5"), IfThenElse(True, IfThenElse(True, 0, 1), 2))
+        cb(var("c6"), IfThenElse(True, IfThenElse(False, 0, 1), 2))
+        cb(var("c7"), IfThenElse(False, 0, IfThenElse(True, 1, 2)))
+        cb(var("c8"), IfThenElse(False, 0, IfThenElse(False, 1, 2)))
+        cb(var("c9"), 1 + IfThenElse(True, 0, 1))
+        cb(var("c10"), 1 + IfThenElse(False, 0, 1))
+        cb.yield_state(tuple(var("c" + str(i)) for i in range(1, 11)),
+                       "result", 0, "final")
+
+    code = TimeIntegratorCode.create_with_steady_state(
+        cb.state_dependencies, cb.instructions)
+
+    return (code, (0, 1, 0, 1, 0, 1, 1, 2, 1, 2))
+
+
+def test_IfThenElse(python_method_impl):
+    from utils import execute_and_return_single_result
+    code, expected_result = get_IfThenElse_test_code_and_expected_result()
+    result = execute_and_return_single_result(python_method_impl, code)
+    assert result == expected_result
+
+
+def test_IfThenElse_expansion(python_method_impl):
+    from utils import execute_and_return_single_result
+    code, expected_result = get_IfThenElse_test_code_and_expected_result()
+    from leap.vm.codegen.transform import expand_IfThenElse
+    code = expand_IfThenElse(code)
+    result = execute_and_return_single_result(python_method_impl, code)
+    assert result == expected_result
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])

@@ -679,10 +679,12 @@ class CodeGenerator(StructuredCodeGenerator):
         from .transform import (
                 eliminate_self_dependencies,
                 isolate_function_arguments,
-                isolate_function_calls)
+                isolate_function_calls,
+                expand_IfThenElse)
         dag = eliminate_self_dependencies(dag)
         dag = isolate_function_arguments(dag)
         dag = isolate_function_calls(dag)
+        dag = expand_IfThenElse(dag)
 
         #from leap.vm.language import show_dependency_graph
         #show_dependency_graph(dag)
