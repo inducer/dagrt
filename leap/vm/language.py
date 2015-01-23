@@ -311,7 +311,7 @@ class Raise(Instruction):
         return frozenset()
 
     def map_expressions(self, mapper):
-        pass
+        return self.copy()
 
     def __str__(self):
         result = "Raise %s" % self.error_condition.__name__
@@ -341,7 +341,7 @@ class StateTransition(Instruction):
     get_read_variables = get_assignees
 
     def map_expressions(self, mapper):
-        pass
+        return self.copy()
 
     def __str__(self):
         return "Transition to " + self.next_state
@@ -360,7 +360,7 @@ class FailStep(Instruction):
         return frozenset()
 
     def map_expressions(self, mapper):
-        pass
+        return self.copy()
 
     def __str__(self):
         return "FailStep"
@@ -414,6 +414,14 @@ class TimeIntegratorState(RecordWithoutPickling):
         name of the next state after this one, if no other state
         is specified by the user.
     """
+
+    @classmethod
+    def from_cb(cls, cb, next_state):
+        """
+        :arg cb: A :class:`NewCodeBuilder` instance
+        :arg next_state: The name of the default next state
+        """
+        return cls(depends_on=cb.state_dependencies, next_state=next_state)
 
     def __init__(self, depends_on, next_state):
         super(TimeIntegratorState, self).__init__(
