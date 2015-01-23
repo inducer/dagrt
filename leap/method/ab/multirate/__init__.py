@@ -268,27 +268,44 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         cb(self.t, self.t + self.dt)
 
     def __call__(self):
-        from leap.vm.language import TimeIntegratorCode, NewCodeBuilder
+        from leap.vm.language import (TimeIntegratorCode, TimeIntegratorState,
+                                      NewCodeBuilder)
 
+        # Initialization state
         with NewCodeBuilder(label="initialization") as cb_init:
             self.emit_initialization(cb_init)
 
-        if self.max_order > 1:
-            with NewCodeBuilder(label="primary") as cb_primary:
-                with cb_primary.if_(self.step, "<", self.max_order - 1):
-                    self.emit_rk_startup(cb_primary)
-                with cb_primary.else_():
-                    self.emit_ab_method(cb_primary)
-                self.emit_epilogue(cb_primary)
-        else:
-            with NewCodeBuilder(label="primary") as cb_primary:
-                self.emit_ab_method(cb_primary)
-                self.emit_epilogue(cb_primary)
+        # Primary state
+        with NewCodeBuilder(label="primary") as cb_primary:
+            self.emit_ab_method(cb_primary)
+            self.emit_epilogue(cb_primary)
 
-        return TimeIntegratorCode.create_with_init_and_step(
+        bootstrap_steps = self.max_order - 1
+
+        if bootstrap_steps == 0:
+            # No need for bootstrapping - just return the primary code.
+            return TimeIntegratorCode.create_with_init_and_step(
                 instructions=cb_init.instructions | cb_primary.instructions,
                 initialization_dep_on=cb_init.state_dependencies,
                 step_dep_on=cb_primary.state_dependencies)
+
+        # Bootstrap state
+        with NewCodeBuilder(label="bootstrap") as cb_bootstrap:
+            self.emit_rk_startup(cb_bootstrap)
+            self.emit_epilogue(cb_bootstrap)
+            with cb_bootstrap.if_(self.step, "==", bootstrap_steps):
+                cb_bootstrap.state_transition("primary")
+
+        states = {}
+        states["initialization"] = TimeIntegratorState.from_cb(cb_init, "bootstrap")
+        states["bootstrap"] = TimeIntegratorState.from_cb(cb_bootstrap, "bootstrap")
+        states["primary"] = TimeIntegratorState.from_cb(cb_primary, "primary")
+
+        return TimeIntegratorCode(
+            instructions=cb_init.instructions | cb_bootstrap.instructions |
+            cb_primary.instructions,
+            states=states,
+            initial_state="initialization")
 
 
 class MRABCodeEmitter(MRABProcessor):
