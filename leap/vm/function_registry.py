@@ -312,14 +312,14 @@ def register_ode_rhs(
         component_id, identifier=None, input_component_ids=None,
         input_component_names=None):
     if identifier is None:
-        identifier = component_id
+        identifier = "<func>"+component_id
 
     if input_component_ids is None:
         input_component_ids = (component_id,)
 
     return function_registry.register(
             _ODERightHandSide(
-                "<func>"+identifier, component_id, input_component_ids,
+                identifier, component_id, input_component_ids,
                 input_component_names=input_component_names))
 
 
