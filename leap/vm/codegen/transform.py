@@ -234,7 +234,7 @@ def isolate_function_calls(dag):
 # }}}
 
 
-# {{{ expand IfThenElse statements
+# {{{ expand IfThenElse expressions
 
 class IfThenElseExpander(IdentityMapper):
 
