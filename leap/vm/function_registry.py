@@ -319,7 +319,7 @@ def register_ode_rhs(
 
     return function_registry.register(
             _ODERightHandSide(
-                identifier, component_id, input_component_ids,
+                "<func>"+identifier, component_id, input_component_ids,
                 input_component_names=input_component_names))
 
 
