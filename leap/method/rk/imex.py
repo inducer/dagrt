@@ -128,8 +128,8 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
                         self.state + sub_y + self.gamma * self.dt * solve_component,
                         self.rhs_impl_func),
                     [solve_component, self.state], cb.assign, cb.fresh_var)
-                cb.assign_solved(this_rhs_impl, solve_component,
-                                 solve_expression, implicit_rhss[-1], 0)
+                cb.assign_solved_1(this_rhs_impl, solve_component,
+                                   solve_expression, implicit_rhss[-1], 0)
 
                 # Compute the next explicit right hand side for the stage value.
                 this_rhs_expl = cb.fresh_var('rhs_expl')

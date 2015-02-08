@@ -72,8 +72,8 @@ class ImplicitEulerMethod(Method):
                                    self.component_id: solve_component
                                })
 
-        builder.assign_solved(self.state, solve_component,
-                              solve_expression, self.state, 0)
+        builder.assign_solved_1(self.state, solve_component,
+                                solve_expression, self.state, 0)
 
         builder.yield_state(self.state, self.component_id,
                             self.t + self.dt, 'final')

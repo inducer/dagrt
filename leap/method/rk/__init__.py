@@ -45,11 +45,13 @@ def verify_fsal_condition(times, last_stage_coefficients,
         return False
     if times[0] != 0:
         return False
+
     def truncate_final_zeros(array):
         index = len(array) - 1
         while array[index] == 0 and index >= 0:
             index -= 1
         return array[:index + 1]
+
     if truncate_final_zeros(last_stage_coefficients) != \
            truncate_final_zeros(output_stage_coefficients):
         return False

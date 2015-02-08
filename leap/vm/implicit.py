@@ -240,15 +240,21 @@ def replace_AssignSolved(dag, *solver_hooks):
             new_instructions.append(insn)
             continue
 
-        expression = insn.expression
-        solve_component = insn.solve_component.name
-        guess = insn.guess
+        if len(insn.assignees) != 1:
+            from leap.vm.utils import TODO
+            raise TODO("Implement lowering for AssignSolved instructions returning "
+                       "multiple values.")
+
+        expression = insn.expressions[0]
+        solve_component = insn.solve_variables[0]
+        other_params = insn.other_params
 
         solver = solver_hooks[insn.solver_id]
 
         new_instructions.append(
-            AssignExpression(assignee=insn.assignee,
-                             expression=solver(expression, solve_component, guess),
+            AssignExpression(assignee=insn.assignees[0],
+                             expression=solver(expression, solve_component,
+                                               **other_params),
                              id=insn.id,
                              depends_on=insn.depends_on))
 
