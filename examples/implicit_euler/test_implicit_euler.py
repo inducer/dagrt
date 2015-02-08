@@ -24,19 +24,31 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import pytest
 import sys
 import numpy as np
 
-from utils import (  # noqa
-        python_method_impl_interpreter as pmi_int,
-        python_method_impl_codegen as pmi_cg)
+
+# Taken from test.utils
+def python_method_impl_interpreter(code, **kwargs):
+    from leap.vm.exec_numpy import NumpyInterpreter
+    return NumpyInterpreter(code, **kwargs)
 
 
+# Taken from test.utils
+def python_method_impl_codegen(code, **kwargs):
+    from leap.vm.codegen import PythonCodeGenerator
+    codegen = PythonCodeGenerator(class_name='Method')
+    return codegen.get_class(code)(**kwargs)
+
+
+@pytest.mark.parametrize("python_method_impl",
+    [python_method_impl_codegen, python_method_impl_interpreter])
 def test_im_euler_accuracy(python_method_impl, show_dag=False,
                            plot_solution=False):
     component_id = "y"
 
-    from leap.method.im_euler import ImplicitEulerMethod
+    from implicit_euler import ImplicitEulerMethod
     from leap.vm.implicit import ScipySolverGenerator
 
     method = ImplicitEulerMethod(component_id)
