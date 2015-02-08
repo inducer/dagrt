@@ -315,7 +315,7 @@ def register_ode_rhs(
         component_id, identifier=None, input_component_ids=None,
         input_component_names=None):
     if identifier is None:
-        identifier = component_id
+        identifier = "<func>"+component_id
 
     if input_component_ids is None:
         input_component_ids = (component_id,)
