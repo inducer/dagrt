@@ -1,6 +1,8 @@
-"""Turn timestepper descriptions into source code"""
+#! /usr/bin/env python
 
-__copyright__ = "Copyright (C) 2014 Matt Wala"
+from __future__ import division, with_statement
+
+__copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
 
 __license__ = """
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,49 +24,66 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from leap.method.rk import ODE23TimeStepper
+import pytest
+import sys
 import numpy as np
 
-import logging
+
+# Taken from test.utils
+def python_method_impl_interpreter(code, **kwargs):
+    from leap.vm.exec_numpy import NumpyInterpreter
+    return NumpyInterpreter(code, **kwargs)
 
 
-def main(show_dag=False, plot_solution=False):
-    method = ODE23TimeStepper(use_high_order=True)
-    expected_order = 3
+# Taken from test.utils
+def python_method_impl_codegen(code, **kwargs):
+    from leap.vm.codegen import PythonCodeGenerator
+    codegen = PythonCodeGenerator(class_name='Method')
+    return codegen.get_class(code)(**kwargs)
 
-    # Use "DEBUG" to trace execution
-    logging.basicConfig(level=logging.INFO)
 
+@pytest.mark.parametrize("python_method_impl",
+    [python_method_impl_codegen, python_method_impl_interpreter])
+def test_im_euler_accuracy(python_method_impl, show_dag=False,
+                           plot_solution=False):
     component_id = "y"
-    code = method(component_id)
+
+    from implicit_euler import ImplicitEulerMethod
+    from leap.vm.implicit import ScipySolverGenerator
+
+    method = ImplicitEulerMethod(component_id)
+    sgen = ScipySolverGenerator(*method.implicit_expression())
+    solver = sgen.get_compiled_solver()
+    code = method.generate(sgen)
+
+    expected_order = 1
 
     if show_dag:
         from leap.vm.language import show_dependency_graph
         show_dependency_graph(code)
 
-    from leap.vm.exec_numpy import NumpyInterpreter
+    h = -0.5
+    y_0 = 1.0
 
     def rhs(t, y):
-        u, v = y
-        return np.array([v, -u/t**2], dtype=np.float64)
+        return h * y
 
     def soln(t):
-        inner = np.sqrt(3)/2*np.log(t)
-        return np.sqrt(t)*(
-                5*np.sqrt(3)/3*np.sin(inner)
-                + np.cos(inner)
-                )
+        return y_0 * np.exp(h * t)
 
     from pytools.convergence import EOCRecorder
     eocrec = EOCRecorder()
 
-    for n in range(4, 7):
+    for n in range(1, 5):
         dt = 2**(-n)
-        t = 1
-        y = np.array([1, 3], dtype=np.float64)
-        final_t = 10
+        t = 0.0
+        y = y_0
+        final_t = 1
 
-        interp = NumpyInterpreter(code, function_map={component_id: rhs})
+        interp = python_method_impl(code,
+            function_map={method.rhs_func.name: rhs,
+                          sgen.solver_func.name: solver})
+
         interp.set_up(t_start=t, dt_start=dt, context={component_id: y})
 
         times = []
@@ -72,7 +91,7 @@ def main(show_dag=False, plot_solution=False):
         for event in interp.run(t_end=final_t):
             if isinstance(event, interp.StateComputed):
                 assert event.component_id == component_id
-                values.append(event.state_component[0])
+                values.append(event.state_component)
                 times.append(event.t)
 
         assert abs(times[-1] - final_t) < 1e-10
@@ -94,7 +113,12 @@ def main(show_dag=False, plot_solution=False):
     print(eocrec.pretty_print())
 
     orderest = eocrec.estimate_order_of_convergence()[0, 1]
-    assert orderest > expected_order*0.95
+    assert orderest > expected_order*0.9
+
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1:
+        exec(sys.argv[1])
+    else:
+        from py.test.cmdline import main
+        main([__file__])

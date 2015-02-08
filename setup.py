@@ -39,8 +39,10 @@ def main():
               ],
 
           packages=find_packages(),
+
           install_requires=[
               "numpy>=1.5",
+              "scipy>=0.14",
               "pytools>=2014.1",
               "pymbolic>=2014.1",
               "pytest>=2.3",

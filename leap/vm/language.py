@@ -194,34 +194,77 @@ class Nop(Instruction):
 
 
 class AssignSolved(Instruction):
-    # FIXME: We should allow vectorization over multiple inputs/outputs
-    # Pure vectorization is not enough here. We may want some amount
-    # of tensor product expression flexibility.
-
-    # FIXME This needs some thought.
     """
-    .. attribute:: assignee
+    .. attribute:: assignees
 
-        A string, the name of the variable being assigned to.
+        A tuple of strings. The names of the variables to assign with the
+        results of solving for `solve_variables`
 
-    .. attribute:: component_ids
-    .. attribute:: t
-    .. attribute:: states
-    .. attribute:: solve_component
-    .. attribute:: lhs
+    .. attribute:: solve_variables
 
-        A list of expressions involving
+        A tuple of strings, the names of the variables being solved for
 
-    .. attribute:: rhs
+    .. attribute:: expressions
+
+        A tuple of expressions, which represent the left hand sides of a
+        system of (possibly nonlinear) equations. The solver will attempt
+        to find a simultaneous root of the system.
+
+    .. attribute:: other_params
+
+        A dictionary used to pass extra arguments to the solver, for instance
+        a starting guess
+
     .. attribute:: solver_id
 
         An identifier for the solver that is to be used to solve the
-        linear system. This identifier is intended to match information
-        about solvers which becomes available at the execution or
-        code generation stage.
+        system. This identifier is intended to match information about
+        solvers which is supplied by the user.
+
     """
 
+    def __init__(self, assignees, solve_variables, expressions, other_params,
+                 solver_id, id=None, depends_on=frozenset()):
+        Instruction.__init__(self, assignees=assignees,
+                             solve_variables=solve_variables,
+                             expressions=expressions,
+                             other_params=other_params,
+                             solver_id=solver_id,
+                             id=id,
+                             depends_on=depends_on)
+
     exec_method = six.moves.intern("exec_AssignSolved")
+
+    def get_assignees(self):
+        return frozenset(self.assignees)
+
+    def get_read_variables(self):
+        # Variables can be read by:
+        #  1. expressions (except for those in solve_variables)
+        #  2. values in other_params
+        from itertools import chain
+        flatten = lambda iter_arg: chain(*list(iter_arg))
+        variables = frozenset()
+        variables |= set(flatten(get_variables(expr) for expr in self.expressions))
+        variables -= set(self.solve_variables)
+        variables |= set(flatten(get_variables(expr) for expr
+                                 in self.other_params.values()))
+        return variables
+
+    def __str__(self):
+        lines = []
+        lines.append("AssignSolved")
+        lines.append("solver_id = " + str(self.solver_id))
+        for assignee_index, assignee in enumerate(self.assignees):
+            lines.append(assignee + " <- " + self.solve_variables[assignee_index])
+        lines.append("where")
+        for expression in self.expressions:
+            lines.append("  " + str(expression) + " = 0")
+        if self.other_params:
+            lines.append("with parameters")
+            for param_name, param_value in self.other_params.items():
+                lines.append(param_name + ": " + str(param_value))
+        return "\n".join(lines)
 
 
 class AssignExpression(Instruction):
@@ -591,8 +634,8 @@ class CodeBuilder(object):
         self.build_group = []
 
     def fresh_var_name(self, prefix):
-        """Return a variable name that is not guaranteed not to be in use and
-        not to be generated in the future."""
+        """Return a variable name that is guaranteed not to be in use and not
+        to be generated in the future."""
         from pytools import generate_unique_names
         for possible_var in generate_unique_names(str(prefix)):
             if possible_var not in self.var_set \
@@ -641,6 +684,9 @@ class CodeBuilder(object):
         dependencies added in situations where a only single instruction writes
         one variable.
         """
+
+        for element in exclude:
+            assert isinstance(element, str)
 
         var_to_writers = {}
         for insn in self.build_group:
@@ -773,6 +819,8 @@ class NewCodeBuilder(object):
                 assignee=assignee.name,
                 expression=expression))
 
+    assign = __call__
+
     def _add_inst_to_context(self, inst):
         inst_id = self._next_instruction_id()
         context = self._contexts[-1]
@@ -828,6 +876,17 @@ class NewCodeBuilder(object):
     def fresh_var(self, prefix="temp"):
         from pymbolic import var
         return var(self.fresh_var_name(prefix))
+
+    def assign_solved_1(self, assignee, solve_component, expression, guess,
+                        solver_id):
+        """Special case of AssignSolved when there is 1 component to solve for."""
+        self.assign_solved((assignee.name,), (solve_component.name,), (expression,),
+                           {"guess": guess}, solver_id)
+
+    def assign_solved(self, assignees, solve_components, expressions,
+                      other_params, solver_id):
+        self._add_inst_to_context(AssignSolved(assignees, solve_components,
+            expressions, other_params, solver_id))
 
     def yield_state(self, expression, component_id, time, time_id):
         """Yield a value."""

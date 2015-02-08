@@ -22,10 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from leap.vm.expression import EvaluationMapper
 from collections import namedtuple
 import numpy as np
-
+from leap.vm.expression import EvaluationMapper
 import six
 
 
@@ -178,6 +177,9 @@ class NumpyInterpreter(object):
         self.functions[name] = f
 
     # {{{ execution methods
+
+    def exec_AssignSolved(self, insn):
+        raise RuntimeError("Encountered AssignSolved.")
 
     def exec_YieldState(self, insn):
         return self.StateComputed(

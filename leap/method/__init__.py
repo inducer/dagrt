@@ -26,7 +26,12 @@ THE SOFTWARE.
 
 
 class Method(object):
-    pass
+
+    def generate(self, *solver_hooks):
+        raise NotImplementedError()
+
+    def implicit_expression(self, expression_tag=None):
+        raise NotImplementedError()
 
 
 # {{{ diagnostics

@@ -102,7 +102,7 @@ class MultirateTimestepperAccuracyChecker(object):
         t = times[-1]
         y = (fast[-1], slow[-1])
 
-        from ode_systems import Basic, Tria
+        from multirate_test_systems import Basic, Tria
 
         if isinstance(self.ode, Basic) or isinstance(self.ode, Tria):
             # AK: why?
@@ -158,11 +158,11 @@ def test_multirate_accuracy(python_method_impl, order, system):
     """Check that the multirate timestepper has the advertised accuracy"""
 
     from leap.method.ab.multirate.methods import methods
-    import ode_systems
+    import multirate_test_systems
 
     step_ratio = 2
 
-    system = getattr(ode_systems, system)
+    system = getattr(multirate_test_systems, system)
 
     for name in methods:
         print("------------------------------------------------------")

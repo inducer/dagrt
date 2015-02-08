@@ -29,9 +29,14 @@ THE SOFTWARE.
 """
 
 
-def get_variables(expr):
+def get_variables(expr, include_function_symbols=False):
     """Returns the set of names of variables used in the expression."""
-    from leap.vm.expression import variable_mapper
+    from leap.vm.expression import ExtendedDependencyMapper
+    args = {"include_subscripts": False,
+            "include_lookups": False,
+            "include_calls": "descend_args"
+            if not include_function_symbols else False}
+    variable_mapper = ExtendedDependencyMapper(**args)
     return frozenset(dep.name for dep in variable_mapper(expr))
 
 
