@@ -28,9 +28,27 @@ THE SOFTWARE.
 class Method(object):
 
     def generate(self, *solver_hooks):
+        """
+        Generate a method description.
+
+        :arg solver_hooks: A list of callbacks that generate expressions
+        for calling user-supplied implicit solvers
+
+        :return: A `TimeIntegratorCode` instance
+        """
         raise NotImplementedError()
 
     def implicit_expression(self, expression_tag=None):
+        """
+        Return a template that expressions in `class`:AssignSolved
+        instances will follow.
+
+        :arg expression_tag: A name for the expression, if multiple
+        expressions are present in the generated code.
+
+        :return: A tuple consisting of :mod:`pymbolic` expressions and
+        the names of the free variables in the expressions.
+        """
         raise NotImplementedError()
 
 

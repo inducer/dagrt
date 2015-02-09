@@ -128,16 +128,21 @@ class EmbeddedRungeKuttaMethod(Method):
 
 
 class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
+    """
+    User-supplied context:
+        <state> + component_id: The value that is integrated
+        <func> + component_id: The right hand side function
+    """
 
-    def __call__(self, component_id):
+    def __init__(self, component_id, *args, **kwargs):
         """
         :arg component_id: an identifier to be used for the single state
             component supported.
         """
-        from leap.vm.language import TimeIntegratorCode
-        from pymbolic import var
+        EmbeddedRungeKuttaMethod.__init__(self, *args, **kwargs)
 
         # Set up variables.
+        from pymbolic import var
 
         self.component_id = component_id
 
@@ -147,14 +152,16 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         self.state = var("<state>" + component_id)
         self.rhs_func = var("<func>" + component_id)
 
-        local_last_rhs = var('last_rhs_' + component_id)
-
         if self.limiter_name is not None:
             limiter = var("<func>" + self.limiter_name)
         else:
             limiter = lambda x: x
 
         self.limiter_func = limiter
+
+    def generate(self):
+        from leap.vm.language import TimeIntegratorCode
+        from pymbolic import var
 
         # Initialization.
 
@@ -166,6 +173,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         # Primary.
 
         with NewCodeBuilder("primary") as cb:
+            local_last_rhs = var('last_rhs_' + self.component_id)
             rhss = []
             # {{{ stage loop
             last_stage = len(self.butcher_tableau) - 1
@@ -175,7 +183,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                     cb(local_last_rhs, self.last_rhs)
                     this_rhs = local_last_rhs
                 else:
-                    stage_state = limiter(
+                    stage_state = self.limiter_func(
                         self.state + sum(
                             self.dt * coeff * rhss[j]
                             for j, coeff in enumerate(coeffs)))
@@ -228,7 +236,6 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
         cb.fence()
         cb(self.t, self.t + self.dt)
-
 
     def call_rhs(self, t, y):
         from pymbolic.primitives import CallWithKwargs

@@ -42,10 +42,10 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
     Volume 44, Issues 1-2, January 2003, Pages 139-181
     http://dx.doi.org/10.1016/S0168-9274(02)00138-1
 
-    Context:
-        state: The value that is integrated
-        rhs_expl_func: The explicit right hand side function
-        rhs_impl_func: The implicit right hand side function
+    User-supplied context:
+        <state> + component_id: The value that is integrated
+        <func>rhs_expl_ + component_id: The explicit right hand side function
+        <func>rhs_impl_ + component_id: The implicit right hand side function
     """
 
     def __init__(self, component_id, **kwargs):

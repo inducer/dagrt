@@ -30,8 +30,6 @@ THE SOFTWARE.
 import numpy
 from leap.method.ab.utils import make_ab_coefficients
 from leap.method import Method
-from pymbolic import var
-from pymbolic.primitives import CallWithKwargs
 
 
 __doc__ = """
@@ -85,14 +83,16 @@ class AdamsBashforthTimeStepperBase(Method):
 
 
 class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
+    """
+    User-supplied context:
+        <state> + component_id: The value that is integrated
+        <func> + component_id: The right hand side
+    """
 
-    def __init__(self, order):
+    def __init__(self, component_id, order):
         super(AdamsBashforthTimeStepper, self).__init__()
         self.order = order
         self.coeffs = numpy.asarray(make_ab_coefficients(order))[::-1]
-
-    def __call__(self, component_id):
-        from leap.vm.language import TimeIntegratorCode, NewCodeBuilder
 
         from pymbolic import var
 
@@ -107,6 +107,9 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         self.state = var('<state>' + component_id)
         self.t = var('<t>')
         self.dt = var('<dt>')
+
+    def generate(self):
+        from leap.vm.language import TimeIntegratorCode, NewCodeBuilder
 
         # Initialization
         with NewCodeBuilder(label="initialization") as cb_init:
@@ -126,7 +129,8 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                 cb_primary.fence()
                 cb_primary(self.history[i], history[i + 1])
             cb_primary(self.t, self.t + self.dt)
-            cb_primary.yield_state(expression=self.state, component_id=component_id,
+            cb_primary.yield_state(expression=self.state,
+                                   component_id=self.component_id,
                                    time_id='', time=self.t)
 
         if steps == 1:
@@ -141,7 +145,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
             self.rk_bootstrap(cb_bootstrap)
             cb_bootstrap(self.t, self.t + self.dt)
             cb_bootstrap.yield_state(expression=self.state,
-                                     component_id=component_id,
+                                     component_id=self.component_id,
                                      time_id='', time=self.t)
             cb_bootstrap(self.step, self.step + 1)
             with cb_bootstrap.if_(self.step, "==", steps):
@@ -163,6 +167,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
     def eval_rhs(self, t, y):
         """Return a node that evaluates the RHS at the given time and
         component value."""
+        from pymbolic.primitives import CallWithKwargs
         return CallWithKwargs(function=self.function,
                               parameters=(),
                               kw_parameters={"t": t, self.component_id: y})
@@ -181,6 +186,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         rk_tableau, rk_coeffs = self.get_rk_tableau_and_coeffs(self.order)
 
         # Stage loop (taken from EmbeddedButcherTableauMethod)
+        from pymbolic import var
         rhss = [var("rk_rhs_" + str(i)) for i in range(len(rk_tableau))]
         for stage_num, (c, coeffs) in enumerate(rk_tableau):
             if len(coeffs) == 0:

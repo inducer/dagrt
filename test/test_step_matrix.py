@@ -39,14 +39,14 @@ logger = logging.getLogger(__name__)
 # python test_step_matrix.py "test_step_matrix(ODE23TimeStepper())"
 
 @pytest.mark.parametrize("method", [
-    ODE23TimeStepper(use_high_order=False),
-    ODE23TimeStepper(use_high_order=True),
-    ODE45TimeStepper(use_high_order=False),
-    ODE45TimeStepper(use_high_order=True),
+    ODE23TimeStepper("y", use_high_order=False),
+    ODE23TimeStepper("y", use_high_order=True),
+    ODE45TimeStepper("y", use_high_order=False),
+    ODE45TimeStepper("y", use_high_order=True),
     ])
 def test_step_matrix(method, show_matrix=True, show_dag=False):
     component_id = 'y'
-    code = method(component_id)
+    code = method.generate()
     if show_dag:
         from leap.vm.language import show_dependency_graph
         show_dependency_graph(code)

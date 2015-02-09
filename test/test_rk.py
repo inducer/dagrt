@@ -43,10 +43,10 @@ from utils import (  # noqa
 # test using 'python test_rk.py test_rk_accuracy(pmi_int, ODE23TimeStepper(use_high_order=False), 2)'  # noqa
 
 @pytest.mark.parametrize(("method", "expected_order"), [
-    (ODE23TimeStepper(use_high_order=False), 2),
-    (ODE23TimeStepper(use_high_order=True), 3),
-    (ODE45TimeStepper(use_high_order=False), 4),
-    (ODE45TimeStepper(use_high_order=True), 5),
+    (ODE23TimeStepper("y", use_high_order=False), 2),
+    (ODE23TimeStepper("y", use_high_order=True), 3),
+    (ODE45TimeStepper("y", use_high_order=False), 4),
+    (ODE45TimeStepper("y", use_high_order=True), 5),
     ])
 def test_rk_accuracy(python_method_impl, method, expected_order,
                      show_dag=False, plot_solution=False):
@@ -61,16 +61,16 @@ def test_rk_accuracy(python_method_impl, method, expected_order,
 # {{{ adaptive test
 
 @pytest.mark.parametrize("method", [
-    ODE23TimeStepper(rtol=1e-6),
-    ODE45TimeStepper(rtol=1e-6),
+    ODE23TimeStepper("y", rtol=1e-6),
+    ODE45TimeStepper("y", rtol=1e-6),
     ])
 def test_adaptive_timestep(python_method_impl, method, show_dag=False,
                            plot=False):
     # Use "DEBUG" to trace execution
     logging.basicConfig(level=logging.INFO)
 
-    component_id = "y"
-    code = method(component_id)
+    component_id = method.component_id
+    code = method.generate()
 
     if show_dag:
         from leap.vm.language import show_dependency_graph

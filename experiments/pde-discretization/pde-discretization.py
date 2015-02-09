@@ -114,7 +114,7 @@ def make_multirate_method(f2f, s2f, f2s, s2s, ratio=2, order=3):
     """Return the object that drives the multirate method for the given
     parameters."""
     orders = DictionaryWithDefault(lambda x: order)
-    code = TwoRateAdamsBashforthTimeStepper(FastestFirst, orders, ratio)()
+    code = TwoRateAdamsBashforthTimeStepper(FastestFirst, orders, ratio).generate()
     MRABMethod = PythonCodeGenerator(class_name='MRABMethod').get_class(code)
 
     rhs_map = {'<func>f2f': f2f, '<func>s2f': s2f, '<func>f2s': f2s,

@@ -50,6 +50,14 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
     [1] C.W. Gear and D.R. Wells, "Multirate linear multistep methods," BIT
     Numerical Mathematics,  vol. 24, Dec. 1984,pg. 484-502.
+
+    User-supplied context:
+        <state>slow: The slow value to be integrated
+        <state>fast: The fast value to be integrated
+        <func>f2f: The fast-to-fast coupling
+        <func>s2f: The slow-to-fast coupling
+        <func>s2s: The slow-to-slow coupling
+        <func>f2s: The fast-to-slow coupling
     """
 
     def __init__(self, method, orders, substep_count):
@@ -267,7 +275,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         cb.fence()
         cb(self.t, self.t + self.dt)
 
-    def __call__(self):
+    def generate(self):
         from leap.vm.language import (TimeIntegratorCode, TimeIntegratorState,
                                       NewCodeBuilder)
 

@@ -56,7 +56,7 @@ class MultirateTimestepperAccuracyChecker(object):
         order = DictionaryWithDefault(lambda x: self.order)
         stepper = TwoRateAdamsBashforthTimeStepper(self.method, order,
                                                        self.step_ratio)
-        return stepper()
+        return stepper.generate()
 
     def initialize_method(self, dt):
         # Requires a coupled component.
