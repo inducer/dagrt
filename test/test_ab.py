@@ -37,7 +37,7 @@ from utils import (  # noqa
 def test_ab_accuracy(python_method_impl, order, show_dag=False,
                      plot_solution=False):
     from utils import check_simple_convergence
-    method = AdamsBashforthTimeStepper(order)
+    method = AdamsBashforthTimeStepper("y", order)
     check_simple_convergence(method=method, method_impl=python_method_impl,
                              expected_order=order, show_dag=show_dag,
                              plot_solution=plot_solution)

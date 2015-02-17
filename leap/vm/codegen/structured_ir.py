@@ -181,7 +181,7 @@ class IfThenElseNode(ComplexControlNode):
 
     def __init__(self, if_node, then_node, else_node):
         super(IfThenElseNode, self).__init__(nodes=set([if_node, then_node,
-                                                    else_node]),
+                                                        else_node]),
                                              if_node=if_node,
                                              then_node=then_node,
                                              else_node=else_node,

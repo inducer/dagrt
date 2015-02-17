@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 from pytools import RecordWithoutPickling, memoize_method
 from leap.vm.utils import get_unique_name, get_variables, TODO
-from leap.vm.language import AssignExpression
+from leap.vm.language import AssignExpression, AssignSolved
 from pymbolic.mapper.stringifier import StringifyMapper
 from textwrap import TextWrapper
 from cgi import escape
@@ -81,7 +81,7 @@ class AssignInst(Inst):
                 pymbolic expression.
             - One of the following :class:`leap.vm.language.Instruction` types:
                 - AssignExpression
-                - AssignSolvedRHS
+                - AssignSolved
     """
 
     def __init__(self, assignment, block=None):
@@ -112,7 +112,8 @@ class AssignInst(Inst):
         if isinstance(assignment, AssignExpression):
             return '{name} <- {expr}'.format(name=assignment.assignee,
                 expr=string_mapper(assignment.expression))
-        raise TODO('Implement string representation for all assignment types')
+        if isinstance(assignment, AssignSolved):
+            raise TODO("Stringify AssignSolved")
 
 
 class YieldStateInst(Inst):

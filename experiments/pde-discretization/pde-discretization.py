@@ -36,17 +36,6 @@ def make_rhs(matrix, multiply_fast_component):
     return f
 
 
-def make_coupled(f2f, f2s, s2f, s2s):
-    """Return a function that couples the RHSs in a manner that is suitable to
-    be passed as input to the MRAB class. This coupling is used during the
-    initialization stage of the method. Eventually, this might be hidden from
-    the user."""
-    def coupled(t, y):
-        args = (t, y[0] + y[1], y[2] + y[3])
-        return np.array((f2f(*args), f2s(*args), s2f(*args), s2s(*args)),)
-    return coupled
-
-
 # The function below return the right hand sides corresponding to the different
 # components.
 
@@ -98,13 +87,26 @@ def run_multirate_method(method, y_fast, y_slow, dt, t_start, t_end):
     """Run the given method and return the history."""
     method.set_up(t_start=t_start, dt_start=dt,
             context={'fast': y_fast, 'slow': y_slow})
-    method.initialize()
     history = [np.concatenate((y_slow, y_fast),)]
+    slow = []
+    slow_ts = []
+    fast = []
+    fast_ts = []
     for event in method.run(t_end=t_end):
         if isinstance(event, method.StateComputed):
-            slow = event.state_component[1]
-            fast = event.state_component[0]
-            history.append(np.concatenate((slow, fast),))
+            if event.component_id == "slow":
+                slow.append(event.state_component)
+                slow_ts.append(event.t)
+            if event.component_id == "fast":
+                fast.append(event.state_component)
+                fast_ts.append(event.t)
+    slow_index = 0
+    fast_index = 0
+    for t in slow_ts:
+        while fast_ts[fast_index] != t:
+            fast_index += 1
+        history.append(np.concatenate((slow[slow_index], fast[fast_index]),))
+        slow_index += 1
     return np.array(history)
 
 
@@ -112,12 +114,11 @@ def make_multirate_method(f2f, s2f, f2s, s2s, ratio=2, order=3):
     """Return the object that drives the multirate method for the given
     parameters."""
     orders = DictionaryWithDefault(lambda x: order)
-    code = TwoRateAdamsBashforthTimeStepper(FastestFirst, orders, ratio)()
+    code = TwoRateAdamsBashforthTimeStepper(FastestFirst, orders, ratio).generate()
     MRABMethod = PythonCodeGenerator(class_name='MRABMethod').get_class(code)
 
     rhs_map = {'<func>f2f': f2f, '<func>s2f': s2f, '<func>f2s': f2s,
-               '<func>s2s': s2s,
-               '<func>coupled': make_coupled(f2f, s2f, f2s, s2s)}
+               '<func>s2s': s2s}
 
     return MRABMethod(rhs_map)
 

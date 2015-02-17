@@ -98,10 +98,10 @@ def read_file(name):
 # {{{ test rk methods
 
 @pytest.mark.parametrize(("min_order", "stepper"), [
-    (2, ODE23TimeStepper(use_high_order=False)),
-    (3, ODE23TimeStepper(use_high_order=True)),
-    (4, ODE45TimeStepper(use_high_order=False)),
-    (5, ODE45TimeStepper(use_high_order=True)),
+    (2, ODE23TimeStepper("y", use_high_order=False)),
+    (3, ODE23TimeStepper("y", use_high_order=True)),
+    (4, ODE45TimeStepper("y", use_high_order=False)),
+    (5, ODE45TimeStepper("y", use_high_order=True)),
     ])
 def test_rk_codegen(min_order, stepper):
     """Test whether Fortran code generation for the Runge-Kutta
@@ -120,7 +120,7 @@ def test_rk_codegen(min_order, stepper):
                 ${result} = -2*${y}
                 """))
 
-    code = stepper(component_id)
+    code = stepper.generate()
 
     codegen = f.CodeGenerator(
             'RKMethod',
@@ -153,7 +153,7 @@ def test_rk_codegen_fancy():
     component_id = 'y'
     rhs_function = '<func>y'
 
-    stepper = ODE23TimeStepper(use_high_order=True)
+    stepper = ODE23TimeStepper(component_id, use_high_order=True)
 
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs,
@@ -175,7 +175,7 @@ def test_rk_codegen_fancy():
                 write(*,*) 'after state update'
                 """))
 
-    code = stepper(component_id)
+    code = stepper.generate()
 
     codegen = f.CodeGenerator(
             'RKMethod',
@@ -218,7 +218,7 @@ def test_multirate_codegen():
 
     stepper = TwoRateAdamsBashforthTimeStepper(methods['F'], order, 4)
 
-    code = stepper()
+    code = stepper.generate()
 
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs)

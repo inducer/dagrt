@@ -130,6 +130,9 @@ class FunctionRegistry(RecordWithoutPickling):
                     "unknown function: '%s'"
                     % function_id)
 
+    def __contains__(self, function_id):
+        return function_id in self.id_to_function
+
     def register_codegen(self, function_id, language, codegen):
         """Register a code generation helper object for target *language*
         for the function with identifier *function_id*.

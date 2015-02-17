@@ -39,7 +39,7 @@ __doc__ = """
 
 
 def verify_first_same_as_last_condition(times, last_stage_coefficients,
-                          output_stage_coefficients):
+                                        output_stage_coefficients):
     if not times or not last_stage_coefficients \
             or not output_stage_coefficients:
         return False
@@ -77,18 +77,72 @@ class EmbeddedRungeKuttaMethod(Method):
         self.max_dt_growth = max_dt_growth
         self.min_dt_shrinkage = min_dt_shrinkage
 
+    def finish_adaptive(self, cb, high_order_estimate, high_order_rhs,
+                        low_order_estimate):
+        from pymbolic import var
+        from pymbolic.primitives import Comparison, LogicalOr, Max, Min
+        from leap.vm.expression import IfThenElse
+
+        norm_start_state = var('norm_start_state')
+        norm_end_state = var('norm_end_state')
+        rel_error_raw = var('rel_error_raw')
+        rel_error = var('rel_error')
+
+        cb.fence()
+
+        norm = lambda expr: var('<builtin>norm')(expr, ord=2)
+        cb(norm_start_state, norm(self.state))
+        cb(norm_end_state, norm(low_order_estimate))
+        cb(rel_error_raw, norm((high_order_estimate - low_order_estimate) /
+                               (var('<builtin>len')(self.state) ** 0.5 *
+                                (self.atol + self.rtol *
+                                 Max((norm_start_state, norm_end_state))
+                                 ))))
+
+        cb(rel_error, IfThenElse(Comparison(rel_error_raw, "==", 0),
+                                 1.0e-14, rel_error_raw))
+
+        with cb.if_(LogicalOr((Comparison(rel_error, ">", 1),
+                               var('<builtin>isnan')(rel_error)))):
+
+            with cb.if_(var('<builtin>isnan')(rel_error)):
+                cb(self.dt, self.min_dt_shrinkage * self.dt)
+            with cb.else_():
+                cb(self.dt, Max((0.9 * self.dt *
+                                 rel_error ** (-1 / self.low_order),
+                                 self.min_dt_shrinkage * self.dt)))
+
+            with cb.if_(self.t + self.dt, '==', self.t):
+                cb.raise_(TimeStepUnderflow)
+            with cb.else_():
+                cb.fail_step()
+
+        with cb.else_():
+            cb(high_order_estimate, self.limiter_func(high_order_estimate))
+            self.finish_nonadaptive(cb, high_order_estimate, high_order_rhs,
+                                    low_order_estimate)
+            cb.fence()
+            cb(self.dt,
+               Min((0.9 * self.dt * rel_error ** (-1 / self.high_order),
+                    self.max_dt_growth * self.dt)))
+
 
 class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
+    """
+    User-supplied context:
+        <state> + component_id: The value that is integrated
+        <func> + component_id: The right hand side function
+    """
 
-    def __call__(self, component_id):
+    def __init__(self, component_id, *args, **kwargs):
         """
         :arg component_id: an identifier to be used for the single state
             component supported.
         """
-        from leap.vm.language import TimeIntegratorCode
-        from pymbolic import var
+        EmbeddedRungeKuttaMethod.__init__(self, *args, **kwargs)
 
         # Set up variables.
+        from pymbolic import var
 
         self.component_id = component_id
 
@@ -98,14 +152,16 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         self.state = var("<state>" + component_id)
         self.rhs_func = var("<func>" + component_id)
 
-        local_last_rhs = var('last_rhs_' + component_id)
-
         if self.limiter_name is not None:
             limiter = var("<func>" + self.limiter_name)
         else:
             limiter = lambda x: x
 
         self.limiter_func = limiter
+
+    def generate(self):
+        from leap.vm.language import TimeIntegratorCode
+        from pymbolic import var
 
         # Initialization.
 
@@ -117,6 +173,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         # Primary.
 
         with NewCodeBuilder("primary") as cb:
+            local_last_rhs = var('last_rhs_' + self.component_id)
             rhss = []
             # {{{ stage loop
             last_stage = len(self.butcher_tableau) - 1
@@ -126,7 +183,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                     cb(local_last_rhs, self.last_rhs)
                     this_rhs = local_last_rhs
                 else:
-                    stage_state = limiter(
+                    stage_state = self.limiter_func(
                         self.state + sum(
                             self.dt * coeff * rhss[j]
                             for j, coeff in enumerate(coeffs)))
@@ -179,55 +236,6 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
         cb.fence()
         cb(self.t, self.t + self.dt)
-
-    def finish_adaptive(self, cb, high_order_estimate, high_order_rhs,
-                        low_order_estimate):
-        from pymbolic import var
-        from pymbolic.primitives import Comparison, LogicalOr, Max, Min
-        from leap.vm.expression import IfThenElse
-
-        norm_start_state = var('norm_start_state')
-        norm_end_state = var('norm_end_state')
-        rel_error_raw = var('rel_error_raw')
-        rel_error = var('rel_error')
-
-        cb.fence()
-
-        norm = lambda expr: var('<builtin>norm')(expr, ord=2)
-        cb(norm_start_state, norm(self.state))
-        cb(norm_end_state, norm(low_order_estimate))
-        cb(rel_error_raw, norm((high_order_estimate - low_order_estimate) /
-                               (var('<builtin>len')(self.state) ** 0.5 *
-                                (self.atol + self.rtol *
-                                 Max((norm_start_state, norm_end_state))
-                                 ))))
-
-        cb(rel_error, IfThenElse(Comparison(rel_error_raw, "==", 0),
-                                 1.0e-14, rel_error_raw))
-
-        with cb.if_(LogicalOr((Comparison(rel_error, ">", 1),
-                               var('<builtin>isnan')(rel_error)))):
-
-            with cb.if_(var('<builtin>isnan')(rel_error)):
-                cb(self.dt, self.min_dt_shrinkage * self.dt)
-            with cb.else_():
-                cb(self.dt, Max((0.9 * self.dt *
-                                 rel_error ** (-1 / self.low_order),
-                                 self.min_dt_shrinkage * self.dt)))
-
-            with cb.if_(self.t + self.dt, '==', self.t):
-                cb.raise_(TimeStepUnderflow)
-            with cb.else_():
-                cb.fail_step()
-
-        with cb.else_():
-            cb(high_order_estimate, self.limiter_func(high_order_estimate))
-            self.finish_nonadaptive(cb, high_order_estimate, high_order_rhs,
-                                    low_order_estimate)
-            cb.fence()
-            cb(self.dt,
-               Min((0.9 * self.dt * rel_error ** (-1 / self.high_order),
-                    self.max_dt_growth * self.dt)))
 
     def call_rhs(self, t, y):
         from pymbolic.primitives import CallWithKwargs

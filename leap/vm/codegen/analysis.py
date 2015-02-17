@@ -161,6 +161,12 @@ def verify_code(code):
 # {{{ collect function names from DAG
 
 class _FunctionNameCollector(Collector):
+
+    def map_variable(self, expr):
+        if expr.name.startswith("<func>"):
+            return set([expr.name])
+        return set()
+
     def map_call(self, expr):
         return (set([expr.function])
                 | super(_FunctionNameCollector, self).map_call(expr))
@@ -178,7 +184,6 @@ def collect_function_names_from_dag(dag):
     def mapper(expr):
         result.update(fnc(expr))
         return expr
-
     for insn in dag.instructions:
         insn.map_expressions(mapper)
 
