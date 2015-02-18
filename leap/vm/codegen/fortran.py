@@ -1032,7 +1032,8 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_initialize(self, dag):
         init_symbols = [
                 sym
-                for sym in self.sym_kind_table.global_table]
+                for sym in self.sym_kind_table.global_table
+                if not sym.startswith("<ret")]
 
         args = self.extra_arguments + ('leap_state',) + tuple(
                 self.name_manager.name_global(sym)
