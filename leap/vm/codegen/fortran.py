@@ -1062,6 +1062,12 @@ class CodeGenerator(StructuredCodeGenerator):
                     other_specifiers=("optional",))
         self.emit('')
 
+        self.emit('real :: leap_nan, leap_nan_helper')
+        self.emit('')
+        self.emit('leap_nan_helper = 0.0')
+        self.emit('leap_nan = 0.0/leap_nan_helper')
+        self.emit('')
+
         self.emit(
                 "leap_state%leap_next_state = leap_state_{0}"
                 .format(dag.initial_state))
@@ -1069,6 +1075,29 @@ class CodeGenerator(StructuredCodeGenerator):
         for sym, sym_kind in six.iteritems(
                 self.sym_kind_table.global_table):
             self.emit_variable_init(sym, sym_kind)
+
+        # {{{ initialize scalar outputs to NaN
+
+        self.emit('')
+        self.emit('! initialize scalar outputs to NaN')
+        self.emit('')
+
+        for sym in self.sym_kind_table.global_table:
+            sym_kind = self.sym_kind_table.global_table[sym]
+
+            tgt_fortran_name = self.name_manager[sym]
+
+            # All our scalars are floating-point numbers for now,
+            # so initializing them all to NaN is fine.
+
+            from leap.vm.codegen.data import Scalar
+            if sym.startswith("<ret") and isinstance(sym_kind, Scalar):
+                self.emit('{fortran_name} = leap_nan'.format(
+                    fortran_name=tgt_fortran_name))
+
+        self.emit('')
+
+        # }}}
 
         for sym in init_symbols:
             sym_kind = self.sym_kind_table.global_table[sym]
