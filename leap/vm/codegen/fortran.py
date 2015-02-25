@@ -1373,6 +1373,11 @@ class CodeGenerator(StructuredCodeGenerator):
                     dummy_name,
                     var(self.call_after_state_update)())
 
+    def emit_state_transition(self, next_state):
+        self.emit(
+                'leap_state%leap_next_state = '
+                + self.state_name_to_state_sym(next_state))
+
     # }}}
 
 # }}}

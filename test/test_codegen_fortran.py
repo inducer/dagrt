@@ -208,7 +208,6 @@ def test_rk_codegen_fancy():
 # }}}
 
 
-@pytest.mark.skipif(True, reason="State transitions not implemented in Fortran yet")
 def test_multirate_codegen():
     from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
     from leap.method.ab.multirate.methods import methods
