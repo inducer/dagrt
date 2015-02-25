@@ -651,6 +651,10 @@ class CodeGenerator(StructuredCodeGenerator):
     def state_name_to_state_sym(state_name):
         return "leap_state_"+state_name
 
+    @staticmethod
+    def component_name_to_component_sym(comp_name):
+        return "leap_component_"+comp_name
+
     @property
     def emitter(self):
         return self.emitters[-1]
@@ -777,6 +781,16 @@ class CodeGenerator(StructuredCodeGenerator):
         for i, state in enumerate(dag.states):
             self.emit("parameter ({state_sym_name} = {i})".format(
                 state_sym_name=self.state_name_to_state_sym(state), i=i))
+
+        self.emit('')
+
+        from .analysis import collect_ode_component_names_from_dag
+        component_ids = collect_ode_component_names_from_dag(dag)
+
+        for i, comp_id in enumerate(component_ids):
+            self.emit("parameter ({comp_sym_name} = {i})".format(
+                comp_sym_name=self.component_name_to_component_sym(comp_id),
+                i=i))
 
         self.emit('')
 
@@ -1361,7 +1375,10 @@ class CodeGenerator(StructuredCodeGenerator):
             from pymbolic import var
             self.emit_assign_from_function_call(
                     dummy_name,
-                    var(self.call_before_state_update)())
+                    var(self.call_before_state_update)(
+                        var(self.component_name_to_component_sym(
+                            inst.component_id))
+                        ))
 
         self.emit_assign_expr(
                 '<ret_state>'+inst.component_id,
@@ -1371,7 +1388,10 @@ class CodeGenerator(StructuredCodeGenerator):
             from pymbolic import var
             self.emit_assign_from_function_call(
                     dummy_name,
-                    var(self.call_after_state_update)())
+                    var(self.call_after_state_update)(
+                        var(self.component_name_to_component_sym(
+                            inst.component_id))
+                        ))
 
     def emit_state_transition(self, next_state):
         self.emit(
