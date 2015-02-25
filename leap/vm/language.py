@@ -313,7 +313,7 @@ class YieldState(Instruction):
         return frozenset()
 
     def get_read_variables(self):
-        return get_variables(self.expression)
+        return get_variables(self.expression) | get_variables(self.time)
 
     def map_expressions(self, mapper):
         return self.copy(
