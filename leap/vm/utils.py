@@ -108,6 +108,6 @@ def resolve_args(arg_names, default_dict, arg_dict):
 
     if arg_dict:
         raise TypeError("leftover arguments after argument resolution: "
-                + ", ".join(arg_dict))
+                + ", ".join(str(i) for i in arg_dict))
 
     return args
