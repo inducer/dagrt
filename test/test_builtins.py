@@ -75,8 +75,15 @@ def test_isnan(python_method_impl, value):
 
 
 @pytest.mark.parametrize(('order'), [2, np.inf])
-def test_norm(python_method_impl, order):
-    test_vector = np.array([-3, 4], dtype=np.double)
+@pytest.mark.parametrize(('test_vector'),
+                         [6, 0 + 1j, np.array([-3]), np.array([-3, 4])])
+def test_norm(python_method_impl, order, test_vector):
+
+    def true_norm(x):
+        if np.isscalar(x):
+            return abs(x)
+        return np.linalg.norm(x, ord=order)
+
     cbuild = CodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_1', assignee='x',
@@ -94,8 +101,7 @@ def test_norm(python_method_impl, order):
             instructions=cbuild.instructions)
 
     result = execute_and_return_single_result(python_method_impl, code)
-    expected_result = np.linalg.norm(test_vector, ord=order)
-    assert np.allclose(result, expected_result)
+    assert np.allclose(result, true_norm(test_vector))
 
 
 @pytest.mark.parametrize(('x, y'), [(1.0, 1.0j), (1.0j, 1.0),
