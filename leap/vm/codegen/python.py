@@ -97,7 +97,6 @@ class _function_symbol_container(object):
 def _builtin_norm(self, x, ord=None):
     if self._numpy.isscalar(x):
         return abs(x)
-    print(x, ord)
     return self._numpy.linalg.norm(x, ord)
 '''
 
