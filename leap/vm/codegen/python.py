@@ -94,6 +94,10 @@ class TransitionEvent(Exception):
 class _function_symbol_container(object):
     pass
 
+def _builtin_norm(self, x, ord=None):
+    if self._numpy.isscalar(x):
+        return abs(x)
+    return self._numpy.linalg.norm(x, ord)
 '''
 
 

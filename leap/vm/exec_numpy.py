@@ -95,10 +95,16 @@ class NumpyInterpreter(object):
         self.exec_controller = ExecutionController(code)
         self.context = {}
         self.next_state = self.code.initial_state
+
+        def builtin_norm(x, ord=None):
+            if np.isscalar(x):
+                return abs(x)
+            return np.linalg.norm(x, ord)
+
         builtins = {
                 "<builtin>len": np.size,
                 "<builtin>isnan": np.isnan,
-                "<builtin>norm": np.linalg.norm,
+                "<builtin>norm": builtin_norm,
                 "<builtin>dot_product": np.vdot
                 }
 

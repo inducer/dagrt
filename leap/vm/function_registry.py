@@ -249,7 +249,7 @@ def _make_bfr():
     bfr = FunctionRegistry()
 
     for func, py_pattern in [
-            (_Norm(), "{numpy}.linalg.norm({args})"),
+            (_Norm(), "self._builtin_norm({args})"),
             (_DotProduct(), "{numpy}.vdot({args})"),
             (_Len(), "{numpy}.size({args})"),
             (_IsNaN(), "{numpy}.isnan({args})"),

@@ -152,7 +152,7 @@ def test_basic_raise_codegen():
 
 
 def test_basic_fail_step_codegen():
-    """Test code generation of the Raise instruction."""
+    """Test code generation of the FailStep instruction."""
     cbuild = CodeBuilder()
     cbuild.add_and_get_ids(FailStep(id="fail"))
     cbuild.commit()
