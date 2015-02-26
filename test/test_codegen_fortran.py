@@ -164,12 +164,12 @@ def test_rk_codegen_fancy():
             f.CallCode("""
                 ${result} = -2*${y}
                 """))
-    freg = register_function(freg, "notify_pre_state_update", ())
+    freg = register_function(freg, "notify_pre_state_update", ("updated_component",))
     freg = freg.register_codegen("notify_pre_state_update", "fortran",
             f.CallCode("""
                 write(*,*) 'before state update'
                 """))
-    freg = register_function(freg, "notify_post_state_update", ())
+    freg = register_function(freg, "notify_post_state_update", ("updated_component",))
     freg = freg.register_codegen("notify_post_state_update", "fortran",
             f.CallCode("""
                 write(*,*) 'after state update'
