@@ -76,7 +76,7 @@ def test_isnan(python_method_impl, value):
 
 @pytest.mark.parametrize(('order'), [2, np.inf])
 @pytest.mark.parametrize(('test_vector'),
-                         [6, 0 + 1j, np.array([-3]), np.array([-3, 4])])
+                         [6, 1j, np.array([-3]), np.array([-3, 4])])
 def test_norm(python_method_impl, order, test_vector):
 
     def true_norm(x):
