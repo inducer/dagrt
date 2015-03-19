@@ -279,12 +279,6 @@ class TypeBase(object):
         Entries may be numeric, too.
     """
 
-    def __init__(self, base_type, dimension):
-        self.base_type = base_type
-        if dimension:
-            dimension = tuple(str(d) for d in dimension)
-        self.dimension = dimension
-
     def get_base_type(self):
         raise NotImplementedError()
 
@@ -353,6 +347,12 @@ class ArrayType(TypeBase):
         Entries may be numeric, too. Or they may refer
         to variables that are available through
         *extra_arguments* in :class:`CodeGenerator`.
+
+    .. attribute:: index_vars
+
+        If further dimensions within :attr:`element_type` depend
+        on indices into :attr:`dimension`, this tuple of variable
+        names determines what each index variable is called.
     """
 
     @staticmethod
@@ -368,9 +368,26 @@ class ArrayType(TypeBase):
                     "unexpected number of parts in dimension spec '%s'"
                     % dim)
 
-    def __init__(self, element_type, dimension):
+    INDEX_VAR_COUNTER = 0
+
+    def __init__(self, dimension, element_type, index_vars=None):
         self.element_type = element_type
         self.dimension = tuple(str(i) for i in dimension)
+
+        if isinstance(index_vars, str):
+            index_vars = tuple(iv.strip() for iv in index_vars.split(","))
+        elif index_vars is None:
+            def get_index_var():
+                ArrayType.INDEX_VAR_COUNTER += 1
+                return "leap_i%d" % ArrayType.INDEX_VAR_COUNTER
+
+            index_vars = tuple(get_index_var() for d in dimension)
+
+        if len(index_vars) != len(dimension):
+            raise ValueError("length of 'index_vars' does not match length "
+                    "of 'dimension'")
+
+        self.index_vars = index_vars
 
     def get_base_type(self):
         return self.element_type.get_base_type()
