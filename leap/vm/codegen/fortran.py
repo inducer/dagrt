@@ -79,6 +79,9 @@ class FortranNameManager(object):
     def make_unique_fortran_name(self, prefix):
         return self.local_map.get_mapped_identifier_without_key(prefix)
 
+    def is_known_fortran_name(self, name):
+        return self.name_generator.is_name_conflicting(name)
+
     def __getitem__(self, name):
         """Provide an interface to PythonExpressionMapper to look up
         the name of a local or global variable.
@@ -288,19 +291,20 @@ class TypeBase(object):
     def is_allocatable(self):
         raise NotImplementedError()
 
-    def emit_allocation(self, code_generator, fortran_expr):
+    def emit_allocation(self, code_generator, fortran_expr, index_expr_map):
         raise NotImplementedError()
 
-    def emit_variable_init(self, code_generator, fortran_expr):
+    def emit_variable_init(self, code_generator, fortran_expr, index_expr_map):
         raise NotImplementedError()
 
-    def emit_variable_deinit(self, code_generator, fortran_expr):
+    def emit_variable_deinit(self, code_generator, fortran_expr, index_expr_map):
         raise NotImplementedError()
 
-    def emit_variable_deallocate(self, code_generator, fortran_expr):
+    def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
         raise NotImplementedError()
 
-    def emit_assignment(self, code_generator, fortran_expr, rhs_expr):
+    def emit_assignment(self, code_generator, fortran_expr, rhs_expr,
+            index_expr_map):
         raise NotImplementedError()
 
 
@@ -317,19 +321,20 @@ class BuiltinType(TypeBase):
     def is_allocatable(self):
         return False
 
-    def emit_allocation(self, code_generator, fortran_expr):
+    def emit_allocation(self, code_generator, fortran_expr, index_expr_map):
         raise NotImplementedError()
 
-    def emit_variable_init(self, code_generator, fortran_expr):
+    def emit_variable_init(self, code_generator, fortran_expr, index_expr_map):
         pass
 
-    def emit_variable_deinit(self, code_generator, fortran_expr):
+    def emit_variable_deinit(self, code_generator, fortran_expr, index_expr_map):
         pass
 
-    def emit_variable_deallocate(self, code_generator, fortran_expr):
+    def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
         pass
 
-    def emit_assignment(self, code_generator, fortran_expr, rhs_expr):
+    def emit_assignment(self, code_generator, fortran_expr, rhs_expr,
+            index_expr_map):
         code_generator.emit(
                 "{name} = {expr}"
                 .format(
@@ -338,6 +343,57 @@ class BuiltinType(TypeBase):
 
 
 # Allocatable arrays are not yet supported, use pointers for now.
+
+class _ArrayLoopManager(object):
+    def __init__(self, array_type):
+        self.array_type = array_type
+
+    def enter(self, code_generator, index_expr_map):
+        atype = self.array_type
+
+        index_expr_map = index_expr_map.copy()
+
+        f_index_names = [
+            code_generator.name_manager.make_unique_fortran_name("leap_"+iname)
+            for iname in atype.index_vars]
+
+        def replace_indices(s):
+            for name, expr in six.iteritems(index_expr_map):
+                s, _ = re.subn(r"\b" + name + r"\b", s, expr)
+            return s
+
+        self.emitters = []
+        for i, (dim, index_name) in enumerate(
+                reversed(list(zip(atype.dimension, f_index_names)))):
+            code_generator.declaration_emitter('integer %s' % index_name)
+
+            start, stop = atype.parse_dimension(dim)
+            em = FortranDoEmitter(
+                    code_generator.emitter, index_name,
+                    "%s, %s" % (
+                        replace_indices(start),
+                        replace_indices(stop)),
+                    code_generator)
+            self.emitters.append(em)
+            em.__enter__()
+
+        index_expr_map.update(zip(atype.index_vars, f_index_names))
+
+        code_generator.declaration_emitter('')
+
+        from pymbolic import var
+
+        asa = ArraySubscriptAppender(
+                code_generator.sym_kind_table, code_generator.current_function,
+                tuple(var("<target>"+v) for v in f_index_names))
+
+        return index_expr_map, asa, f_index_names
+
+    def leave(self):
+        while self.emitters:
+            em = self.emitters.pop()
+            em.__exit__(None, None, None)
+
 
 class ArrayType(TypeBase):
     """
@@ -387,6 +443,9 @@ class ArrayType(TypeBase):
             raise ValueError("length of 'index_vars' does not match length "
                     "of 'dimension'")
 
+        if not isinstance(element_type, TypeBase):
+            raise TypeError("element_type should be a subclass of TypeBase")
+
         self.index_vars = index_vars
 
     def get_base_type(self):
@@ -407,72 +466,95 @@ class ArrayType(TypeBase):
     def is_allocatable(self):
         return self.element_type.is_allocatable()
 
-    def emit_allocation(self, code_generator, fortran_expr):
+    def emit_allocation(self, code_generator, fortran_expr, index_expr_map):
         if not self.element_type.is_allocatable():
             return
         else:
             # Array of pointers, for example.
-            raise NotImplementedError()
 
-    def emit_variable_init(self, code_generator, fortran_expr):
+            alm = _ArrayLoopManager(self)
+            index_expr_map, _, f_index_names = \
+                    alm.enter(code_generator, index_expr_map)
+
+            self.element_type.emit_allocation(
+                    code_generator,
+                    "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
+                    index_expr_map)
+
+            alm.leave()
+
+    def emit_variable_init(self, code_generator, fortran_expr, index_expr_map):
         if not self.element_type.is_allocatable():
             return
         else:
             # Array of pointers, for example.
-            raise NotImplementedError()
 
-    def emit_variable_deinit(self, code_generator, fortran_expr):
+            alm = _ArrayLoopManager(self)
+            index_expr_map, _, f_index_names = \
+                    alm.enter(code_generator, index_expr_map)
+
+            self.element_type.emit_variable_init(
+                    code_generator,
+                    "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
+                    index_expr_map)
+
+            alm.leave()
+
+    def emit_variable_deinit(self, code_generator, fortran_expr, index_expr_map):
         if not self.element_type.is_allocatable():
             return
         else:
             # Array of pointers, for example.
-            raise NotImplementedError()
 
-    def emit_variable_deallocate(self, code_generator, fortran_expr):
+            alm = _ArrayLoopManager(self)
+            index_expr_map, _, f_index_names = \
+                    alm.enter(code_generator, index_expr_map)
+
+            self.element_type.emit_variable_deinit(
+                    code_generator,
+                    "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
+                    index_expr_map)
+
+            alm.leave()
+
+    def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
         if not self.element_type.is_allocatable():
             return
         else:
             # Array of pointers, for example.
-            raise NotImplementedError()
 
-    def emit_assignment(self, code_generator, fortran_expr, rhs_expr):
-        index_names = [
-            code_generator.name_manager.make_unique_fortran_name("i%d" % i)
-            for i in range(len(self.dimension))]
+            alm = _ArrayLoopManager(self)
+            index_expr_map, _, f_index_names = \
+                    alm.enter(code_generator, index_expr_map)
 
-        emitters = []
-        for i, (dim, index_name) in enumerate(
-                reversed(list(zip(self.dimension, index_names)))):
-            code_generator.declaration_emitter('integer %s' % index_name)
+            self.element_type.emit_variable_deallocate(
+                    code_generator,
+                    "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
+                    index_expr_map)
 
-            start_stop = self.parse_dimension(dim)
-            em = FortranDoEmitter(
-                    code_generator.emitter, index_name,
-                    "%s, %s" % start_stop,
-                    code_generator)
-            emitters.append(em)
-            em.__enter__()
+            alm.leave()
 
-        code_generator.declaration_emitter('')
+    def emit_assignment(self, code_generator, fortran_expr, rhs_expr,
+            index_expr_map):
+        alm = _ArrayLoopManager(self)
+        index_expr_map, array_subscript_appender, f_index_names = \
+                alm.enter(code_generator, index_expr_map)
 
-        from pymbolic import var
-
-        asa = ArraySubscriptAppender(
-                code_generator.sym_kind_table, code_generator.current_function,
-                tuple(var("<target>"+v) for v in index_names))
         self.element_type.emit_assignment(
                 code_generator,
-                "%s(%s)" % (fortran_expr, ", ".join(index_names)),
-                asa(rhs_expr))
+                "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
+                array_subscript_appender(rhs_expr),
+                index_expr_map)
 
-        while emitters:
-            em = emitters.pop()
-            em.__exit__(None, None, None)
+        alm.leave()
 
 
 class PointerType(TypeBase):
     def __init__(self, pointee_type):
         self.pointee_type = pointee_type
+
+        if not isinstance(pointee_type, TypeBase):
+            raise TypeError("pointee_type should be a subclass of TypeBase")
 
     def get_base_type(self):
         return self.pointee_type.get_base_type()
@@ -483,7 +565,7 @@ class PointerType(TypeBase):
     def is_allocatable(self):
         return True
 
-    def emit_allocation(self, code_generator, fortran_expr):
+    def emit_allocation(self, code_generator, fortran_expr, index_expr_map):
         dimension = ""
         if isinstance(self.pointee_type, ArrayType):
             if self.pointee_type.dimension:
@@ -501,22 +583,28 @@ class PointerType(TypeBase):
                         name=fortran_expr))
             code_generator.emit("stop")
 
-        self.pointee_type.emit_allocation(code_generator, fortran_expr)
+        self.pointee_type.emit_allocation(
+                code_generator, fortran_expr, index_expr_map)
 
-    def emit_variable_init(self, code_generator, fortran_expr):
+    def emit_variable_init(self, code_generator, fortran_expr, index_expr_map):
         code_generator.emit_traceable("nullify(%s)" % fortran_expr)
 
-    def emit_variable_deinit(self, code_generator, fortran_expr):
+    def emit_variable_deinit(self, code_generator, fortran_expr, index_expr_map):
         code_generator.emit_traceable("nullify(%s)" % fortran_expr)
 
-    def emit_variable_deallocate(self, code_generator, fortran_expr):
-        self.pointee_type.emit_variable_deinit(code_generator, fortran_expr)
+    def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
+        self.pointee_type.emit_variable_deallocate(
+                code_generator, fortran_expr, index_expr_map)
+        self.pointee_type.emit_variable_deinit(
+                code_generator, fortran_expr, index_expr_map)
 
         code_generator.emit_traceable('deallocate({id})'.format(id=fortran_expr))
         code_generator.emit_traceable("nullify(%s)" % fortran_expr)
 
-    def emit_assignment(self, code_generator, fortran_expr, rhs_expr):
-        self.pointee_type.emit_assignment(code_generator, fortran_expr, rhs_expr)
+    def emit_assignment(self, code_generator, fortran_expr, rhs_expr,
+            index_expr_map):
+        self.pointee_type.emit_assignment(code_generator, fortran_expr, rhs_expr,
+                index_expr_map)
 
 
 class StructureType(TypeBase):
@@ -530,6 +618,12 @@ class StructureType(TypeBase):
         self.type_name = type_name
         self.members = members
 
+        for i, (_, mtype) in enumerate(members):
+            if not isinstance(mtype, TypeBase):
+                raise TypeError("member with index %d has type that is "
+                        "not a subclass of TypeBase"
+                        % i)
+
     def get_base_type(self):
         return "type(%s)" % self.type_name
 
@@ -541,32 +635,36 @@ class StructureType(TypeBase):
                 member_type.is_allocatable()
                 for name, member_type in self.members)
 
-    def emit_allocation(self, code_generator, fortran_expr):
+    def emit_allocation(self, code_generator, fortran_expr, index_expr_map):
         for member_name, member_type in self.members:
             if member_type.is_allocatable():
                 member_type.emit_allocation(
                         code_generator,
                         '{expr}%{member_name}'.format(
                             expr=fortran_expr,
-                            member_name=member_name))
+                            member_name=member_name),
+                        index_expr_map)
 
-    def emit_variable_init(self, code_generator, fortran_expr):
+    def emit_variable_init(self, code_generator, fortran_expr, index_expr_map):
         for member_name, member_type in self.members:
             member_type.emit_variable_init(
                     code_generator,
                     '{expr}%{member_name}'.format(
                         expr=fortran_expr,
-                        member_name=member_name))
+                        member_name=member_name),
+                    index_expr_map)
 
-    def emit_variable_deinit(self, code_generator, fortran_expr):
+    def emit_variable_deinit(self, code_generator, fortran_expr, index_expr_map):
         for member_name, member_type in self.members:
             member_type.emit_variable_deinit(
                     code_generator,
                     '{expr}%{member_name}'.format(
                         expr=fortran_expr,
-                        member_name=member_name))
+                        member_name=member_name),
+                    index_expr_map)
 
-    def emit_assignment(self, code_generator, fortran_expr, rhs_expr):
+    def emit_assignment(self, code_generator, fortran_expr, rhs_expr,
+            index_expr_map):
         for name, type in self.members:
             sla = StructureLookupAppender(
                     code_generator.sym_kind_table, code_generator.current_function,
@@ -574,7 +672,8 @@ class StructureType(TypeBase):
             type.emit_assignment(
                     code_generator,
                     fortran_expr+"%"+name,
-                    sla(rhs_expr))
+                    sla(rhs_expr),
+                    index_expr_map)
 
 # }}}
 
@@ -889,7 +988,7 @@ class CodeGenerator(StructuredCodeGenerator):
         from leap.vm.codegen.data import ODEComponent
         if isinstance(sym_kind, ODEComponent):
             comp_type = self.get_ode_component_type(sym_kind.component_id)
-            comp_type.emit_variable_init(self, self.name_manager[name])
+            comp_type.emit_variable_init(self, self.name_manager[name], {})
 
     def emit_variable_deinit(self, name, sym_kind):
         fortran_name = self.name_manager[name]
@@ -905,14 +1004,14 @@ class CodeGenerator(StructuredCodeGenerator):
                     self.emitter, '{refcnt}.eq.1'.format(refcnt=refcnt_name), self) \
                             as if_emit:
                 comp_type = self.get_ode_component_type(sym_kind.component_id)
-                comp_type.emit_variable_deallocate(self, self.name_manager[name])
+                comp_type.emit_variable_deallocate(self, self.name_manager[name], {})
 
                 self.emit_traceable(
                         'deallocate({refcnt})'.format(refcnt=refcnt_name))
 
                 if_emit.emit_else()
 
-                comp_type.emit_variable_deinit(self, self.name_manager[name])
+                comp_type.emit_variable_deinit(self, self.name_manager[name], {})
                 self.emit_traceable(
                         '{refcnt} = {refcnt} - 1'
                         .format(refcnt=refcnt_name))
@@ -941,7 +1040,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def emit_allocation(self, fortran_name, sym_kind):
         comp_type = self.get_ode_component_type(sym_kind.component_id)
-        comp_type.emit_allocation(self, fortran_name)
+        comp_type.emit_allocation(self, fortran_name, {})
 
     def emit_allocation_check(self, sym, sym_kind):
         fortran_name = self.name_manager[sym]
@@ -1042,7 +1141,7 @@ class CodeGenerator(StructuredCodeGenerator):
                             expr=self.expr(expr)))
             else:
                 comp_type = self.get_ode_component_type(sym_kind.component_id)
-                comp_type.emit_assignment(self, assignee_fortran_name, expr)
+                comp_type.emit_assignment(self, assignee_fortran_name, expr, {})
 
         self.emit('')
 
@@ -1153,7 +1252,8 @@ class CodeGenerator(StructuredCodeGenerator):
                     from pymbolic import var
                     comp_type.emit_assignment(
                             self, tgt_fortran_name,
-                            var("<target>"+fortran_name))
+                            var("<target>"+fortran_name),
+                            {})
 
         self.emit_def_end(function_name)
 

@@ -51,7 +51,8 @@ def test_basic_codegen():
     codegen = f.CodeGenerator("simple",
             ode_component_type_map={
                 "state": f.ArrayType(
-                    f.BuiltinType('real (kind=8)'), (200,))
+                    (200,),
+                    f.BuiltinType('real (kind=8)'),)
                 })
     print(codegen(code))
 
@@ -126,7 +127,9 @@ def test_rk_codegen(min_order, stepper):
             'RKMethod',
             ode_component_type_map={
                 component_id: f.ArrayType(
-                    f.BuiltinType('real (kind=8)'), (2,))
+                    (2,),
+                    f.BuiltinType('real (kind=8)'),
+                    )
                 },
             function_registry=freg,
             module_preamble="""
@@ -169,7 +172,8 @@ def test_rk_codegen_fancy():
             f.CallCode("""
                 write(*,*) 'before state update'
                 """))
-    freg = register_function(freg, "notify_post_state_update", ("updated_component",))
+    freg = register_function(
+            freg, "notify_post_state_update", ("updated_component",))
     freg = freg.register_codegen("notify_post_state_update", "fortran",
             f.CallCode("""
                 write(*,*) 'after state update'
@@ -181,8 +185,8 @@ def test_rk_codegen_fancy():
             'RKMethod',
             ode_component_type_map={
                 component_id: f.ArrayType(
+                    (2,),
                     f.BuiltinType('real (kind=8)'),
-                    (2,)
                     )
                 },
             function_registry=freg,
@@ -246,9 +250,13 @@ def test_multirate_codegen():
             'RKMethod',
             ode_component_type_map={
                 "slow": f.ArrayType(
-                    f.BuiltinType('real (kind=8)'), (200,)),
+                    (200,),
+                    f.BuiltinType('real (kind=8)'),
+                    ),
                 "fast": f.ArrayType(
-                    f.BuiltinType('real (kind=8)'), (300,))
+                    (300,),
+                    f.BuiltinType('real (kind=8)'),
+                    )
                 },
             function_registry=freg,
             module_preamble="""
