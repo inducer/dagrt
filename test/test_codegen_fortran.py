@@ -143,7 +143,6 @@ def test_rk_codegen(min_order, stepper):
             "MIN_ORDER", str(min_order - 0.3)+"d0")),
         ])
 
-
 # }}}
 
 # {{{ test fancy codegen
@@ -211,15 +210,16 @@ def test_rk_codegen_fancy():
 
 # }}}
 
-
-def test_multirate_codegen():
+@pytest.mark.parametrize("min_order", [2,3,4,5
+    ])
+def test_multirate_codegen(min_order):
     from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
     from leap.method.ab.multirate.methods import methods
     from pytools import DictionaryWithDefault
 
-    order = DictionaryWithDefault(lambda x: 4)
+    orders = DictionaryWithDefault(lambda x: min_order)
 
-    stepper = TwoRateAdamsBashforthTimeStepper(methods['F'], order, 4)
+    stepper = TwoRateAdamsBashforthTimeStepper(methods['F'], orders, 4)
 
     code = stepper.generate()
 
@@ -241,20 +241,36 @@ def test_multirate_codegen():
                 component_id=component_id,
                 input_component_ids=("slow", "fast"),
                 input_component_names=("s", "f"))
-        freg = freg.register_codegen(func_name, "fortran",
+        if func_name=="<func>s2f":
+            freg = freg.register_codegen(func_name, "fortran",
                 f.CallCode("""
-                    ${result} = -2*${f} + ${s}
+                    ${result} = 0*${f} + 0*${s}
+                    """))
+        elif func_name=="<func>f2s":
+              freg = freg.register_codegen(func_name, "fortran",
+                f.CallCode("""
+                    ${result} = 0*${f} + 0*${s}
+                    """))
+        elif func_name=="<func>f2f":
+              freg = freg.register_codegen(func_name, "fortran",
+                f.CallCode("""
+                    ${result} = 2*${f} + 0*${s}
+                    """))
+        elif func_name=="<func>s2s":
+              freg = freg.register_codegen(func_name, "fortran",
+                f.CallCode("""
+                    ${result} = 0*${f} + ${s}
                     """))
 
     codegen = f.CodeGenerator(
-            'RKMethod',
+            'MRAB',
             ode_component_type_map={
                 "slow": f.ArrayType(
-                    (200,),
+                    (2,),
                     f.BuiltinType('real (kind=8)'),
                     ),
                 "fast": f.ArrayType(
-                    (300,),
+                    (2,),
                     f.BuiltinType('real (kind=8)'),
                     )
                 },
@@ -264,7 +280,19 @@ def test_multirate_codegen():
             ! use ModStuff
             """)
 
-    print(codegen(code))
+    #min_order = 4
+
+    code_str = codegen(code)
+
+    #g = open('corytest.f90', 'w')
+    #g.write(code_str)
+    #g.close()
+
+    run_fortran([
+         ("abmethod.f90", code_str),
+        ("test_ab.f90", read_file("test_mrab.f90").replace(
+            "MIN_ORDER", str(min_order - 0.3)+"d0")),
+        ])
 
 
 if __name__ == "__main__":
