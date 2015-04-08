@@ -461,7 +461,7 @@ class TimeIntegratorState(RecordWithoutPickling):
     @classmethod
     def from_cb(cls, cb, next_state):
         """
-        :arg cb: A :class:`NewCodeBuilder` instance
+        :arg cb: A :class:`CodeBuilder` instance
         :arg next_state: The name of the default next state
         """
         return cls(depends_on=cb.state_dependencies, next_state=next_state)
@@ -624,125 +624,6 @@ class ExecutionController(object):
 
 class CodeBuilder(object):
 
-    def __init__(self):
-        self.id_set = set()
-        self.generated_id_set = set()
-        self.var_set = set()
-        self.generated_var_set = set()
-
-        self._instructions = []
-        self.build_group = []
-
-    def fresh_var_name(self, prefix):
-        """Return a variable name that is guaranteed not to be in use and not
-        to be generated in the future."""
-        from pytools import generate_unique_names
-        for possible_var in generate_unique_names(str(prefix)):
-            if possible_var not in self.var_set \
-                    and possible_var not in self.generated_var_set:
-                self.generated_var_set.add(possible_var)
-                return possible_var
-
-    def fresh_insn_id(self, prefix):
-        """Return an instruction name that is guaranteed not to be in use and
-        not to be generated in the future."""
-        from pytools import generate_unique_names
-        for possible_id in generate_unique_names(prefix):
-            if possible_id not in self.id_set and possible_id not in \
-                    self.generated_id_set:
-                self.generated_id_set.add(possible_id)
-                return possible_id
-
-    def add_and_get_ids(self, *insns):
-        new_ids = []
-        for insn in insns:
-            set_attrs = {}
-            if not hasattr(insn, "id") or insn.id is None:
-                set_attrs["id"] = self.fresh_insn_id("insn")
-            else:
-                if insn.id in self.id_set:
-                    raise ValueError("duplicate ID")
-
-            if not hasattr(insn, "depends_on"):
-                set_attrs["depends_on"] = frozenset()
-
-            if set_attrs:
-                insn = insn.copy(**set_attrs)
-
-            self.build_group.append(insn)
-            new_ids.append(insn.id)
-
-            self.var_set |= insn.get_assignees()
-            # self.var_set |= insn.get_read_variables()
-
-        # For exception safety, only make state change at end.
-        self.id_set.update(new_ids)
-        return new_ids
-
-    def infer_single_writer_dependencies(self, exclude=[]):
-        """Change the current :attr:`build_group` to one with reader
-        dependencies added in situations where a only single instruction writes
-        one variable.
-        """
-
-        for element in exclude:
-            assert isinstance(element, str)
-
-        var_to_writers = {}
-        for insn in self.build_group:
-            for wvar in insn.get_assignees():
-                var_to_writers.setdefault(wvar, []).append(insn)
-
-        # toss out variables written more than once
-        for wvar in list(six.iterkeys(var_to_writers)):
-            if len(var_to_writers[wvar]) > 1:
-                del var_to_writers[wvar]
-
-        # toss out excluded variables
-        for v in exclude:
-            try:
-                del var_to_writers[v]
-            except KeyError:
-                pass
-
-        new_build_group = []
-
-        single_writer_vars = set(var_to_writers)
-
-        for insn in self.build_group:
-            new_deps = []
-            for v in insn.get_read_variables() & single_writer_vars:
-                var_writer, = var_to_writers[v]
-                new_deps.append(var_writer.id)
-
-            new_build_group.append(
-                    insn.copy(
-                        depends_on=insn.depends_on | frozenset(new_deps)))
-
-        self.build_group = new_build_group
-
-    def commit(self):
-        for insn in self.build_group:
-            for dep in insn.depends_on:
-                if dep not in self.id_set:
-                    raise ValueError("unknown dependency id: %s" % dep)
-
-        self._instructions.extend(self.build_group)
-        del self.build_group[:]
-
-    @property
-    def instructions(self):
-        if self.build_group:
-            raise ValueError("attempted to get instructions while "
-                    "build group is uncommitted")
-
-        return self._instructions
-
-# }}}
-
-
-class NewCodeBuilder(object):
-
     class Context(RecordWithoutPickling):
         """
         Attributes:
@@ -784,7 +665,7 @@ class NewCodeBuilder(object):
         conditional = If(condition=condition, then_depends_on=[],
                          else_depends_on=[])
         conditional_id = self._make_new_context_with_inst(conditional)
-        self._contexts.append(NewCodeBuilder.Context())
+        self._contexts.append(CodeBuilder.Context())
         yield
         # Update then_depends_on.
         then_context = self._contexts.pop()
@@ -799,7 +680,7 @@ class NewCodeBuilder(object):
         """
         conditional_id = one(self._contexts[-1].lead_instruction_ids)
         assert isinstance(self._instruction_map[conditional_id], If)
-        self._contexts.append(NewCodeBuilder.Context())
+        self._contexts.append(CodeBuilder.Context())
         yield
         else_context = self._contexts.pop()
         self._instruction_map[conditional_id] = \
@@ -854,7 +735,7 @@ class NewCodeBuilder(object):
         assert isinstance(inst, (Nop, If))
         inst_id = self._next_instruction_id()
         context = self._contexts[-1]
-        new_context = NewCodeBuilder.Context(
+        new_context = CodeBuilder.Context(
             lead_instruction_ids=[inst_id],
             used_variables=inst.get_read_variables())
         self._instruction_map[inst_id] = \
@@ -909,13 +790,15 @@ class NewCodeBuilder(object):
         self._add_inst_to_context(StateTransition(next_state))
 
     def __enter__(self):
-        self._contexts.append(NewCodeBuilder.Context())
+        self._contexts.append(CodeBuilder.Context())
         return self
 
     def __exit__(self, *ignored):
         self.fence()
         self.state_dependencies = list(self._contexts[-1].lead_instruction_ids)
         self.instructions = set(self._instruction_map.values())
+
+# }}}
 
 
 # {{{ graphviz / dot export

@@ -29,10 +29,10 @@ import pytest
 import sys
 
 from leap.vm.language import AssignExpression, YieldState
-from leap.vm.language import CodeBuilder, TimeIntegratorCode
+from leap.vm.language import TimeIntegratorCode
 from pymbolic import var
 
-from utils import execute_and_return_single_result
+from utils import execute_and_return_single_result, RawCodeBuilder
 
 
 @pytest.mark.parametrize(('obj, len_'), [(np.ones(0), 0),
@@ -40,7 +40,7 @@ from utils import execute_and_return_single_result
                                          (np.ones(2), 2),
                                          (6.0, 1)])
 def test_len(python_method_impl, obj, len_):
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_1', assignee='x',
                          expression=var('<builtin>len')(obj)),
@@ -58,7 +58,7 @@ def test_len(python_method_impl, obj, len_):
 
 @pytest.mark.parametrize(('value'), [0, float('nan')])
 def test_isnan(python_method_impl, value):
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_1', assignee='x',
                          expression=var('<builtin>isnan')(value)),
@@ -84,7 +84,7 @@ def test_norm(python_method_impl, order, test_vector):
             return abs(x)
         return np.linalg.norm(x, ord=order)
 
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_1', assignee='x',
                          expression=test_vector),
@@ -107,7 +107,7 @@ def test_norm(python_method_impl, order, test_vector):
 @pytest.mark.parametrize(('x, y'), [(1.0, 1.0j), (1.0j, 1.0),
                                     (1.0, 1.0), (1.0j, 1.0j)])
 def test_dot_product(python_method_impl, x, y):
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_1', assignee='x',
                          expression=var('<builtin>dot_product')(x, y)),

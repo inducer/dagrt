@@ -28,9 +28,11 @@ import sys
 import pytest
 
 from leap.vm.language import YieldState
-from leap.vm.language import CodeBuilder, TimeIntegratorCode
+from leap.vm.language import TimeIntegratorCode
 import leap.vm.codegen.fortran as f
 from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
+
+from utils import RawCodeBuilder
 
 
 skip = pytest.mark.skipif(True, reason="not fully implemented")
@@ -39,7 +41,7 @@ skip = pytest.mark.skipif(True, reason="not fully implemented")
 def test_basic_codegen():
     """Test whether the code generator returns a working method. The
     generated method always returns 0."""
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         YieldState(id='return', time=0, time_id='final',
                     expression=0, component_id='state',

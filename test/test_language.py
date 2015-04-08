@@ -25,7 +25,7 @@ THE SOFTWARE.
 """
 
 import sys
-from leap.vm.language import (NewCodeBuilder, TimeIntegratorCode)
+from leap.vm.language import (CodeBuilder, TimeIntegratorCode)
 from pymbolic import var
 
 from leap.vm.exec_numpy import NumpyInterpreter  # noqa
@@ -38,8 +38,8 @@ from utils import (  # noqa
 from utils import execute_and_return_single_result
 
 
-def test_NewCodeBuilder_yield(python_method_impl):
-    with NewCodeBuilder() as builder:
+def test_CodeBuilder_yield(python_method_impl):
+    with CodeBuilder() as builder:
         builder.yield_state(1, 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
         builder.state_dependencies, builder.instructions)
@@ -47,8 +47,8 @@ def test_NewCodeBuilder_yield(python_method_impl):
     assert result == 1
 
 
-def test_NewCodeBuilder_assign(python_method_impl):
-    with NewCodeBuilder() as builder:
+def test_CodeBuilder_assign(python_method_impl):
+    with CodeBuilder() as builder:
         builder(var('x'), 1)
         builder.yield_state(var('x'), 'x', 0, 'final')
     code = TimeIntegratorCode.create_with_steady_state(
@@ -57,8 +57,8 @@ def test_NewCodeBuilder_assign(python_method_impl):
     assert result == 1
 
 
-def test_NewCodeBuilder_condition(python_method_impl):
-    with NewCodeBuilder() as builder:
+def test_CodeBuilder_condition(python_method_impl):
+    with CodeBuilder() as builder:
         builder(var('x'), 1)
         with builder.if_(var('x'), '==', 1):
             builder(var('x'), 2)
@@ -69,8 +69,8 @@ def test_NewCodeBuilder_condition(python_method_impl):
     assert result == 2
 
 
-def test_NewCodeBuilder_condition_with_else(python_method_impl):
-    with NewCodeBuilder() as builder:
+def test_CodeBuilder_condition_with_else(python_method_impl):
+    with CodeBuilder() as builder:
         builder(var('x'), 1)
         with builder.if_(var('x'), '!=', 1):
             builder(var('x'), 2)
@@ -83,8 +83,8 @@ def test_NewCodeBuilder_condition_with_else(python_method_impl):
     assert result == 3
 
 
-def test_NewCodeBuilder_nested_condition(python_method_impl):
-    with NewCodeBuilder() as builder:
+def test_CodeBuilder_nested_condition(python_method_impl):
+    with CodeBuilder() as builder:
         builder(var('x'), 1)
         with builder.if_(var('x'), '==', 1):
             builder(var('x'), 2)
@@ -97,8 +97,8 @@ def test_NewCodeBuilder_nested_condition(python_method_impl):
     assert result == 3
 
 
-def test_NewCodeBuilder_nested_condition_with_else(python_method_impl):
-    with NewCodeBuilder() as builder:
+def test_CodeBuilder_nested_condition_with_else(python_method_impl):
+    with CodeBuilder() as builder:
         builder(var('x'), 1)
         with builder.if_(var('x'), '==', 1):
             builder(var('x'), 2)

@@ -277,14 +277,14 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
     def generate(self):
         from leap.vm.language import (TimeIntegratorCode, TimeIntegratorState,
-                                      NewCodeBuilder)
+                                      CodeBuilder)
 
         # Initialization state
-        with NewCodeBuilder(label="initialization") as cb_init:
+        with CodeBuilder(label="initialization") as cb_init:
             self.emit_initialization(cb_init)
 
         # Primary state
-        with NewCodeBuilder(label="primary") as cb_primary:
+        with CodeBuilder(label="primary") as cb_primary:
             self.emit_ab_method(cb_primary)
             self.emit_epilogue(cb_primary)
 
@@ -298,7 +298,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                 step_dep_on=cb_primary.state_dependencies)
 
         # Bootstrap state
-        with NewCodeBuilder(label="bootstrap") as cb_bootstrap:
+        with CodeBuilder(label="bootstrap") as cb_bootstrap:
             self.emit_rk_startup(cb_bootstrap)
             self.emit_epilogue(cb_bootstrap)
             with cb_bootstrap.if_(self.step, "==", bootstrap_steps):

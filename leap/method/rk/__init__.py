@@ -28,7 +28,7 @@ THE SOFTWARE.
 """
 
 from leap.method import Method, TimeStepUnderflow
-from leap.vm.language import NewCodeBuilder
+from leap.vm.language import CodeBuilder
 
 
 __doc__ = """
@@ -165,14 +165,14 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
 
         # Initialization.
 
-        with NewCodeBuilder("initialization") as cb:
+        with CodeBuilder("initialization") as cb:
             cb(self.last_rhs, self.call_rhs(self.t, self.state))
 
         cb_init = cb
 
         # Primary.
 
-        with NewCodeBuilder("primary") as cb:
+        with CodeBuilder("primary") as cb:
             local_last_rhs = var('last_rhs_' + self.component_id)
             rhss = []
             # {{{ stage loop

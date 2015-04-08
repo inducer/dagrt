@@ -27,7 +27,7 @@ THE SOFTWARE.
 import sys
 
 from leap.vm.language import AssignExpression, YieldState
-from leap.vm.language import CodeBuilder, TimeIntegratorCode
+from leap.vm.language import TimeIntegratorCode
 from leap.vm.codegen import PythonCodeGenerator, CodeGenerationError
 from pymbolic import var
 from leap.vm.codegen.ir import BasicBlock, SymbolTable, Function
@@ -36,11 +36,13 @@ from leap.vm.codegen.structured_ir import SingleNode, BlockNode, IfThenNode, \
 from leap.vm.codegen.ir2structured_ir import StructuralExtractor
 from pytools import one
 
+from utils import RawCodeBuilder
+
 
 def test_circular_dependency_detection():
     """Check that the code generator detects that there is a circular
     dependency."""
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign', assignee='<state>y', expression=1,
                          depends_on=['assign2']),
@@ -86,9 +88,9 @@ def test_missing_dependency_detection():
 
 def test_missing_state_detection():
     """Check that the code generator detects there is a missing state."""
-    from leap.vm.language import NewCodeBuilder
+    from leap.vm.language import CodeBuilder
 
-    with NewCodeBuilder(label="state_1") as cb:
+    with CodeBuilder(label="state_1") as cb:
         cb.state_transition("state_2")
 
     code = TimeIntegratorCode.create_with_steady_state(

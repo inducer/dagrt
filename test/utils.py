@@ -204,4 +204,67 @@ class TemporaryDirectory(object):
 # }}}
 
 
+# {{{ low-level code building utility
+
+class RawCodeBuilder(object):
+
+    def __init__(self):
+        self.id_set = set()
+        self.generated_id_set = set()
+
+        self._instructions = []
+        self.build_group = []
+
+    def fresh_insn_id(self, prefix):
+        """Return an instruction name that is guaranteed not to be in use and
+        not to be generated in the future."""
+        from pytools import generate_unique_names
+        for possible_id in generate_unique_names(prefix):
+            if possible_id not in self.id_set and possible_id not in \
+                    self.generated_id_set:
+                self.generated_id_set.add(possible_id)
+                return possible_id
+
+    def add_and_get_ids(self, *insns):
+        new_ids = []
+        for insn in insns:
+            set_attrs = {}
+            if not hasattr(insn, "id") or insn.id is None:
+                set_attrs["id"] = self.fresh_insn_id("insn")
+            else:
+                if insn.id in self.id_set:
+                    raise ValueError("duplicate ID")
+
+            if not hasattr(insn, "depends_on"):
+                set_attrs["depends_on"] = frozenset()
+
+            if set_attrs:
+                insn = insn.copy(**set_attrs)
+
+            self.build_group.append(insn)
+            new_ids.append(insn.id)
+
+        # For exception safety, only make state change at end.
+        self.id_set.update(new_ids)
+        return new_ids
+
+    def commit(self):
+        for insn in self.build_group:
+            for dep in insn.depends_on:
+                if dep not in self.id_set:
+                    raise ValueError("unknown dependency id: %s" % dep)
+
+        self._instructions.extend(self.build_group)
+        del self.build_group[:]
+
+    @property
+    def instructions(self):
+        if self.build_group:
+            raise ValueError("attempted to get instructions while "
+                    "build group is uncommitted")
+
+        return self._instructions
+
+# }}}
+
 # vim: foldmethod=marker
