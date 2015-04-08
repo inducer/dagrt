@@ -11,7 +11,8 @@ program test_mrabmethod
   type(leap_state_type), target :: state
   type(leap_state_type), pointer :: state_ptr
 
-  real*8, dimension(2) :: initial_condition, true_sol_fast, true_sol_slow
+  real*8, dimension(2) :: initial_condition 
+  real*8, dimension(1) :: true_sol_fast, true_sol_slow
   integer, dimension(2) :: ntrips
 
   integer run_count
@@ -31,8 +32,8 @@ program test_mrabmethod
 
   state_ptr => state
 
-  initial_condition(1) = 2
-  initial_condition(2) = 2.3
+  initial_condition(1) = (exp(0d0))*cos(0d0) ! fast
+  initial_condition(2) = (exp(0d0))*sin(0d0) ! slow
 
   ntrips(1) = 20
   ntrips(2) = 50
@@ -42,23 +43,23 @@ program test_mrabmethod
 
     call timestep_initialize( &
       leap_state=state_ptr, &
-      state_slow=initial_condition, &
-      state_fast=initial_condition, &
+      state_slow=initial_condition(2:2), &
+      state_fast=initial_condition(1:1), &
       leap_t=0d0, &
       leap_dt=dt_values(irun))
 
-    do istep = 1,ntrips(irun)
+    do
       call timestep_run(leap_state=state_ptr)
-      write(*,*) state%ret_state_fast, state%ret_state_slow
-    enddo
+      if (state%ret_time_fast.ge.t_fin) then
+        exit
+      endif
+    end do 
 
-    true_sol_fast = initial_condition * (exp(2*state%ret_time_fast))
-    true_sol_slow = initial_condition * (exp(state%ret_time_slow))
+    true_sol_fast = (exp(state%ret_time_fast))*cos(state%ret_time_fast)
+    true_sol_slow = (exp(state%ret_time_slow))*sin(state%ret_time_slow)
 
     error_slow(irun) = sqrt(sum((true_sol_slow-state%ret_state_slow)**2))
     error_fast(irun) = sqrt(sum((true_sol_fast-state%ret_state_fast)**2))
-
-    write(*,*) error_fast
 
     call timestep_shutdown(leap_state=state_ptr)
     write(*,*) 'done'
@@ -70,13 +71,13 @@ program test_mrabmethod
 
   write(*,*) 'estimated order slow:', est_order_slow
   if (est_order_slow < min_order) then
-    write(stderr,*) 'ERROR: achieved order too low:', est_order, ' < ', &
+    write(stderr,*) 'ERROR: achieved order too low:', est_order_slow, ' < ', &
         min_order
   endif
 
   write(*,*) 'estimated order fast:', est_order_fast
   if (est_order_fast < min_order) then
-    write(stderr,*) 'ERROR: achieved order too low:', est_order, ' < ', &
+    write(stderr,*) 'ERROR: achieved order too low:', est_order_fast, ' < ', &
         min_order
   endif
 

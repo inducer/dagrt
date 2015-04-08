@@ -244,33 +244,33 @@ def test_multirate_codegen(min_order):
         if func_name=="<func>s2f":
             freg = freg.register_codegen(func_name, "fortran",
                 f.CallCode("""
-                    ${result} = 0*${f} + 0*${s}
+                    ${result} = (sin(2*${t}) - 1)*${s} 
                     """))
         elif func_name=="<func>f2s":
               freg = freg.register_codegen(func_name, "fortran",
                 f.CallCode("""
-                    ${result} = 0*${f} + 0*${s}
+                    ${result} = (sin(2*${t}) + 1)*${f} 
                     """))
         elif func_name=="<func>f2f":
               freg = freg.register_codegen(func_name, "fortran",
                 f.CallCode("""
-                    ${result} = 2*${f} + 0*${s}
+                    ${result} = cos(2*${t})*${f}
                     """))
         elif func_name=="<func>s2s":
               freg = freg.register_codegen(func_name, "fortran",
                 f.CallCode("""
-                    ${result} = 0*${f} + ${s}
+                    ${result} = -cos(2*${t})*${s}
                     """))
 
     codegen = f.CodeGenerator(
             'MRAB',
             ode_component_type_map={
                 "slow": f.ArrayType(
-                    (2,),
+                    (1,),
                     f.BuiltinType('real (kind=8)'),
                     ),
                 "fast": f.ArrayType(
-                    (2,),
+                    (1,),
                     f.BuiltinType('real (kind=8)'),
                     )
                 },
@@ -280,20 +280,16 @@ def test_multirate_codegen(min_order):
             ! use ModStuff
             """)
 
-    #min_order = 4
-
     code_str = codegen(code)
 
-    #g = open('corytest.f90', 'w')
-    #g.write(code_str)
-    #g.close()
+    with open("abmethod.f90", "wt") as outf:
+        outf.write(code_str)
 
     run_fortran([
          ("abmethod.f90", code_str),
-        ("test_ab.f90", read_file("test_mrab.f90").replace(
+        ("test_mrab.f90", read_file("test_mrab.f90").replace(
             "MIN_ORDER", str(min_order - 0.3)+"d0")),
         ])
-
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
