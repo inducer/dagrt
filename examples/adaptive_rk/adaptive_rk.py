@@ -24,7 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from leap.vm.language import TimeIntegratorCode, NewCodeBuilder
+from leap.vm.language import TimeIntegratorCode, CodeBuilder
 from pymbolic import var
 
 
@@ -60,7 +60,7 @@ def adaptive_rk_method(tol):
         return Min(((tol / Max((1.0e-16, norm(err)))) ** (1 / 2), 2.0))
 
     # Code for the main state
-    with NewCodeBuilder(label="adaptrk") as cb:
+    with CodeBuilder(label="adaptrk") as cb:
         # Euler
         cb(y_e, y + dt * g(t, y))
 

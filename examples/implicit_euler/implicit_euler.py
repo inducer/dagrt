@@ -25,7 +25,7 @@ THE SOFTWARE.
 """
 
 from leap.method import Method
-from leap.vm.language import TimeIntegratorCode, NewCodeBuilder
+from leap.vm.language import TimeIntegratorCode, CodeBuilder
 from pymbolic import var
 from pymbolic.primitives import CallWithKwargs
 
@@ -48,7 +48,7 @@ class ImplicitEulerMethod(Method):
         """Return code that implements the implicit Euler method for the single
         state component supported."""
 
-        with NewCodeBuilder(label="primary") as cb:
+        with CodeBuilder(label="primary") as cb:
             self._make_primary(cb)
 
         code = TimeIntegratorCode.create_with_steady_state(

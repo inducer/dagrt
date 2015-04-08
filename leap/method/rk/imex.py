@@ -175,15 +175,15 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
                           state=self.state.name)), "solve_component")
 
     def generate(self, solver_hook):
-        from leap.vm.language import NewCodeBuilder, TimeIntegratorCode
+        from leap.vm.language import CodeBuilder, TimeIntegratorCode
 
-        with NewCodeBuilder(label="initialization") as cb_init:
+        with CodeBuilder(label="initialization") as cb_init:
             cb_init.assign(self.rhs_expl, self.call_rhs(
                     self.t, self.state, self.rhs_expl_func))
             cb_init.assign(self.rhs_impl, self.call_rhs(
                     self.t, self.state, self.rhs_impl_func))
 
-        with NewCodeBuilder(label="primary") as cb_primary:
+        with CodeBuilder(label="primary") as cb_primary:
             self.emit_primary(cb_primary)
 
         from leap.vm.implicit import replace_AssignSolved

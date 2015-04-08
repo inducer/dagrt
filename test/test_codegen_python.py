@@ -32,11 +32,13 @@ from leap.vm.language import CodeBuilder, TimeIntegratorCode
 from leap.vm.codegen import PythonCodeGenerator
 from pymbolic import var
 
+from utils import RawCodeBuilder
+
 
 def test_basic_codegen():
     """Test whether the code generator returns a working method. The
     generated method always returns 0."""
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         YieldState(id='return', time=0, time_id='final',
                     expression=0, component_id='<state>',
@@ -62,7 +64,7 @@ def test_basic_codegen():
 
 def test_basic_conditional_codegen():
     """Test whether the code generator generates branches properly."""
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='then_branch', assignee='<state>y', expression=1),
         AssignExpression(id='else_branch', assignee='<state>y', expression=0),
@@ -89,7 +91,7 @@ def test_basic_conditional_codegen():
 def test_basic_assign_rhs_codegen():
     """Test whether the code generator generates RHS evaluation code
     properly."""
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_rhs1',
                          assignee='<state>y',
@@ -127,7 +129,7 @@ def test_basic_assign_rhs_codegen():
 
 def test_basic_raise_codegen():
     """Test code generation of the Raise instruction."""
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     from leap.method import TimeStepUnderflow
     cbuild.add_and_get_ids(Raise(TimeStepUnderflow, "underflow", id="raise"))
     cbuild.commit()
@@ -153,7 +155,7 @@ def test_basic_raise_codegen():
 
 def test_basic_fail_step_codegen():
     """Test code generation of the FailStep instruction."""
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(FailStep(id="fail"))
     cbuild.commit()
     code = TimeIntegratorCode.create_with_init_and_step(
@@ -175,7 +177,7 @@ def test_basic_fail_step_codegen():
 
 def test_local_name_distinctness():
     """Test whether the code generator gives locals distinct names."""
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_y^', assignee='y^', expression=1),
         AssignExpression(id='assign_y*', assignee='y*', expression=0),
@@ -198,7 +200,7 @@ def test_local_name_distinctness():
 
 def test_global_name_distinctness():
     """Test whether the code generator gives globals distinct names."""
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_y^', assignee='<p>y^', expression=1),
         AssignExpression(id='assign_y*', assignee='<p>y*', expression=0),
@@ -221,7 +223,7 @@ def test_global_name_distinctness():
 
 def test_function_name_distinctness():
     """Test whether the code generator gives functions distinct names."""
-    cbuild = CodeBuilder()
+    cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         YieldState(id='return', time=0, time_id='final',
             expression=var('<func>y^')() + var('<func>y*')(),
@@ -242,12 +244,12 @@ def test_function_name_distinctness():
 
 
 def test_state_transitions(python_method_impl):
-    from leap.vm.language import NewCodeBuilder, TimeIntegratorState
+    from leap.vm.language import CodeBuilder, TimeIntegratorState
 
-    with NewCodeBuilder(label="state_1") as builder_1:
+    with CodeBuilder(label="state_1") as builder_1:
         builder_1(var("<state>x"), 1)
         builder_1.state_transition("state_2")
-    with NewCodeBuilder(label="state_2") as builder_2:
+    with CodeBuilder(label="state_2") as builder_2:
         builder_2.yield_state(var("<state>x"), 'x', 0, 'final')
 
     code = TimeIntegratorCode(
@@ -267,10 +269,9 @@ def test_state_transitions(python_method_impl):
 
 
 def get_IfThenElse_test_code_and_expected_result():
-    from leap.vm.language import NewCodeBuilder
     from leap.vm.expression import IfThenElse
 
-    with NewCodeBuilder(label="primary") as cb:
+    with CodeBuilder(label="primary") as cb:
         cb(var("c1"), IfThenElse(True, 0, 1))
         cb(var("c2"), IfThenElse(False, 0, 1))
         cb(var("c3"), IfThenElse(IfThenElse(True, True, False), 0, 1))

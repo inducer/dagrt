@@ -109,16 +109,16 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         self.dt = var('<dt>')
 
     def generate(self):
-        from leap.vm.language import TimeIntegratorCode, NewCodeBuilder
+        from leap.vm.language import TimeIntegratorCode, CodeBuilder
 
         # Initialization
-        with NewCodeBuilder(label="initialization") as cb_init:
+        with CodeBuilder(label="initialization") as cb_init:
             cb_init(self.step, 1)
 
         steps = self.order
 
         # Primary
-        with NewCodeBuilder(label="primary") as cb_primary:
+        with CodeBuilder(label="primary") as cb_primary:
             cb_primary(self.rhs, self.eval_rhs(self.t, self.state))
             cb_primary.fence()
             history = self.history + [self.rhs]
@@ -141,7 +141,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                 step_dep_on=cb_primary.state_dependencies)
 
         # Bootstrap
-        with NewCodeBuilder(label="bootstrap") as cb_bootstrap:
+        with CodeBuilder(label="bootstrap") as cb_bootstrap:
             self.rk_bootstrap(cb_bootstrap)
             cb_bootstrap(self.t, self.t + self.dt)
             cb_bootstrap.yield_state(expression=self.state,
