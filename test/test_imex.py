@@ -46,6 +46,8 @@ _component_id = "y"
     [KapsProblem(epsilon=0.9), KennedyCarpenterIMEXARK4(_component_id), 4],
     ])
 def test_convergence(python_method_impl, problem, method, expected_order):
+    pytest.importorskip("scipy")
+
     sgen = ScipySolverGenerator(*method.implicit_expression())
     solver_func = sgen.get_compiled_solver()
     code = method.generate(sgen)
@@ -99,6 +101,7 @@ def test_convergence(python_method_impl, problem, method, expected_order):
     [KapsProblem(epsilon=0.001), KennedyCarpenterIMEXARK4],
     ])
 def test_adaptive(python_method_impl, problem, method):
+    pytest.importorskip("scipy")
 
     t_start = problem.t_start
     t_end = problem.t_end

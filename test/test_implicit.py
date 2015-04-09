@@ -28,14 +28,20 @@ from leap.vm.implicit import ScipySolverGenerator
 from leap.vm.expression import parse
 import numpy as np
 
+import pytest
+
 
 def test_ScipySolverGenerator_code_generation():
+    pytest.importorskip("scipy")
+
     gen = ScipySolverGenerator(parse("z**2 - y"), "z")
     func = gen.get_compiled_solver()
     assert np.allclose(func(1, 2), np.sqrt(2))
 
 
 def test_ScipySolverGenerator_code_generation_with_function_calls():
+    pytest.importorskip("scipy")
+
     gen = ScipySolverGenerator(parse("`<func>f`(x, y=x)"), "x")
     func = gen.get_compiled_solver()
 
@@ -46,18 +52,24 @@ def test_ScipySolverGenerator_code_generation_with_function_calls():
 
 
 def test_ScipySolverGenerator_code_generation_with_builtins():
+    pytest.importorskip("scipy")
+
     gen = ScipySolverGenerator(parse("`<builtin>dot_product`(x, x) - 1"), "x")
     func = gen.get_compiled_solver()
     assert np.allclose(func(-0.9), -1)
 
 
 def test_ScipySolverGenerator_code_generation_with_vectors():
+    pytest.importorskip("scipy")
+
     gen = ScipySolverGenerator(parse("x"), "x")
     func = gen.get_compiled_solver()
     assert np.allclose(func(np.array([-0.9, -0.1])), np.array([0.0, 0.0]))
 
 
 def test_ScipySolverGenerator_callback():
+    pytest.importorskip("scipy")
+
     gen = ScipySolverGenerator(parse("x + `<func>f`(x, b)"), "x")
     expr = parse("`<func>f`(y, b) + y")
     assert gen(expr, "y", 6) == parse("`<func>solver`(6, `<func>f`, b)")
