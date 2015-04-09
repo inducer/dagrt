@@ -35,8 +35,8 @@ program test_mrabmethod
   initial_condition(1) = (exp(0d0))*cos(0d0) ! fast
   initial_condition(2) = (exp(0d0))*sin(0d0) ! slow
 
-  ntrips(1) = 20
-  ntrips(2) = 50
+  ntrips(1) = 200
+  ntrips(2) = 500
 
   do irun = 1,run_count
     dt_values(irun) = t_fin/ntrips(irun)
@@ -62,7 +62,7 @@ program test_mrabmethod
     error_fast(irun) = sqrt(sum((true_sol_fast-state%ret_state_fast)**2))
 
     call timestep_shutdown(leap_state=state_ptr)
-    write(*,*) 'done'
+    write(*,*) 'done', dt_values(irun), error_slow(irun), error_fast(irun)
   enddo
 
   min_order = MIN_ORDER
