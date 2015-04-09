@@ -148,6 +148,7 @@ def test_rk_codegen(min_order, stepper):
 
 # }}}
 
+
 # {{{ test fancy codegen
 
 def test_rk_codegen_fancy():
@@ -213,8 +214,8 @@ def test_rk_codegen_fancy():
 
 # }}}
 
-@pytest.mark.parametrize("min_order", [2,3,4,5
-    ])
+
+@pytest.mark.parametrize("min_order", [2, 3, 4, 5])
 def test_multirate_codegen(min_order):
     from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
     from leap.method.ab.multirate.methods import methods
@@ -244,26 +245,23 @@ def test_multirate_codegen(min_order):
                 component_id=component_id,
                 input_component_ids=("slow", "fast"),
                 input_component_names=("s", "f"))
-        if func_name=="<func>s2f":
-            freg = freg.register_codegen(func_name, "fortran",
-                f.CallCode("""
-                    ${result} = (sin(2*${t}) - 1)*${s} 
-                    """))
-        elif func_name=="<func>f2s":
-              freg = freg.register_codegen(func_name, "fortran",
-                f.CallCode("""
-                    ${result} = (sin(2*${t}) + 1)*${f} 
-                    """))
-        elif func_name=="<func>f2f":
-              freg = freg.register_codegen(func_name, "fortran",
-                f.CallCode("""
-                    ${result} = cos(2*${t})*${f}
-                    """))
-        elif func_name=="<func>s2s":
-              freg = freg.register_codegen(func_name, "fortran",
-                f.CallCode("""
-                    ${result} = -cos(2*${t})*${s}
-                    """))
+
+        freg = freg.register_codegen("<func>s2f", "fortran",
+            f.CallCode("""
+                ${result} = (sin(2*${t}) - 1)*${s}
+                """))
+        freg = freg.register_codegen("<func>f2s", "fortran",
+          f.CallCode("""
+              ${result} = (sin(2*${t}) + 1)*${f}
+              """))
+        freg = freg.register_codegen("<func>f2f", "fortran",
+          f.CallCode("""
+              ${result} = cos(2*${t})*${f}
+              """))
+        freg = freg.register_codegen("<func>s2s", "fortran",
+          f.CallCode("""
+              ${result} = -cos(2*${t})*${s}
+              """))
 
     codegen = f.CodeGenerator(
             'MRAB',
@@ -285,11 +283,12 @@ def test_multirate_codegen(min_order):
 
     code_str = codegen(code)
 
-    with open("abmethod.f90", "wt") as outf:
-        outf.write(code_str)
+    if 0:
+        with open("abmethod.f90", "wt") as outf:
+            outf.write(code_str)
 
     run_fortran([
-         ("abmethod.f90", code_str),
+        ("abmethod.f90", code_str),
         ("test_mrab.f90", read_file("test_mrab.f90").replace(
             "MIN_ORDER", str(min_order - 0.3)+"d0")),
         ])
