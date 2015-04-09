@@ -246,22 +246,22 @@ def test_multirate_codegen(min_order):
                 input_component_ids=("slow", "fast"),
                 input_component_names=("s", "f"))
 
-        freg = freg.register_codegen("<func>s2f", "fortran",
-            f.CallCode("""
-                ${result} = (sin(2*${t}) - 1)*${s}
-                """))
-        freg = freg.register_codegen("<func>f2s", "fortran",
-          f.CallCode("""
-              ${result} = (sin(2*${t}) + 1)*${f}
-              """))
-        freg = freg.register_codegen("<func>f2f", "fortran",
-          f.CallCode("""
-              ${result} = cos(2*${t})*${f}
-              """))
-        freg = freg.register_codegen("<func>s2s", "fortran",
-          f.CallCode("""
-              ${result} = -cos(2*${t})*${s}
-              """))
+    freg = freg.register_codegen("<func>s2f", "fortran",
+        f.CallCode("""
+            ${result} = (sin(2*${t}) - 1)*${s}
+            """))
+    freg = freg.register_codegen("<func>f2s", "fortran",
+      f.CallCode("""
+          ${result} = (sin(2*${t}) + 1)*${f}
+          """))
+    freg = freg.register_codegen("<func>f2f", "fortran",
+      f.CallCode("""
+          ${result} = cos(2*${t})*${f}
+          """))
+    freg = freg.register_codegen("<func>s2s", "fortran",
+      f.CallCode("""
+          ${result} = -cos(2*${t})*${s}
+          """))
 
     codegen = f.CodeGenerator(
             'MRAB',
