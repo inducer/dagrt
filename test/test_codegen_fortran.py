@@ -189,7 +189,8 @@ def test_rk_codegen_fancy():
             ode_component_type_map={
                 component_id: f.ArrayType(
                     (2,),
-                    f.BuiltinType('real (kind=8)'),
+                    f.PointerType(
+                    f.BuiltinType('real (kind=8)')),
                     )
                 },
             function_registry=freg,
