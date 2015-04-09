@@ -81,7 +81,8 @@ def run_fortran(sources):
         stdout_data, stderr_data = p.communicate()
 
         if stderr_data:
-            raise RuntimeError("Fortran code has non-empty stderr:\n"+stderr_data)
+            raise RuntimeError("Fortran code has non-empty stderr:\n" +
+                               stderr_data.decode('ascii'))
 
         if stdout_data:
             print("Fortran code said this on stdout: -----------------------------",
