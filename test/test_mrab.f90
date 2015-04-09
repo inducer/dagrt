@@ -21,12 +21,12 @@ program test_mrabmethod
 
   real*8, dimension(run_count):: dt_values, error_slow, error_fast
 
-  real*8 est_order, min_order, est_order_fast, est_order_slow
+  real*8 min_order, est_order_fast, est_order_slow
 
   integer stderr
   parameter(stderr=0)
 
-  integer istep, irun
+  integer irun
 
   ! start code ----------------------------------------------------------------
 
