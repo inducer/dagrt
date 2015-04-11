@@ -428,6 +428,8 @@ class ArrayType(TypeBase):
 
     def __init__(self, dimension, element_type, index_vars=None):
         self.element_type = element_type
+        if isinstance(dimension, str):
+            dimension = tuple(d.strip() for d in dimension.split(","))
         self.dimension = tuple(str(i) for i in dimension)
 
         if isinstance(index_vars, str):
