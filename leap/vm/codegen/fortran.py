@@ -670,6 +670,15 @@ class StructureType(TypeBase):
                         member_name=member_name),
                     index_expr_map)
 
+    def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
+        for member_name, member_type in self.members:
+            member_type.emit_variable_deallocate(
+                    code_generator,
+                    '{expr}%{member_name}'.format(
+                        expr=fortran_expr,
+                        member_name=member_name),
+                    index_expr_map)
+
     def emit_assignment(self, code_generator, fortran_expr, rhs_expr,
             index_expr_map):
         for name, type in self.members:
