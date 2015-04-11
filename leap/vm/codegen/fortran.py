@@ -1276,34 +1276,38 @@ class CodeGenerator(StructuredCodeGenerator):
         self.current_function = None
 
     def emit_shutdown(self):
-        with FortranSubroutineEmitter(
-                self.emitter,
-                'shutdown', self.extra_arguments+('leap_state',), self):
+        args = self.extra_arguments + ('leap_state',)
 
-            self.emit('implicit none')
-            self.emit('')
-            self.emit('type(leap_state_type), pointer :: leap_state')
-            self.emit('')
-            self.emit_extra_arg_decl()
+        function_name = 'shutdown'
+        state_id = "<leap>"+function_name
+        self.emit_def_begin(function_name, args, state_id=state_id)
 
-            from leap.vm.codegen.data import ODEComponent
+        self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
+        self.declaration_emitter('')
 
-            for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
-                self.emit_variable_deinit(sym, sym_kind)
+        self.current_function = state_id
 
-            for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
-                if isinstance(sym_kind, ODEComponent):
-                    fortran_name = self.name_manager[sym]
-                    with FortranIfEmitter(
-                            self.emitter,
-                            'associated({id})'.format(id=fortran_name), self):
-                        self.emit(
-                                "write(leap_stderr,*) 'leaked reference in {name}'"
-                                .format(name=fortran_name))
-                        self.emit(
-                                "write(leap_stderr,*) 'remaining refcount ', {name}"
-                                .format(name=self.name_manager.name_refcount(sym)))
-                        #self.emit('stop')
+        from leap.vm.codegen.data import ODEComponent
+
+        for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
+            self.emit_variable_deinit(sym, sym_kind)
+
+        for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
+            if isinstance(sym_kind, ODEComponent):
+                fortran_name = self.name_manager[sym]
+                with FortranIfEmitter(
+                        self.emitter,
+                        'associated({id})'.format(id=fortran_name), self):
+                    self.emit(
+                            "write(leap_stderr,*) 'leaked reference in {name}'"
+                            .format(name=fortran_name))
+                    self.emit(
+                            "write(leap_stderr,*) 'remaining refcount ', {name}"
+                            .format(name=self.name_manager.name_refcount(sym)))
+
+        self.emit_def_end(function_name)
+
+        self.current_function = None
 
     def emit_run_step(self, dag):
         args = self.extra_arguments + ('leap_state',)
