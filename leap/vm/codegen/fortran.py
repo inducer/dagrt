@@ -447,6 +447,9 @@ class ArrayType(TypeBase):
 
         if not isinstance(element_type, TypeBase):
             raise TypeError("element_type should be a subclass of TypeBase")
+        if isinstance(element_type, PointerType):
+            raise TypeError("Arrays of pointers are not allowed in Fortran. "
+                    "You must declare an intermediate StructureType instead.")
 
         self.index_vars = index_vars
 
