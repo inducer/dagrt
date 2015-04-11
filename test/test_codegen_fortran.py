@@ -188,10 +188,16 @@ def test_rk_codegen_fancy():
             'RKMethod',
             ode_component_type_map={
                 component_id: f.ArrayType(
-                    (2,),
-                    f.PointerType(
-                    f.BuiltinType('real (kind=8)')),
-                    )
+                    "region%n_grids",
+                    index_vars="igrid",
+                    element_type=f.StructureType(
+                        "sim_grid_state_type",
+                        (
+                            ("conserved_var", f.PointerType(
+                                f.ArrayType(
+                                    "region%n_grid_dofs(igrid)",
+                                    f.BuiltinType('real (kind=8)')))),
+                        )))
                 },
             function_registry=freg,
             module_preamble="""
@@ -293,6 +299,7 @@ def test_multirate_codegen(min_order):
         ("test_mrab.f90", read_file("test_mrab.f90").replace(
             "MIN_ORDER", str(min_order - 0.3)+"d0")),
         ])
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:

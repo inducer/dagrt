@@ -2,11 +2,11 @@ module sim_types
 
     type region_type
         integer nconserved_vars
-        integer state_size
+        integer n_grids
+        integer, pointer, dimension(:) :: n_grid_dofs
     end type
 
-    type sim_state_type
-        real (kind=8), pointer, dimension(:,:) :: conserved_var
-        real (kind=8), pointer, dimension(:,:) :: conserved_var_aux
+    type sim_grid_state_type
+        real (kind=8), pointer, dimension(:) :: conserved_var
     end type
 end module
