@@ -27,7 +27,7 @@ THE SOFTWARE.
 import sys
 import pytest
 
-from leap.vm.language import AssignExpression, If, YieldState, FailStep, Raise
+from leap.vm.language import AssignExpression, YieldState, FailStep, Raise, Nop
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
 from leap.vm.codegen import PythonCodeGenerator
 from pymbolic import var
@@ -66,10 +66,11 @@ def test_basic_conditional_codegen():
     """Test whether the code generator generates branches properly."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(id='then_branch', assignee='<state>y', expression=1),
-        AssignExpression(id='else_branch', assignee='<state>y', expression=0),
-        If(id='branch', condition=True, then_depends_on=['then_branch'],
-            else_depends_on=['else_branch']),
+        AssignExpression(id='then_branch', assignee='<state>y', expression=1,
+                         condition=True),
+        AssignExpression(id='else_branch', assignee='<state>y', expression=0,
+                         condition=False),
+        Nop(id='branch', depends_on=['then_branch', 'else_branch']),
         YieldState(id='return', time=0, time_id='final',
             expression=var('<state>y'), component_id='<state>',
         depends_on=['branch']))

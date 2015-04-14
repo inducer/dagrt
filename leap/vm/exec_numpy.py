@@ -182,6 +182,9 @@ class NumpyInterpreter(object):
 
         self.functions[name] = f
 
+    def evaluate_condition(self, insn):
+        return self.eval_mapper(insn.condition)
+
     # {{{ execution methods
 
     def exec_AssignSolved(self, insn):
@@ -202,12 +205,6 @@ class NumpyInterpreter(object):
 
     def exec_FailStep(self, insn):
         raise FailStepException()
-
-    def exec_If(self, insn):
-        if self.eval_mapper(insn.condition):
-            return None, insn.then_depends_on
-        else:
-            return None, insn.else_depends_on
 
     def exec_Nop(self, insn):
         pass
@@ -286,6 +283,12 @@ class StepMatrixFinder(object):
                 step_matrix[i][j] = DifferentiationMapper(iv)(self.context[v])
         return step_matrix
 
+    def evaluate_condition(self, insn):
+        if insn.condition is not True:
+            raise RuntimeError("matrices don't represent conditionals well, "
+                "so StepMatrixFinder cannot support them")
+        return True
+
     # {{{ exec methods
 
     def exec_AssignExpression(self, insn):
@@ -302,10 +305,6 @@ class StepMatrixFinder(object):
 
     def exec_FailStep(self, insn):
         raise FailStepException()
-
-    def exec_If(self, insn):
-        raise RuntimeError("matrices don't represent conditionals well, "
-                "so StepMatrixFinder cannot support them")
 
     def exec_StateTransition(self, insn):
         pass

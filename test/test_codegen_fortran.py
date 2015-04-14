@@ -70,6 +70,7 @@ def run_fortran(sources):
 
             with open(join(tmpdir, name), "w") as srcf:
                 srcf.write(contents)
+                print(contents)
 
         from subprocess import check_call, Popen, PIPE
         check_call(

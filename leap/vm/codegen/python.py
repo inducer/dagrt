@@ -26,7 +26,7 @@ from .expressions import PythonExpressionMapper
 from .codegen_base import StructuredCodeGenerator
 from .utils import (wrap_line_base, exec_in_new_namespace,
                     KeyToUniqueNameMap)
-from .ir import YieldStateInst
+# from .ir import YieldStateInst
 from pytools.py_codegen import (
         PythonCodeGenerator as PythonEmitter,
         PythonFunctionGenerator as PythonFunctionEmitter,
@@ -192,40 +192,29 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         from .analysis import verify_code
         verify_code(dag)
 
-        from .dag2ir import InstructionDAGExtractor, ControlFlowGraphAssembler
-        from .optimization import Optimizer
-        from .ir2structured_ir import StructuralExtractor
-
-        dag_extractor = InstructionDAGExtractor()
-        assembler = ControlFlowGraphAssembler()
-        optimizer = Optimizer()
-        extract_structure = StructuralExtractor()
+        from .ast_ import create_ast_from_state
 
         self.begin_emit(dag)
-        for state_name, state in six.iteritems(dag.states):
-            code = dag_extractor(dag.instructions, state.depends_on)
-            function = assembler(state_name, code, state.depends_on)
-            if optimize:
-                function = optimizer(function)
-            self._pre_lower(function)
-            control_tree = extract_structure(function)
-            self.lower_function(state_name, control_tree)
-
+        for state_name in six.iterkeys(dag.states):
+            ast = create_ast_from_state(dag, state_name, optimize)
+            self._pre_lower(ast)
+            self.lower_function(state_name, ast)
         self.finish_emit(dag)
 
         return self.get_code()
 
-    def _pre_lower(self, function):
+    def _pre_lower(self, ast):
         self._has_yield_inst = False
-        for block in function:
-            for inst in block:
-                if isinstance(inst, YieldStateInst):
-                    self._has_yield_inst = True
-                    return
+        from leap.vm.language import YieldState
+        from .ast_ import get_instructions_in_ast
+        for inst in get_instructions_in_ast(ast):
+            if isinstance(inst, YieldState):
+                self._has_yield_inst = True
+                return
 
-    def lower_function(self, function_name, control_tree):
+    def lower_function(self, function_name, ast):
         self.emit_def_begin(function_name)
-        self.lower_node(control_tree)
+        self.lower_ast(ast)
         self.emit_def_end()
 
     def get_class(self, code):
@@ -364,13 +353,6 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         self._class_emitter.incorporate(self._emitter)
         del self._emitter
 
-    def emit_while_loop_begin(self, expr):
-        self._emit('while {expr}:'.format(expr=self._expr(expr)))
-        self._emitter.indent()
-
-    def emit_while_loop_end(self):
-        self._emitter.dedent()
-
     def emit_if_begin(self, expr):
         self._emit('if {expr}:'.format(expr=self._expr(expr)))
         self._emitter.indent()
@@ -400,14 +382,14 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         if not self._has_yield_inst:
             self._emit('yield')
 
-    def emit_yield_state(self, inst):
+    def emit_yield_state(self, component_id, expression, time, time_id):
         self._emit('yield self.StateComputed(t={t}, time_id={time_id}, '
                    'component_id={component_id}, '
                    'state_component={state_component})'.format(
-                       t=self._expr(inst.time),
-                       time_id=repr(inst.time_id),
-                       component_id=repr(inst.component_id),
-                       state_component=self._expr(inst.expression)))
+                       t=self._expr(time),
+                       time_id=repr(time_id),
+                       component_id=repr(component_id),
+                       state_component=self._expr(expression)))
 
     def emit_raise(self, error_condition, error_message):
         self._emit('raise self.{condition}("{message}")'.format(

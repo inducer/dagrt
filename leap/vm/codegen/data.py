@@ -28,7 +28,6 @@ THE SOFTWARE.
 """
 
 import leap.vm.language as lang
-import leap.vm.codegen.ir as ir
 from leap.vm.utils import is_state_variable
 from pytools import RecordWithoutPickling
 from pymbolic.mapper import Mapper
@@ -301,17 +300,18 @@ class SymbolKindFinder(object):
     def __init__(self, function_registry):
         self.function_registry = function_registry
 
-    def __call__(self, functions):
+    def __call__(self, names, functions):
         """Return a :class:`SymbolKindTable`.
         """
 
         result = SymbolKindTable()
 
-        insn_queue = [
-                (func.name, insn)
-                for func in functions
-                for bblock in func.postorder()
-                for insn in bblock]
+        from .ast_ import get_instructions_in_ast
+
+        insn_queue = []
+        for name, func in zip(names, functions):
+            insn_queue.extend((name, insn) for insn in get_instructions_in_ast(func))
+
         insn_queue_push_buffer = []
         made_progress = False
 
@@ -326,39 +326,24 @@ class SymbolKindFinder(object):
 
             func_name, insn = insn_queue.pop()
 
-            if isinstance(insn, ir.AssignInst):
-                if isinstance(insn.assignment, lang.AssignSolved):
-                    made_progress = True
-                    from leap.vm.utils import TODO
-                    raise TODO()
+            if isinstance(insn, lang.AssignSolved):
+                made_progress = True
+                from leap.vm.utils import TODO
+                raise TODO()
 
-                elif isinstance(insn.assignment, tuple):
-                    # These are function returns or initializations, we're not
-                    # interested in them.
+            elif isinstance(insn, lang.AssignExpression):
+                kim = KindInferenceMapper(
+                        result.global_table,
+                        result.per_function_table.get(func_name, {}),
+                        self.function_registry)
 
-                    name, expr = insn.assignment
-                    assert expr is None or isinstance(expr, tuple)
-
-                elif isinstance(insn.assignment, (tuple, lang.AssignExpression)):
-                    kim = KindInferenceMapper(
-                            result.global_table,
-                            result.per_function_table.get(func_name, {}),
-                            self.function_registry)
-
-                    try:
-                        kind = kim(insn.assignment.expression)
-                    except UnableToInferKind:
-                        insn_queue_push_buffer.append((func_name, insn))
-                    else:
-                        made_progress = True
-                        result.set(
-                                func_name, insn.assignment.assignee,
-                                kind=kind)
-
+                try:
+                    kind = kim(insn.expression)
+                except UnableToInferKind:
+                    insn_queue_push_buffer.append((func_name, insn))
                 else:
-                    raise NotImplementedError(
-                            "assignment of type '%s'"
-                            % type(insn.assignment).__name__)
+                    made_progress = True
+                    result.set(func_name, insn.assignee, kind=kind)
 
             else:
                 # We only care about assignments.

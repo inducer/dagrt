@@ -22,11 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools import memoize_method
 from pymbolic.mapper import Collector
-from leap.vm.language import Instruction, If, YieldState, StateTransition
-from .graphs import InstructionDAGIntGraph
-import six
+from leap.vm.language import Instruction, YieldState, StateTransition
 
 
 # {{{ verifier
@@ -53,6 +50,17 @@ class InstructionDAGVerifier(object):
         warnings = []
         errors = []
 
+        # TODO: Warn about conditions that may have side effects.
+        # Eg:
+        # WARNING: The condition expression for this function includes a call to
+        # an external function.  leap assumes that evaluating conditional
+        # expressions does not produce side effects.  If calling the function
+        # does produce a side effect, the behavior of the code may not be what
+        # you expect.
+
+        # TODO: Make error messages more useful. Eg. name the offending
+        # instruction.
+
         if not self._verify_instructions_well_typed(instructions):
             errors += ['Instructions are not well formed.']
         elif not self._verify_state_transitions(instructions, state_names):
@@ -70,8 +78,7 @@ class InstructionDAGVerifier(object):
     def _verify_instructions_well_typed(self, instructions):
         """Ensure that all instructions are of the expected format."""
         for inst in instructions:
-            # TODO: To what extent should the verifier check the correctness
-            # of the input?
+            # TODO: Be strict about the correctness of the input.
             if not isinstance(inst, Instruction):
                 return False
         return True
@@ -89,9 +96,6 @@ class InstructionDAGVerifier(object):
         ids = set(inst.id for inst in instructions)
         for inst in instructions:
             deps = set(inst.depends_on)
-            if isinstance(inst, If):
-                deps |= set(inst.then_depends_on)
-                deps |= set(inst.else_depends_on)
             if not deps <= ids:
                 return False
         for dependency_list in dependency_lists:
@@ -100,25 +104,23 @@ class InstructionDAGVerifier(object):
         return True
 
     def _verify_no_circular_dependencies(self, instructions):
-        """Ensure that there are no circular dependencies among the
-        instructions.
-        """
-        graph = InstructionDAGIntGraph(instructions)
-        visited = set()
+        """Ensure that there are no circular dependencies among the instructions."""
+        id_to_instruction = dict((inst.id, inst) for inst in instructions)
+        stack = list(instructions)
         visiting = set()
-        stack = list(graph)
+        visited = set()
         while stack:
             top = stack[-1]
-            if top not in visited:
-                visited.add(top)
-                visiting.add(top)
-                for dep in graph[top]:
-                    if dep in visiting:
+            if top.id not in visited:
+                visited.add(top.id)
+                visiting.add(top.id)
+                for neighbor in top.depends_on:
+                    if neighbor in visiting:
                         return False
-                    else:
-                        stack.append(dep)
+                    stack.append(id_to_instruction[neighbor])
             else:
-                visiting.discard(top)
+                if top.id in visiting:
+                    visiting.remove(top.id)
                 stack.pop()
         return True
 
@@ -216,87 +218,6 @@ def collect_ode_component_names_from_dag(dag):
             result.add(insn.component_id)
 
     return result
-
-# }}}
-
-
-# {{{ reaching definitions
-
-class ReachingDefinitions(object):
-    """Performs a reaching definitions analysis and computes use-def chains."""
-
-    def __init__(self, control_flow_graph):
-        """
-        :arg control_flow_graph: The :class:`Function` to analyze
-        """
-        # A definition is a pair (variable, instruction) representing a
-        # variable name and the instruction which defines the variable.
-
-        def_in = {}
-        def_out = {}
-        def_gen = {}
-        def_kill = {}
-
-        # Initialize the gen, kill, and definition sets for dataflow analysis.
-        for block in control_flow_graph:
-            gen, kill = self._get_gen_and_kill_sets(block, len(block))
-            def_gen[block] = gen
-            def_kill[block] = kill
-            def_in[block] = set()
-            def_out[block] = set()
-
-        # Perform the reaching definitions analysis.
-        changed = True
-        while changed:
-            # Iterate until convergence.
-            changed = False
-
-            for block in control_flow_graph.reverse_postorder():
-                # Compute the set of definitions that reach the entry of the
-                # block and the exit.
-                reach = set()
-                for predecessor in block.predecessors:
-                    reach |= def_out[predecessor]
-                changed |= len(reach) > len(def_in[block])
-                def_in[block] = reach
-
-                kill = def_kill[block]
-                reach_out = self._remove_killed(reach, kill)
-
-                reach_out |= def_gen[block]
-                changed |= len(reach_out) > len(def_out[block])
-
-                def_out[block] = reach_out
-
-            # If the graph is acyclic then only a single iteration is required.
-            if control_flow_graph.is_acyclic():
-                break
-
-        self._def_in = def_in
-
-    def _get_gen_and_kill_sets(self, block, point):
-        """Return the gen and kill sets."""
-        last_def = {}
-        for inst in block.code[:point]:
-            for name in inst.get_defined_variables():
-                last_def[name] = inst
-        return (set(six.iteritems(last_def)), set(six.iterkeys(last_def)))
-
-    def _remove_killed(self, definitions, kill):
-        """Return the result of removing all definitions that are killed."""
-        return set(pair for pair in definitions if pair[0] not in kill)
-
-    @memoize_method
-    def get_reaching_definitions(self, instruction):
-        """Return the set of all definitions that reach the instruction on some
-        execution path. A definition is a pair (variable, instruction).
-
-        :arg instruction: The instruction to analyze
-        """
-        block = instruction.block
-        index = block.code.index(instruction)
-        gen, kill = self._get_gen_and_kill_sets(block, index)
-        return gen | self._remove_killed(self._def_in[block], kill)
 
 # }}}
 
