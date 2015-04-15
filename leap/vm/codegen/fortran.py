@@ -344,6 +344,12 @@ class BuiltinType(TypeBase):
 
 # Allocatable arrays are not yet supported, use pointers for now.
 
+def _replace_indices(index_expr_map, s):
+    for name, expr in six.iteritems(index_expr_map):
+        s, _ = re.subn(r"\b" + name + r"\b", expr, s)
+    return s
+
+
 class _ArrayLoopManager(object):
     def __init__(self, array_type):
         self.array_type = array_type
@@ -357,11 +363,6 @@ class _ArrayLoopManager(object):
             code_generator.name_manager.make_unique_fortran_name("leap_"+iname)
             for iname in atype.index_vars]
 
-        def replace_indices(s):
-            for name, expr in six.iteritems(index_expr_map):
-                s, _ = re.subn(r"\b" + name + r"\b", s, expr)
-            return s
-
         self.emitters = []
         for i, (dim, index_name) in enumerate(
                 reversed(list(zip(atype.dimension, f_index_names)))):
@@ -371,8 +372,8 @@ class _ArrayLoopManager(object):
             em = FortranDoEmitter(
                     code_generator.emitter, index_name,
                     "%s, %s" % (
-                        replace_indices(start),
-                        replace_indices(stop)),
+                        _replace_indices(index_expr_map, start),
+                        _replace_indices(index_expr_map, stop)),
                     code_generator)
             self.emitters.append(em)
             em.__enter__()
@@ -580,7 +581,7 @@ class PointerType(TypeBase):
         code_generator.emit_traceable(
                 'allocate({name}{dimension}, stat=leap_ierr)'.format(
                     name=fortran_expr,
-                    dimension=dimension))
+                    dimension=_replace_indices(index_expr_map, dimension)))
         with FortranIfEmitter(
                 code_generator.emitter, 'leap_ierr.ne.0', code_generator):
             code_generator.emit(
