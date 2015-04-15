@@ -588,8 +588,6 @@ class PointerType(TypeBase):
                         name=fortran_expr))
             code_generator.emit("stop")
             if self.pointee_type.is_allocatable():
-                return
-            else:
                 self.pointee_type.emit_allocation(
                     code_generator, fortran_expr, index_expr_map)
 
@@ -600,8 +598,9 @@ class PointerType(TypeBase):
         code_generator.emit_traceable("nullify(%s)" % fortran_expr)
 
     def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
-        self.pointee_type.emit_variable_deallocate(
-                code_generator, fortran_expr, index_expr_map)
+        if self.pointee_type.is_allocatable():
+            self.pointee_type.emit_variable_deallocate(
+                    code_generator, fortran_expr, index_expr_map)
         self.pointee_type.emit_variable_deinit(
                 code_generator, fortran_expr, index_expr_map)
 
