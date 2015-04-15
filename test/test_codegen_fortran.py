@@ -168,7 +168,26 @@ def test_rk_codegen_fancy():
                             identifier=rhs_function)
     freg = freg.register_codegen(rhs_function, "fortran",
             f.CallCode("""
-                ${result} = -2*${y}
+                <%
+
+                igrid = declare_new("integer", "igrid")
+                ncv = declare_new("integer","ncv")
+                Nc = declare_new("integer", "Nc")
+
+                %>
+
+                do ${igrid} = 1, region%nGrids
+                  region%state(${igrid})%conserved_var => &
+                  ${y}(${igrid})%conserved_var
+                  do ${ncv} = 1, region%n_grid_dofs(${igrid})
+                    do ${Nc} = 1, region%nCells(${igrid})
+                      region%state(${igrid})%rhs(${ncv},${Nc}) = &
+                       -2*region%state(${igrid})%conserved_var(${ncv},${Nc})
+                    end do
+                  end do
+                  region%state(${igrid})%rhs => ${result}(${igrid})%rhs
+                end do
+
                 """))
     freg = register_function(freg, "notify_pre_state_update", ("updated_component",))
     freg = freg.register_codegen("notify_pre_state_update", "fortran",
@@ -188,14 +207,15 @@ def test_rk_codegen_fancy():
             'RKMethod',
             ode_component_type_map={
                 component_id: f.ArrayType(
-                    "region%n_grids",
+                    "region%nGrids",
                     index_vars="igrid",
                     element_type=f.StructureType(
                         "sim_grid_state_type",
                         (
                             ("conserved_var", f.PointerType(
                                 f.ArrayType(
-                                    "region%n_grid_dofs(igrid)",
+                                    ("region%n_grid_dofs(igrid)",
+                                    "region%nCells(igrid)",),
                                     f.BuiltinType('real (kind=8)')))),
                         )))
                 },
