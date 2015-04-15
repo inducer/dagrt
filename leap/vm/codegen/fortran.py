@@ -588,9 +588,10 @@ class PointerType(TypeBase):
                     "write(leap_stderr,*) 'failed to allocate {name}'".format(
                         name=fortran_expr))
             code_generator.emit("stop")
-            if self.pointee_type.is_allocatable():
-                self.pointee_type.emit_allocation(
-                    code_generator, fortran_expr, index_expr_map)
+
+        if self.pointee_type.is_allocatable():
+            self.pointee_type.emit_allocation(
+                code_generator, fortran_expr, index_expr_map)
 
     def emit_variable_init(self, code_generator, fortran_expr, index_expr_map):
         code_generator.emit_traceable("nullify(%s)" % fortran_expr)
