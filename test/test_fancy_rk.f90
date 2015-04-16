@@ -34,6 +34,7 @@ program test_rkmethod
 
   allocate(region%nCells(region%nGrids))
   allocate(region%n_grid_dofs(region%nGrids))
+  allocate(initial_condition(region%nGrids))
 
   do igrid = 1, region%nGrids
     region%nCells(igrid) = 2
