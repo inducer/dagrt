@@ -20,7 +20,7 @@ program test_rkmethod
   type(leap_state_type), pointer :: leap_state_ptr
 
   real*8 t_fin
-  integer ntrips, igrid, icells, idofs
+  integer ntrips, igrid, idof
   parameter (t_fin=1d0, ntrips=20)
 
   integer istep
@@ -30,22 +30,17 @@ program test_rkmethod
   leap_state_ptr => leap_state
   region_ptr => region
  
-  region%nGrids = 2
+  region%n_grids = 2
 
-  allocate(region%nCells(region%nGrids))
-  allocate(region%n_grid_dofs(region%nGrids))
-  allocate(initial_condition(region%nGrids))
+  allocate(region%n_grid_dofs(region%n_grids))
+  allocate(initial_condition(region%n_grids))
 
-  do igrid = 1, region%nGrids
-    region%nCells(igrid) = 2
+  do igrid = 1, region%n_grids
     region%n_grid_dofs(igrid) = 2
-    allocate(initial_condition(igrid)%conserved_var(region%n_grid_dofs(igrid),region%nCells(igrid)))
-    allocate(initial_condition(igrid)%rhs(region%n_grid_dofs(igrid),region%nCells(igrid)))
-    do icells=1, region%nCells(igrid)
-      do idofs = 1, region%n_grid_dofs(igrid)
-        initial_condition(igrid)%conserved_var(idofs,icells) = 1
-        initial_condition(igrid)%rhs(idofs,icells) = 0
-        end do
+    allocate(initial_condition(igrid)%conserved_var(region%n_grid_dofs(igrid)))
+
+    do idof = 1, region%n_grid_dofs(igrid)
+      initial_condition(igrid)%conserved_var(idof) = 1
     end do
   end do
 

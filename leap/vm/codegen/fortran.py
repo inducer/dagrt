@@ -1266,6 +1266,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 else:
                     comp_type = self.get_ode_component_type(
                             sym_kind.component_id)
+
                     from pymbolic import var
                     comp_type.emit_assignment(
                             self, tgt_fortran_name,

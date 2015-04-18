@@ -171,21 +171,15 @@ def test_rk_codegen_fancy():
                 <%
 
                 igrid = declare_new("integer", "igrid")
-                ncv = declare_new("integer","ncv")
-                Nc = declare_new("integer", "Nc")
+                i = declare_new("integer", "i")
 
                 %>
 
-                do ${igrid} = 1, region%nGrids
-                  region%state(${igrid})%conserved_var => &
-                  ${y}(${igrid})%conserved_var
-                  do ${ncv} = 1, region%n_grid_dofs(${igrid})
-                    do ${Nc} = 1, region%nCells(${igrid})
-                      region%state(${igrid})%rhs(${ncv},${Nc}) = &
-                       -2*region%state(${igrid})%conserved_var(${ncv},${Nc})
-                    end do
+                do ${igrid} = 1, region%n_grids
+                  do ${i} = 1, region%n_grid_dofs(${igrid})
+                    ${result}(${igrid})%conserved_var(${i}) = &
+                     -2*${y}(${igrid})%conserved_var(${i})
                   end do
-                  region%state(${igrid})%rhs => ${result}(${igrid})%rhs
                 end do
 
                 """))
@@ -207,15 +201,14 @@ def test_rk_codegen_fancy():
             'RKMethod',
             ode_component_type_map={
                 component_id: f.ArrayType(
-                    "region%nGrids",
+                    "region%n_grids",
                     index_vars="igrid",
                     element_type=f.StructureType(
                         "sim_grid_state_type",
                         (
                             ("conserved_var", f.PointerType(
                                 f.ArrayType(
-                                    ("region%n_grid_dofs(igrid)",
-                                    "region%nCells(igrid)",),
+                                    ("region%n_grid_dofs(igrid)",),
                                     f.BuiltinType('real (kind=8)')))),
                         )))
                 },
@@ -236,7 +229,7 @@ def test_rk_codegen_fancy():
     run_fortran([
         ("sim_types.f90", read_file("sim_types.f90")),
         ("rkmethod.f90", code_str),
-        ("test_rk.f90", read_file("test_fancy_rk.f90")),
+        ("test_fancy_rk.f90", read_file("test_fancy_rk.f90")),
         ])
 
 # }}}
