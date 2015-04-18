@@ -256,6 +256,7 @@ def replace_AssignSolved(dag, *solver_hooks):
                              expression=solver(expression, solve_component,
                                                **other_params),
                              id=insn.id,
+                             condition=insn.condition,
                              depends_on=insn.depends_on))
 
     return dag.copy(instructions=new_instructions)

@@ -56,6 +56,7 @@ def eliminate_self_dependencies(dag):
 
             new_tmp_insn = AssignExpression(
                     tmp_var_name, var(var_name),
+                    condition=insn.condition,
                     id=tmp_insn_id,
                     depends_on=insn.depends_on)
             new_instructions.append(new_tmp_insn)
@@ -63,7 +64,7 @@ def eliminate_self_dependencies(dag):
         from pymbolic import substitute
         new_insn = (insn
                 .map_expressions(
-                    lambda expr: substitute(insn.expression, dict(substs)))
+                    lambda expr: substitute(expr, dict(substs)))
                 .copy(depends_on=frozenset(tmp_insn_ids)))
 
         new_instructions.append(new_insn)
@@ -83,7 +84,7 @@ class FunctionArgumentIsolator(IdentityMapper):
         self.insn_id_gen = insn_id_gen
         self.var_name_gen = var_name_gen
 
-    def isolate_arg(self, expr, base_deps, extra_deps):
+    def isolate_arg(self, expr, base_condition, base_deps, extra_deps):
         from pymbolic.primitives import Variable
         if isinstance(expr, Variable):
             return expr
@@ -96,11 +97,12 @@ class FunctionArgumentIsolator(IdentityMapper):
 
         sub_extra_deps = []
         rec_result = self.rec(
-                expr, base_deps, sub_extra_deps)
+                expr, base_condition, base_deps, sub_extra_deps)
 
         from leap.vm.language import AssignExpression
         new_insn = AssignExpression(
                 tmp_var_name, rec_result,
+                condition=base_condition,
                 depends_on=base_deps | frozenset(sub_extra_deps),
                 id=tmp_insn_id)
 
@@ -109,19 +111,20 @@ class FunctionArgumentIsolator(IdentityMapper):
         from pymbolic import var
         return var(tmp_var_name)
 
-    def map_call(self, expr, base_deps, extra_deps):
+    def map_call(self, expr, base_condition, base_deps, extra_deps):
         return type(expr)(
                 expr.function,
-                tuple(self.isolate_arg(child, base_deps, extra_deps)
+                tuple(self.isolate_arg(child, base_condition, base_deps, extra_deps)
                     for child in expr.parameters))
 
-    def map_call_with_kwargs(self, expr, base_deps, extra_deps):
+    def map_call_with_kwargs(self, expr, base_condition, base_deps, extra_deps):
         return type(expr)(
                 expr.function,
-                tuple(self.isolate_arg(child, base_deps, extra_deps)
+                tuple(self.isolate_arg(child, base_condition, base_deps, extra_deps)
                     for child in expr.parameters),
                 dict(
-                    (key, self.isolate_arg(val, base_deps, extra_deps))
+                    (key,
+                     self.isolate_arg(val, base_condition, base_deps, extra_deps))
                     for key, val in six.iteritems(expr.kw_parameters))
                     )
 
@@ -145,7 +148,7 @@ def isolate_function_arguments(dag):
                 insn
                 .map_expressions(
                     lambda expr: fai(
-                        expr, base_deps, new_deps))
+                        expr, insn.condition, base_deps, new_deps))
                 .copy(depends_on=insn.depends_on | frozenset(new_deps)))
 
     return dag.copy(instructions=new_instructions)
@@ -163,7 +166,8 @@ class FunctionCallIsolator(IdentityMapper):
         self.insn_id_gen = insn_id_gen
         self.var_name_gen = var_name_gen
 
-    def isolate_call(self, expr, base_deps, extra_deps, super_method):
+    def isolate_call(self, expr, base_condition, base_deps, extra_deps,
+                     super_method):
         # FIXME: These aren't awesome identifiers.
         tmp_var_name = self.var_name_gen("tmp")
 
@@ -177,6 +181,7 @@ class FunctionCallIsolator(IdentityMapper):
         from leap.vm.language import AssignExpression
         new_insn = AssignExpression(
                 tmp_var_name, rec_result, id=tmp_insn_id,
+                condition=base_condition,
                 depends_on=base_deps | frozenset(sub_extra_deps))
 
         self.new_instructions.append(new_insn)
@@ -184,14 +189,14 @@ class FunctionCallIsolator(IdentityMapper):
         from pymbolic import var
         return var(tmp_var_name)
 
-    def map_call(self, expr, base_deps, extra_deps):
+    def map_call(self, expr, base_condition, base_deps, extra_deps):
         return self.isolate_call(
-                expr, base_deps, extra_deps,
+                expr, base_condition, base_deps, extra_deps,
                 super(FunctionCallIsolator, self).map_call)
 
-    def map_call_with_kwargs(self, expr, base_deps, extra_deps):
+    def map_call_with_kwargs(self, expr, base_condition, base_deps, extra_deps):
         return self.isolate_call(
-                expr, base_deps, extra_deps,
+                expr, base_condition, base_deps, extra_deps,
                 super(FunctionCallIsolator, self)
                 .map_call_with_kwargs)
 
@@ -234,6 +239,17 @@ def isolate_function_calls(dag):
 # }}}
 
 
+def flat_LogicalAnd(*children):
+    from pymbolic.primitives import LogicalAnd
+    result = []
+    for child in children:
+        if isinstance(child, LogicalAnd):
+            result.extend(child.children)
+        else:
+            result.append(child)
+    return LogicalAnd(tuple(result))
+
+
 # {{{ expand IfThenElse expressions
 
 class IfThenElseExpander(IdentityMapper):
@@ -244,43 +260,52 @@ class IfThenElseExpander(IdentityMapper):
         self.insn_id_gen = insn_id_gen
         self.var_name_gen = var_name_gen
 
-    def map_if(self, expr, base_deps, extra_deps):
+    def map_if(self, expr, base_condition, base_deps, extra_deps):
+        from pymbolic.primitives import LogicalNot
+        from pymbolic import var
+
+        flag = var(self.var_name_gen("<flag>ifthenelse_cond"))
         tmp_result = self.var_name_gen("ifthenelse_result")
-        if_insn_id = self.insn_id_gen("ifthenelse_if")
+        if_insn_id = self.insn_id_gen("ifthenelse_cond")
         then_insn_id = self.insn_id_gen("ifthenelse_then")
         else_insn_id = self.insn_id_gen("ifthenelse_else")
 
-        extra_deps.append(if_insn_id)
-
         sub_condition_deps = []
-        rec_condition = self.rec(expr.condition, base_deps, sub_condition_deps)
+        rec_condition = self.rec(expr.condition, base_condition, base_deps,
+                                 sub_condition_deps)
 
         sub_then_deps = []
-        rec_then = self.rec(expr.then, base_deps, sub_then_deps)
+        then_condition = flat_LogicalAnd(base_condition, flag)
+        rec_then = self.rec(expr.then, then_condition,
+                            base_deps | frozenset([if_insn_id]), sub_then_deps)
 
         sub_else_deps = []
-        rec_else = self.rec(expr.else_, base_deps, sub_else_deps)
+        else_condition = flat_LogicalAnd(base_condition, LogicalNot(flag))
+        rec_else = self.rec(expr.else_, else_condition,
+                            base_deps | frozenset([if_insn_id]), sub_else_deps)
 
-        from leap.vm.language import AssignExpression, If
+        from leap.vm.language import AssignExpression
 
         self.new_instructions.extend([
-            If(condition=rec_condition,
-               then_depends_on=frozenset([then_insn_id]),
-               else_depends_on=frozenset([else_insn_id]),
-               id=if_insn_id,
-               depends_on=base_deps | frozenset(sub_condition_deps)),
+            AssignExpression(assignee=flag.name,
+                             expression=rec_condition,
+                             condition=base_condition,
+                             id=if_insn_id,
+                             depends_on=base_deps | frozenset(sub_condition_deps)),
             AssignExpression(assignee=tmp_result,
+                             condition=then_condition,
                              expression=rec_then,
                              id=then_insn_id,
-                             depends_on=base_deps | frozenset(sub_then_deps)),
+                             depends_on=base_deps | frozenset(sub_then_deps) |
+                             frozenset([if_insn_id])),
             AssignExpression(assignee=tmp_result,
+                             condition=else_condition,
                              expression=rec_else,
                              id=else_insn_id,
-                             depends_on=base_deps | frozenset(sub_else_deps))])
+                             depends_on=base_deps | frozenset(sub_else_deps) |
+                             frozenset([if_insn_id]))])
 
-        extra_deps.append(if_insn_id)
-
-        from pymbolic import var
+        extra_deps.extend([then_insn_id, else_insn_id])
         return var(tmp_result)
 
 
@@ -307,7 +332,7 @@ def expand_IfThenElse(dag):
 
         new_instructions.append(
             insn.map_expressions(
-                lambda expr: expander(expr, base_deps, new_deps))
+                lambda expr: expander(expr, insn.condition, base_deps, new_deps))
             .copy(depends_on=insn.depends_on | frozenset(new_deps)))
 
     return dag.copy(instructions=new_instructions)

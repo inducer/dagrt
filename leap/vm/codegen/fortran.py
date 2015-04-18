@@ -38,8 +38,6 @@ from functools import partial
 import re  # noqa
 import six
 
-from pytools import Record
-
 
 def pad_fortran(line, width):
     line += ' ' * (width - 1 - len(line))
@@ -174,13 +172,6 @@ class FortranDoEmitter(FortranSubblockEmitter):
                 parent_emitter, "do", code_generator)
         self("do {loop_var} = {bounds}".format(
             loop_var=loop_var, bounds=bounds))
-
-
-class FortranDoWhileEmitter(FortranSubblockEmitter):
-    def __init__(self, parent_emitter, expr, code_generator=None):
-        super(FortranDoWhileEmitter, self).__init__(
-                parent_emitter, "do", code_generator)
-        self("do while ({expr})".format(expr=expr))
 
 
 class FortranSubroutineEmitter(FortranSubblockEmitter):
@@ -697,13 +688,6 @@ class StructureType(TypeBase):
 
 # {{{ code generator
 
-class _IRFunctionDescriptor(Record):
-    """
-    .. attribute:: name
-    .. attribute:: function
-    .. attribute:: control_tree
-    """
-
 
 class CodeGenerator(StructuredCodeGenerator):
     language = "fortran"
@@ -823,41 +807,28 @@ class CodeGenerator(StructuredCodeGenerator):
         dag = isolate_function_calls(dag)
         dag = expand_IfThenElse(dag)
 
-        #from leap.vm.language import show_dependency_graph
-        #show_dependency_graph(dag)
+        # from leap.vm.language import show_dependency_graph
+        # show_dependency_graph(dag)
 
-        # {{{ produce function descriptors
+        # {{{ produce function name / function AST pairs
 
-        from .dag2ir import InstructionDAGExtractor, ControlFlowGraphAssembler
-        from .optimization import Optimizer
-        from .ir2structured_ir import StructuralExtractor
+        from .ast_ import create_ast_from_state
 
+        from collections import namedtuple
+        NameASTPair = namedtuple("NameASTPair", "name, ast")
         fdescrs = []
 
-        dag_extractor = InstructionDAGExtractor()
-        assembler = ControlFlowGraphAssembler()
-        optimizer = Optimizer()
-        extract_structure = StructuralExtractor()
-
-        for state_name, state in six.iteritems(dag.states):
-            code = dag_extractor(dag.instructions, state.depends_on)
-            function = assembler(state_name, code, state.depends_on)
-            if optimize:
-                function = optimizer(function)
-            control_tree = extract_structure(function)
-
-            fdescrs.append(
-                    _IRFunctionDescriptor(
-                        name=state_name,
-                        function=function,
-                        control_tree=control_tree))
+        for state_name in six.iterkeys(dag.states):
+            ast = create_ast_from_state(dag, state_name, optimize)
+            fdescrs.append(NameASTPair(state_name, ast))
 
         # }}}
 
         from leap.vm.codegen.data import SymbolKindFinder
 
-        self.sym_kind_table = SymbolKindFinder(self.function_registry)([
-            fd.function for fd in fdescrs])
+        self.sym_kind_table = SymbolKindFinder(self.function_registry)(
+            [fd.name for fd in fdescrs],
+            [fd.ast for fd in fdescrs])
 
         from .analysis import collect_ode_component_names_from_dag
         component_ids = collect_ode_component_names_from_dag(dag)
@@ -877,14 +848,14 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.begin_emit(dag)
         for fdescr in fdescrs:
-            self.lower_function(fdescr.name, fdescr.control_tree)
+            self.lower_function(fdescr.name, fdescr.ast)
         self.finish_emit(dag)
 
         del self.sym_kind_table
 
         return self.get_code()
 
-    def lower_function(self, function_name, control_tree):
+    def lower_function(self, function_name, ast):
         self.current_function = function_name
 
         self.emit_def_begin(
@@ -894,7 +865,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
         self.declaration_emitter('')
 
-        self.lower_node(control_tree)
+        self.lower_ast(ast)
         self.emit_def_end(function_name)
 
         self.current_function = None
@@ -1433,15 +1404,6 @@ class CodeGenerator(StructuredCodeGenerator):
 
         del self.declaration_emitter
 
-    def emit_while_loop_begin(self, expr):
-        FortranDoWhileEmitter(
-                self.emitter,
-                self.expr(expr),
-                self).__enter__()
-
-    def emit_while_loop_end(self,):
-        self.emitter.__exit__(None, None, None)
-
     def emit_if_begin(self, expr):
         FortranIfEmitter(
                 self.emitter,
@@ -1497,13 +1459,13 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.emit('return')
 
-    def emit_yield_state(self, inst):
+    def emit_yield_state(self, component_id, expression, time, time_id):
         self.emit_assign_expr(
-                '<ret_time_id>'+inst.component_id,
-                Variable("leap_time_"+str(inst.time_id)))
+                '<ret_time_id>'+component_id,
+                Variable("leap_time_"+str(time_id)))
         self.emit_assign_expr(
-                '<ret_time>'+inst.component_id,
-                inst.time)
+                '<ret_time>'+component_id,
+                time)
 
         if self.call_before_state_update or self.call_after_state_update:
             dummy_name = self.name_manager.make_unique_fortran_name("dummy_logical")
@@ -1516,12 +1478,12 @@ class CodeGenerator(StructuredCodeGenerator):
                     dummy_name,
                     var(self.call_before_state_update)(
                         var(self.component_name_to_component_sym(
-                            inst.component_id))
+                            component_id))
                         ))
 
         self.emit_assign_expr(
-                '<ret_state>'+inst.component_id,
-                inst.expression)
+                '<ret_state>'+component_id,
+                expression)
 
         if self.call_after_state_update:
             from pymbolic import var
@@ -1529,7 +1491,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     dummy_name,
                     var(self.call_after_state_update)(
                         var(self.component_name_to_component_sym(
-                            inst.component_id))
+                            component_id))
                         ))
 
     def emit_state_transition(self, next_state):

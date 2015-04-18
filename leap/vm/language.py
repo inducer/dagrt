@@ -28,7 +28,6 @@ THE SOFTWARE.
 from pytools import RecordWithoutPickling, memoize_method
 from leap.vm.utils import get_variables
 from contextlib import contextmanager
-from pytools import one
 
 import logging
 import six
@@ -126,9 +125,10 @@ Visualization
 
 class Instruction(RecordWithoutPickling):
     """
-    .. attribute:: id
+    .. attribute:: condition
 
-        A string, a unique identifier for this instruction.
+       The instruction condition as a :mod:`pymbolic` expression (`True` if the
+       instruction is unconditionally executed)
 
     .. attribute:: depends_on
 
@@ -136,19 +136,31 @@ class Instruction(RecordWithoutPickling):
         executed within this execution context before this instruction can be
         executed.
 
+    .. attribute:: id
+
+        A string, a unique identifier for this instruction.
+
     .. automethod:: get_assignees
     .. automethod:: get_read_variables
+
     """
 
     def __init__(self, **kwargs):
         id = kwargs.pop("id", None)
         if id is not None:
             id = six.moves.intern(id)
+        condition = kwargs.pop("condition", True)
         depends_on = frozenset(kwargs.pop("depends_on", []))
         RecordWithoutPickling.__init__(self,
-                id=id,
-                depends_on=depends_on,
-                **kwargs)
+                                       id=id,
+                                       condition=condition,
+                                       depends_on=depends_on,
+                                       **kwargs)
+
+    def _condition_printing_suffix(self):
+        if self.condition is True:
+            return ""
+        return " if " + str(self.condition)
 
     def get_assignees(self):
         """Returns a :class:`frozenset` of variables being written by this
@@ -178,11 +190,8 @@ class Nop(Instruction):
 
     get_read_variables = get_assignees
 
-    def visit_expressions(self, visitor):
-        pass
-
     def map_expressions(self, mapper):
-        return self.copy()
+        return self.copy(condition=mapper(self.condition))
 
     def __str__(self):
         return 'nop'
@@ -224,14 +233,13 @@ class AssignSolved(Instruction):
     """
 
     def __init__(self, assignees, solve_variables, expressions, other_params,
-                 solver_id, id=None, depends_on=frozenset()):
+                 solver_id, **kwargs):
         Instruction.__init__(self, assignees=assignees,
                              solve_variables=solve_variables,
                              expressions=expressions,
                              other_params=other_params,
                              solver_id=solver_id,
-                             id=id,
-                             depends_on=depends_on)
+                             **kwargs)
 
     exec_method = six.moves.intern("exec_AssignSolved")
 
@@ -242,6 +250,7 @@ class AssignSolved(Instruction):
         # Variables can be read by:
         #  1. expressions (except for those in solve_variables)
         #  2. values in other_params
+        #  3. condition
         from itertools import chain
         flatten = lambda iter_arg: chain(*list(iter_arg))
         variables = frozenset()
@@ -249,6 +258,7 @@ class AssignSolved(Instruction):
         variables -= set(self.solve_variables)
         variables |= set(flatten(get_variables(expr) for expr
                                  in self.other_params.values()))
+        variables |= get_variables(self.condition)
         return variables
 
     def __str__(self):
@@ -264,6 +274,7 @@ class AssignSolved(Instruction):
             lines.append("with parameters")
             for param_name, param_value in self.other_params.items():
                 lines.append(param_name + ": " + str(param_value))
+        lines.append(self._condition_printing_suffix())
         return "\n".join(lines)
 
 
@@ -272,25 +283,28 @@ class AssignExpression(Instruction):
     .. attribute:: assignee
     .. attribute:: expression
     """
-    def __init__(self, assignee, expression, id=None, depends_on=frozenset()):
+    def __init__(self, assignee, expression, **kwargs):
         Instruction.__init__(self,
                 assignee=assignee,
                 expression=expression,
-                id=id,
-                depends_on=depends_on)
+                **kwargs)
 
     def get_assignees(self):
         return frozenset([self.assignee])
 
     def get_read_variables(self):
-        return get_variables(self.expression)
+        return get_variables(self.expression) | get_variables(self.condition)
 
     def map_expressions(self, mapper):
         return self.copy(
-                expression=mapper(self.expression))
+                expression=mapper(self.expression),
+                condition=mapper(self.condition))
 
     def __str__(self):
-        return "%s <- %s" % (self.assignee, self.expression)
+        return "{assignee} <- {expr}{cond}".format(
+            assignee=self.assignee,
+            expr=str(self.expression),
+            cond=self._condition_printing_suffix())
 
     exec_method = "exec_AssignExpression"
 
@@ -317,13 +331,15 @@ class YieldState(Instruction):
 
     def map_expressions(self, mapper):
         return self.copy(
-                expression=mapper(self.expression))
+                expression=mapper(self.expression),
+                condition=mapper(self.condition))
 
     def __str__(self):
-        return "Ret %s at %s as %s" % (
-                self.expression,
-                self.time_id,
-                self.component_id)
+        return "Ret {expr} at {time_id} as {component_id}{cond}".format(
+                    expr=self.expression,
+                    time_id=self.time_id,
+                    component_id=self.component_id,
+                    cond=self._condition_printing_suffix())
 
     exec_method = six.moves.intern("exec_YieldState")
 
@@ -339,30 +355,28 @@ class Raise(Instruction):
         The error message to go along with that exception type.
     """
 
-    def __init__(self, error_condition, error_message=None,
-            id=None, depends_on=frozenset()):
+    def __init__(self, error_condition, error_message=None, **kwargs):
         Instruction.__init__(self,
                 error_condition=error_condition,
                 error_message=error_message,
-                id=id,
-                depends_on=depends_on)
+                **kwargs)
 
     def get_assignees(self):
         return frozenset()
 
     def get_read_variables(self):
-        return frozenset()
+        return get_variables(self.condition)
 
     def map_expressions(self, mapper):
-        return self.copy()
+        return self.copy(condition=mapper(self.condition))
 
     def __str__(self):
-        result = "Raise %s" % self.error_condition.__name__
-
+        error = self.error_condition.__name__
         if self.error_message:
-            result += repr(self.error_message)
+            error += "(" + repr(self.error_message) + ")"
 
-        return result
+        return "Raise {error}{cond}".format(error=error,
+                                            cond=self._condition_printing_suffix())
 
     exec_method = six.moves.intern("exec_Raise")
 
@@ -374,20 +388,21 @@ class StateTransition(Instruction):
         The name of the next state to enter
     """
 
-    def __init__(self, next_state, id=None, depends_on=frozenset()):
-        Instruction.__init__(self, next_state=next_state, id=id,
-                             depends_on=depends_on)
+    def __init__(self, next_state, **kwargs):
+        Instruction.__init__(self, next_state=next_state, **kwargs)
 
     def get_assignees(self):
         return frozenset()
 
-    get_read_variables = get_assignees
+    def get_read_variables(self):
+        return get_variables(self.condition)
 
     def map_expressions(self, mapper):
-        return self.copy()
+        return self.copy(condition=mapper(self.condition))
 
     def __str__(self):
-        return "Transition to " + self.next_state
+        return "Transition to {state}{cond}".format(state=self.next_state,
+            cond=self._condition_printing_suffix())
 
     exec_method = six.moves.intern("exec_StateTransition")
 
@@ -400,45 +415,16 @@ class FailStep(Instruction):
         return frozenset()
 
     def get_read_variables(self):
-        return frozenset()
-
-    def map_expressions(self, mapper):
-        return self.copy()
-
-    def __str__(self):
-        return "FailStep"
-
-    exec_method = six.moves.intern("exec_FailStep")
-
-
-class If(Instruction):
-    """
-    .. attribute:: condition
-    .. attribute:: then_depends_on
-
-        a set of ids that the instruction depends on if :attr:`condition_expr`
-        evaluates to True
-
-    .. attribute:: else_depends_on
-
-        a set of ids that the instruction depends on if :attr:`condition`
-        evaluates to False
-    """
-
-    def get_assignees(self):
-        return frozenset()
-
-    def get_read_variables(self):
         return get_variables(self.condition)
 
     def map_expressions(self, mapper):
-        return self.copy(
-                condition=mapper(self.condition))
+        return self.copy(condition=mapper(self.condition))
 
     def __str__(self):
-        return "If %s" % self.condition
+        return "FailStep{cond}".format(cond=self._condition_printing_suffix())
 
-    exec_method = six.moves.intern("exec_If")
+    exec_method = six.moves.intern("exec_FailStep")
+
 
 # }}}
 
@@ -547,6 +533,7 @@ class TimeIntegratorCode(RecordWithoutPickling):
 # {{{ interpreter foundation
 
 class ExecutionController(object):
+
     def __init__(self, code):
         self.code = code
 
@@ -556,6 +543,8 @@ class ExecutionController(object):
 
     def reset(self):
         logger.debug("execution reset")
+        del self.plan[:]
+        self.plan_id_set.clear()
         self.executed_ids.clear()
 
     def update_plan(self, execute_ids):
@@ -608,6 +597,9 @@ class ExecutionController(object):
             logger.debug("execution trace: [%s] %s" % (
                 insn.id, str(insn).replace("\n", " | ")))
 
+            if not target.evaluate_condition(insn):
+                continue
+
             result = getattr(target, insn.exec_method)(insn)
             if result is not None:
                 event, new_deps = result
@@ -626,21 +618,33 @@ class CodeBuilder(object):
 
     class Context(RecordWithoutPickling):
         """
-        Attributes:
+        A context represents a block of instructions being built into the DAG
+
+        .. attribute:: lead_instruction_ids
+
+        .. attribute:: introduced_condition
+
+        .. attribute:: context_instruction_ids
+
+        .. attribute:: used_variables
+
+        .. attribute:: definition_map
         """
-        def __init__(self, lead_instruction_ids=[], variable_map={},
-                     used_variables=[]):
+        def __init__(self, lead_instruction_ids=[], definition_map={},
+                     used_variables=[], condition=True):
             RecordWithoutPickling.__init__(self,
                 lead_instruction_ids=frozenset(lead_instruction_ids),
                 context_instruction_ids=set(lead_instruction_ids),
-                variable_map=dict(variable_map),
-                used_variables=set(used_variables))
+                definition_map=dict(definition_map),
+                used_variables=set(used_variables),
+                condition=condition)
 
     def __init__(self, label="state"):
         self.label = label
         self._instruction_map = {}
         self._instruction_count = 0
         self._contexts = []
+        self._last_popped_context = None
         self._all_var_names = set()
         self._all_generated_var_names = set()
 
@@ -649,7 +653,28 @@ class CodeBuilder(object):
         Enter a new logical block of instructions. Force all prior
         instructions to execute before subsequent ones.
         """
-        self._make_new_context_with_inst(Nop())
+        self._contexts[-1] = self._make_new_context(Nop(),
+            additional_condition=self._contexts[-1].condition)
+
+    def _get_active_condition(self):
+        def is_nontrivial_condition(cond):
+            return cond is not True
+
+        conditions = list(filter(is_nontrivial_condition,
+                         [context.condition for context in self._contexts]))
+        num_conditions = len(conditions)
+
+        # No conditions - trival
+        if num_conditions == 0:
+            return True
+
+        # Single condition
+        if num_conditions == 1:
+            return conditions[0]
+
+        # Conjunction of conditions
+        from pymbolic.primitives import LogicalAnd
+        return LogicalAnd(tuple(conditions))
 
     @contextmanager
     def if_(self, *condition_arg):
@@ -661,32 +686,48 @@ class CodeBuilder(object):
             condition = Comparison(*condition_arg)
         else:
             raise ValueError("Unrecognized condition expression")
-        # Create a conditional instruction: then and else are empty.
-        conditional = If(condition=condition, then_depends_on=[],
-                         else_depends_on=[])
-        conditional_id = self._make_new_context_with_inst(conditional)
-        self._contexts.append(CodeBuilder.Context())
+
+        # Create an instruction as a lead instruction to assign a logical flag.
+        cond_var = self.fresh_var("<cond>")
+        cond_assignment = AssignExpression(assignee=cond_var.name,
+                                           expression=condition)
+
+        self._contexts.append(
+            self._make_new_context(cond_assignment, additional_condition=cond_var))
+
         yield
-        # Update then_depends_on.
-        then_context = self._contexts.pop()
-        self._instruction_map[conditional_id] = \
-            self._instruction_map[conditional_id].copy(
-            then_depends_on=list(then_context.context_instruction_ids))
+
+        # Pop myself from the stack.
+        last_context = self._contexts.pop()
+        self._contexts[-1] = self._make_new_context(
+            Nop(depends_on=last_context.context_instruction_ids),
+            additional_condition=self._contexts[-1].condition)
+
+        self._last_popped_if = last_context
 
     @contextmanager
     def else_(self):
-        """Create the "else" portion of a conditionally executed
-        block.
         """
-        conditional_id = one(self._contexts[-1].lead_instruction_ids)
-        assert isinstance(self._instruction_map[conditional_id], If)
-        self._contexts.append(CodeBuilder.Context())
+        Create the "else" portion of a conditionally executed block.
+        """
+        assert self._last_popped_if
+
+        # Create conditions for the context.
+        from pymbolic.primitives import LogicalNot
+        self._contexts.append(
+            self._make_new_context(Nop(),
+                additional_condition=LogicalNot(self._last_popped_if.condition)))
+
+        self._last_popped_if = None
+
         yield
-        else_context = self._contexts.pop()
-        self._instruction_map[conditional_id] = \
-            self._instruction_map[conditional_id].copy(
-            else_depends_on=list(else_context.context_instruction_ids))
-        self.fence()
+
+        # Pop myself from the stack.
+        last_context = self._contexts.pop()
+
+        self._contexts[-1] = self._make_new_context(
+            Nop(depends_on=last_context.context_instruction_ids),
+            additional_condition=self._contexts[-1].condition)
 
     def _next_instruction_id(self):
         self._instruction_count += 1
@@ -706,6 +747,7 @@ class CodeBuilder(object):
         inst_id = self._next_instruction_id()
         context = self._contexts[-1]
         dependencies = set(context.lead_instruction_ids)
+
         # Verify that assignees are not being places after uses of the
         # assignees in this context.
         for assignee in inst.get_assignees():
@@ -714,35 +756,43 @@ class CodeBuilder(object):
             if assignee in context.used_variables:
                 raise ValueError("write after use of " + assignee +
                                  " in the same block")
-            if assignee in context.variable_map:
+            if assignee in context.definition_map:
                 raise ValueError("multiple assignments to " + assignee)
+
         # Create the set of dependencies based on the set of used
         # variables.
         for used_variable in inst.get_read_variables():
-            if used_variable in context.variable_map:
-                dependencies.add(context.variable_map[used_variable])
+            if used_variable in context.definition_map:
+                dependencies.add(context.definition_map[used_variable])
+
+        # Add the condition to the instruction.
         # Update context and global information.
         context.context_instruction_ids.add(inst_id)
-        context.variable_map.update((assignee, inst_id)
-                                    for assignee in inst.get_assignees())
+        context.definition_map.update((assignee, inst_id)
+                                      for assignee in inst.get_assignees())
         context.used_variables |= inst.get_read_variables()
         self._all_var_names |= inst.get_assignees()
         self._instruction_map[inst_id] = \
-            inst.copy(id=inst_id, depends_on=list(dependencies))
+            inst.copy(id=inst_id, depends_on=list(dependencies),
+                      condition=self._get_active_condition())
         return inst_id
 
-    def _make_new_context_with_inst(self, inst):
-        assert isinstance(inst, (Nop, If))
+    def _make_new_context(self, inst, additional_condition=True):
+        """
+        :param leading_instructions: A list of lead instruction ids
+        :conditions: A
+        """
         inst_id = self._next_instruction_id()
         context = self._contexts[-1]
         new_context = CodeBuilder.Context(
             lead_instruction_ids=[inst_id],
-            used_variables=inst.get_read_variables())
+            used_variables=set(),
+            condition=additional_condition)
         self._instruction_map[inst_id] = \
             inst.copy(id=inst_id,
-                      depends_on=list(context.context_instruction_ids))
-        self._contexts[-1] = new_context
-        return inst_id
+                      depends_on=inst.depends_on | context.context_instruction_ids,
+                      condition=self._get_active_condition())
+        return new_context
 
     def fresh_var_name(self, prefix="temp"):
         """Return a variable name that is not guaranteed not to be in
@@ -831,7 +881,7 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
         for dep in insn.depends_on:
             dep_graph.setdefault(insn.id, set()).add(dep)
 
-        if isinstance(insn, If):
+        if 0:
             for dep in insn.then_depends_on:
                 annotation_dep_graph[(insn.id, dep)] = "then"
             for dep in insn.else_depends_on:
