@@ -815,7 +815,7 @@ class CodeGenerator(StructuredCodeGenerator):
         from .ast_ import create_ast_from_state
 
         from collections import namedtuple
-        NameASTPair = namedtuple("NameASTPair", "name, ast")
+        NameASTPair = namedtuple("NameASTPair", "name, ast")  # noqa
         fdescrs = []
 
         for state_name in six.iterkeys(dag.states):
