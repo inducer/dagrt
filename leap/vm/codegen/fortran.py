@@ -1337,7 +1337,7 @@ class CodeGenerator(StructuredCodeGenerator):
     def get_code(self):
         assert not self.module_emitter.preamble
 
-        indent_spaces = 4
+        indent_spaces = 1
         indentation = indent_spaces*' '
 
         wrapped_lines = []
