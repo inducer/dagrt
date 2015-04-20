@@ -219,7 +219,6 @@ def isolate_function_calls(dag):
 
     from pymbolic.primitives import Call, CallWithKwargs
     for insn in dag.instructions:
-        base_deps = insn.depends_on
         new_deps = []
 
         from leap.vm.language import AssignExpression
@@ -231,7 +230,7 @@ def isolate_function_calls(dag):
                     insn
                     .map_expressions(
                         lambda expr: fci(
-                            expr, base_deps, new_deps))
+                            expr, insn.condition, insn.depends_on, new_deps))
                     .copy(depends_on=insn.depends_on | frozenset(new_deps)))
 
     return dag.copy(instructions=new_instructions)
