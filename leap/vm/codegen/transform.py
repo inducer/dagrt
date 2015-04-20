@@ -239,7 +239,7 @@ def isolate_function_calls(dag):
 # }}}
 
 
-def flat_LogicalAnd(*children):
+def flat_LogicalAnd(*children):  # noqa
     from pymbolic.primitives import LogicalAnd
     result = []
     for child in children:
@@ -309,7 +309,7 @@ class IfThenElseExpander(IdentityMapper):
         return var(tmp_result)
 
 
-def expand_IfThenElse(dag):
+def expand_IfThenElse(dag):  # noqa
     """
     Turn IfThenElse expressions into values that are computed as a result of an
     If instruction. This is useful for targets that do not support ternary
