@@ -308,10 +308,6 @@ class TypeBase(object):
     def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
         raise NotImplementedError()
 
-    def emit_assignment(self, code_generator, fortran_expr, rhs_expr,
-            index_expr_map):
-        raise NotImplementedError()
-
 
 class BuiltinType(TypeBase):
     def __init__(self, type_name):
@@ -337,14 +333,6 @@ class BuiltinType(TypeBase):
 
     def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
         pass
-
-    def emit_assignment(self, code_generator, fortran_expr, rhs_expr,
-            index_expr_map):
-        code_generator.emit(
-                "{name} = {expr}"
-                .format(
-                    name=fortran_expr,
-                    expr=code_generator.expr(rhs_expr)))
 
 
 # Allocatable arrays are not yet supported, use pointers for now.
@@ -545,20 +533,6 @@ class ArrayType(TypeBase):
 
             alm.leave()
 
-    def emit_assignment(self, code_generator, fortran_expr, rhs_expr,
-            index_expr_map):
-        alm = _ArrayLoopManager(self)
-        index_expr_map, array_subscript_appender, f_index_names = \
-                alm.enter(code_generator, index_expr_map)
-
-        self.element_type.emit_assignment(
-                code_generator,
-                "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
-                array_subscript_appender(rhs_expr),
-                index_expr_map)
-
-        alm.leave()
-
 
 class PointerType(TypeBase):
     def __init__(self, pointee_type):
@@ -613,11 +587,6 @@ class PointerType(TypeBase):
 
         code_generator.emit_traceable('deallocate({id})'.format(id=fortran_expr))
         code_generator.emit_traceable("nullify(%s)" % fortran_expr)
-
-    def emit_assignment(self, code_generator, fortran_expr, rhs_expr,
-            index_expr_map):
-        self.pointee_type.emit_assignment(code_generator, fortran_expr, rhs_expr,
-                index_expr_map)
 
 
 class StructureType(TypeBase):
@@ -685,23 +654,89 @@ class StructureType(TypeBase):
                         member_name=member_name),
                     index_expr_map)
 
-    def emit_assignment(self, code_generator, fortran_expr, rhs_expr,
-            index_expr_map):
-        for name, type in self.members:
+# }}}
+
+
+# {{{ type visitor
+
+class TypeVisitor(object):
+    def __init__(self, code_generator):
+        self.code_generator = code_generator
+
+    def rec(self, fortran_type, fortran_expr, index_expr_map, *args):
+        return getattr(self, "visit_"+type(fortran_type).__name__)(
+                fortran_type, fortran_expr, index_expr_map, *args)
+
+    __call__ = rec
+
+    def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map,
+            *args):
+        pass
+
+    def visit_ArrayType(self, fortran_type, fortran_expr, index_expr_map,
+            *args):
+        alm = _ArrayLoopManager(fortran_type)
+        index_expr_map, _, f_index_names = \
+                alm.enter(self.code_generator, index_expr_map)
+
+        self.rec(fortran_type.element_type,
+                "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
+                index_expr_map, *args)
+
+        alm.leave()
+
+    def visit_PointerType(self, fortran_type, fortran_expr, index_expr_map,
+            *args):
+        self.rec(fortran_type.pointee_type, fortran_expr, index_expr_map,
+                *args)
+
+    def visit_StructureType(self, fortran_type, fortran_expr, index_expr_map,
+            *args):
+        for member_name, member_type in self.members:
+            self.rec(member_type,
+                    fortran_expr+"%"+member_name,
+                    index_expr_map,
+                    *args)
+
+
+class AssignmentEmitter(TypeVisitor):
+    def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map,
+            rhs_expr):
+        self.code_generator.emit(
+                "{name} = {expr}"
+                .format(
+                    name=fortran_expr,
+                    expr=self.code_generator.expr(rhs_expr)))
+
+    def visit_ArrayType(self, fortran_type, fortran_expr, index_expr_map,
+            rhs_expr):
+        alm = _ArrayLoopManager(fortran_type)
+        index_expr_map, array_subscript_appender, f_index_names = \
+                alm.enter(self.code_generator, index_expr_map)
+
+        self.rec(fortran_type.element_type,
+                "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
+                index_expr_map, array_subscript_appender(rhs_expr))
+
+        alm.leave()
+
+    def visit_StructureType(self, fortran_type, fortran_expr, index_expr_map,
+            rhs_expr):
+        for member_name, member_type in fortran_type.members:
             sla = StructureLookupAppender(
-                    code_generator.sym_kind_table, code_generator.current_function,
-                    name)
-            type.emit_assignment(
-                    code_generator,
-                    fortran_expr+"%"+name,
-                    sla(rhs_expr),
-                    index_expr_map)
+                    self.code_generator.sym_kind_table,
+                    self.code_generator.current_function,
+                    member_name)
+
+            self.rec(member_type,
+                    fortran_expr+"%"+member_name,
+                    index_expr_map,
+                    sla(rhs_expr))
 
 # }}}
 
 
 # {{{ code generator
-
 
 class CodeGenerator(StructuredCodeGenerator):
     language = "fortran"
@@ -1153,7 +1188,8 @@ class CodeGenerator(StructuredCodeGenerator):
                             expr=self.expr(expr)))
             else:
                 comp_type = self.get_ode_component_type(sym_kind.component_id)
-                comp_type.emit_assignment(self, assignee_fortran_name, expr, {})
+                AssignmentEmitter(self)(comp_type, assignee_fortran_name, {}, expr)
+                #comp_type.emit_assignment(self, assignee_fortran_name, expr, {})
 
         self.emit('')
 
@@ -1263,10 +1299,8 @@ class CodeGenerator(StructuredCodeGenerator):
                             sym_kind.component_id)
 
                     from pymbolic import var
-                    comp_type.emit_assignment(
-                            self, tgt_fortran_name,
-                            var("<target>"+fortran_name),
-                            {})
+                    AssignmentEmitter(self)(comp_type, tgt_fortran_name, {},
+                            var("<target>"+fortran_name))
 
         self.emit_def_end(function_name)
 
