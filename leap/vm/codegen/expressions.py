@@ -101,6 +101,26 @@ class FortranExpressionMapper(StringifyMapper):
         return '{numpy}.array([{elements}],dtype=\'object\')'.format(
             numpy=self._numpy, elements=', '.join(elements))
 
+    def map_logical_not(self, expr, enclosing_prec, *args, **kwargs):
+        from pymbolic.mapper.stringifier import PREC_UNARY
+        return self.parenthesize_if_needed(
+                ".not. " + self.rec(expr.child, PREC_UNARY, *args, **kwargs),
+                enclosing_prec, PREC_UNARY)
+
+    def map_logical_or(self, expr, enclosing_prec, *args, **kwargs):
+        from pymbolic.mapper.stringifier import PREC_LOGICAL_OR
+        return self.parenthesize_if_needed(
+                self.join_rec(
+                    " .or. ", expr.children, PREC_LOGICAL_OR, *args, **kwargs),
+                enclosing_prec, PREC_LOGICAL_OR)
+
+    def map_logical_and(self, expr, enclosing_prec, *args, **kwargs):
+        from pymbolic.mapper.stringifier import PREC_LOGICAL_AND
+        return self.parenthesize_if_needed(
+                self.join_rec(
+                    " .and. ", expr.children, PREC_LOGICAL_AND, *args, **kwargs),
+                enclosing_prec, PREC_LOGICAL_AND)
+
 # }}}
 
 

@@ -277,6 +277,18 @@ def _make_bfr():
             _PythonBuiltinFunctionCodeGenerator(
                 func, py_pattern))
 
+    from leap.vm.codegen.fortran import (
+            codegen_builtin_len,
+            codegen_builtin_norm_2,
+            codegen_builtin_isnan)
+
+    bfr = bfr.register_codegen(_Norm2.identifier, "fortran",
+            codegen_builtin_norm_2)
+    bfr = bfr.register_codegen(_Len.identifier, "fortran",
+            codegen_builtin_len)
+    bfr = bfr.register_codegen(_IsNaN.identifier, "fortran",
+            codegen_builtin_isnan)
+
     return bfr
 
 base_function_registry = _make_bfr()

@@ -60,14 +60,14 @@ program test_rkmethod
     write(*,*) 'done'
   enddo
 
-  min_order = MIN_ORDER
-  est_order = log(errors(2)/errors(1))/log(dt_values(2)/dt_values(1))
+  ! min_order = MIN_ORDER
+  ! est_order = log(errors(2)/errors(1))/log(dt_values(2)/dt_values(1))
 
-  write(*,*) 'estimated order:', est_order
-  if (est_order < min_order) then
-    write(stderr,*) 'ERROR: achieved order too low:', est_order, ' < ', &
-        min_order
-  endif
+  ! write(*,*) 'estimated order:', est_order
+  ! if (est_order < min_order) then
+  !   write(stderr,*) 'ERROR: achieved order too low:', est_order, ' < ', &
+  !       min_order
+  ! endif
 
 end program
 

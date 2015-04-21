@@ -223,9 +223,12 @@ class CallCode(object):
 
         template_names.update(zip(function.arg_names, args))
 
-        return remove_redundant_blank_lines(
+        lines = remove_redundant_blank_lines(
                 remove_common_indentation(
                     self.template.render(**template_names)))
+
+        for l in lines:
+            code_generator.emit(l)
 
 
 # {{{ expression modifiers
@@ -296,18 +299,6 @@ class TypeBase(object):
     def is_allocatable(self):
         raise NotImplementedError()
 
-    def emit_allocation(self, code_generator, fortran_expr, index_expr_map):
-        raise NotImplementedError()
-
-    def emit_variable_init(self, code_generator, fortran_expr, index_expr_map):
-        raise NotImplementedError()
-
-    def emit_variable_deinit(self, code_generator, fortran_expr, index_expr_map):
-        raise NotImplementedError()
-
-    def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
-        raise NotImplementedError()
-
 
 class BuiltinType(TypeBase):
     def __init__(self, type_name):
@@ -322,73 +313,8 @@ class BuiltinType(TypeBase):
     def is_allocatable(self):
         return False
 
-    def emit_allocation(self, code_generator, fortran_expr, index_expr_map):
-        raise NotImplementedError()
-
-    def emit_variable_init(self, code_generator, fortran_expr, index_expr_map):
-        pass
-
-    def emit_variable_deinit(self, code_generator, fortran_expr, index_expr_map):
-        pass
-
-    def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
-        pass
-
 
 # Allocatable arrays are not yet supported, use pointers for now.
-
-def _replace_indices(index_expr_map, s):
-    for name, expr in six.iteritems(index_expr_map):
-        s, _ = re.subn(r"\b" + name + r"\b", expr, s)
-    return s
-
-
-class _ArrayLoopManager(object):
-    def __init__(self, array_type):
-        self.array_type = array_type
-
-    def enter(self, code_generator, index_expr_map):
-        atype = self.array_type
-
-        index_expr_map = index_expr_map.copy()
-
-        f_index_names = [
-            code_generator.name_manager.make_unique_fortran_name("leap_"+iname)
-            for iname in atype.index_vars]
-
-        self.emitters = []
-        for i, (dim, index_name) in enumerate(
-                reversed(list(zip(atype.dimension, f_index_names)))):
-            code_generator.declaration_emitter('integer %s' % index_name)
-
-            start, stop = atype.parse_dimension(dim)
-            em = FortranDoEmitter(
-                    code_generator.emitter, index_name,
-                    "%s, %s" % (
-                        _replace_indices(index_expr_map, start),
-                        _replace_indices(index_expr_map, stop)),
-                    code_generator)
-            self.emitters.append(em)
-            em.__enter__()
-
-        index_expr_map.update(zip(atype.index_vars, f_index_names))
-
-        code_generator.declaration_emitter('')
-
-        from pymbolic import var
-
-        asa = ArraySubscriptAppender(
-                code_generator.sym_kind_table, code_generator.current_function,
-                tuple(var("<target>"+v) for v in f_index_names))
-
-        return index_expr_map, asa, f_index_names
-
-    def leave(self):
-        while self.emitters:
-            em = self.emitters.pop()
-            em.__exit__(None, None, None)
-
-
 class ArrayType(TypeBase):
     """
     .. attribute:: dimension
@@ -465,74 +391,6 @@ class ArrayType(TypeBase):
     def is_allocatable(self):
         return self.element_type.is_allocatable()
 
-    def emit_allocation(self, code_generator, fortran_expr, index_expr_map):
-        if not self.element_type.is_allocatable():
-            return
-        else:
-            # Array of pointers, for example.
-
-            alm = _ArrayLoopManager(self)
-            index_expr_map, _, f_index_names = \
-                    alm.enter(code_generator, index_expr_map)
-
-            self.element_type.emit_allocation(
-                    code_generator,
-                    "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
-                    index_expr_map)
-
-            alm.leave()
-
-    def emit_variable_init(self, code_generator, fortran_expr, index_expr_map):
-        if not self.element_type.is_allocatable():
-            return
-        else:
-            # Array of pointers, for example.
-
-            alm = _ArrayLoopManager(self)
-            index_expr_map, _, f_index_names = \
-                    alm.enter(code_generator, index_expr_map)
-
-            self.element_type.emit_variable_init(
-                    code_generator,
-                    "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
-                    index_expr_map)
-
-            alm.leave()
-
-    def emit_variable_deinit(self, code_generator, fortran_expr, index_expr_map):
-        if not self.element_type.is_allocatable():
-            return
-        else:
-            # Array of pointers, for example.
-
-            alm = _ArrayLoopManager(self)
-            index_expr_map, _, f_index_names = \
-                    alm.enter(code_generator, index_expr_map)
-
-            self.element_type.emit_variable_deinit(
-                    code_generator,
-                    "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
-                    index_expr_map)
-
-            alm.leave()
-
-    def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
-        if not self.element_type.is_allocatable():
-            return
-        else:
-            # Array of pointers, for example.
-
-            alm = _ArrayLoopManager(self)
-            index_expr_map, _, f_index_names = \
-                    alm.enter(code_generator, index_expr_map)
-
-            self.element_type.emit_variable_deallocate(
-                    code_generator,
-                    "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
-                    index_expr_map)
-
-            alm.leave()
-
 
 class PointerType(TypeBase):
     def __init__(self, pointee_type):
@@ -549,44 +407,6 @@ class PointerType(TypeBase):
 
     def is_allocatable(self):
         return True
-
-    def emit_allocation(self, code_generator, fortran_expr, index_expr_map):
-        dimension = ""
-        if isinstance(self.pointee_type, ArrayType):
-            if self.pointee_type.dimension:
-                dimension = '(%s)' % ', '.join(
-                        str(dim_axis) for dim_axis in self.pointee_type.dimension)
-
-        code_generator.emit_traceable(
-                'allocate({name}{dimension}, stat=leap_ierr)'.format(
-                    name=fortran_expr,
-                    dimension=_replace_indices(index_expr_map, dimension)))
-        with FortranIfEmitter(
-                code_generator.emitter, 'leap_ierr.ne.0', code_generator):
-            code_generator.emit(
-                    "write(leap_stderr,*) 'failed to allocate {name}'".format(
-                        name=fortran_expr))
-            code_generator.emit("stop")
-
-        if self.pointee_type.is_allocatable():
-            self.pointee_type.emit_allocation(
-                code_generator, fortran_expr, index_expr_map)
-
-    def emit_variable_init(self, code_generator, fortran_expr, index_expr_map):
-        code_generator.emit_traceable("nullify(%s)" % fortran_expr)
-
-    def emit_variable_deinit(self, code_generator, fortran_expr, index_expr_map):
-        code_generator.emit_traceable("nullify(%s)" % fortran_expr)
-
-    def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
-        if self.pointee_type.is_allocatable():
-            self.pointee_type.emit_variable_deallocate(
-                    code_generator, fortran_expr, index_expr_map)
-        self.pointee_type.emit_variable_deinit(
-                code_generator, fortran_expr, index_expr_map)
-
-        code_generator.emit_traceable('deallocate({id})'.format(id=fortran_expr))
-        code_generator.emit_traceable("nullify(%s)" % fortran_expr)
 
 
 class StructureType(TypeBase):
@@ -617,49 +437,70 @@ class StructureType(TypeBase):
                 member_type.is_allocatable()
                 for name, member_type in self.members)
 
-    def emit_allocation(self, code_generator, fortran_expr, index_expr_map):
-        for member_name, member_type in self.members:
-            if member_type.is_allocatable():
-                member_type.emit_allocation(
-                        code_generator,
-                        '{expr}%{member_name}'.format(
-                            expr=fortran_expr,
-                            member_name=member_name),
-                        index_expr_map)
-
-    def emit_variable_init(self, code_generator, fortran_expr, index_expr_map):
-        for member_name, member_type in self.members:
-            member_type.emit_variable_init(
-                    code_generator,
-                    '{expr}%{member_name}'.format(
-                        expr=fortran_expr,
-                        member_name=member_name),
-                    index_expr_map)
-
-    def emit_variable_deinit(self, code_generator, fortran_expr, index_expr_map):
-        for member_name, member_type in self.members:
-            member_type.emit_variable_deinit(
-                    code_generator,
-                    '{expr}%{member_name}'.format(
-                        expr=fortran_expr,
-                        member_name=member_name),
-                    index_expr_map)
-
-    def emit_variable_deallocate(self, code_generator, fortran_expr, index_expr_map):
-        for member_name, member_type in self.members:
-            member_type.emit_variable_deallocate(
-                    code_generator,
-                    '{expr}%{member_name}'.format(
-                        expr=fortran_expr,
-                        member_name=member_name),
-                    index_expr_map)
-
 # }}}
 
 
 # {{{ type visitor
 
+# {{{ helper functionality
+
+def _replace_indices(index_expr_map, s):
+    for name, expr in six.iteritems(index_expr_map):
+        s, _ = re.subn(r"\b" + name + r"\b", expr, s)
+    return s
+
+
+class _ArrayLoopManager(object):
+    def __init__(self, array_type):
+        self.array_type = array_type
+
+    def enter(self, code_generator, index_expr_map):
+        atype = self.array_type
+
+        index_expr_map = index_expr_map.copy()
+
+        f_index_names = [
+            code_generator.name_manager.make_unique_fortran_name("leap_"+iname)
+            for iname in atype.index_vars]
+
+        self.emitters = []
+        for i, (dim, index_name) in enumerate(
+                reversed(list(zip(atype.dimension, f_index_names)))):
+            code_generator.declaration_emitter('integer %s' % index_name)
+
+            start, stop = atype.parse_dimension(dim)
+            em = FortranDoEmitter(
+                    code_generator.emitter, index_name,
+                    "%s, %s" % (
+                        _replace_indices(index_expr_map, start),
+                        _replace_indices(index_expr_map, stop)),
+                    code_generator)
+            self.emitters.append(em)
+            em.__enter__()
+
+        index_expr_map.update(zip(atype.index_vars, f_index_names))
+
+        code_generator.declaration_emitter('')
+
+        from pymbolic import var
+
+        asa = ArraySubscriptAppender(
+                code_generator.sym_kind_table, code_generator.current_function,
+                tuple(var("<target>"+v) for v in f_index_names))
+
+        return index_expr_map, asa, f_index_names
+
+    def leave(self):
+        while self.emitters:
+            em = self.emitters.pop()
+            em.__exit__(None, None, None)
+
+# }}}
+
+
 class TypeVisitor(object):
+    recurse_only_if_allocatable = False
+
     def __init__(self, code_generator):
         self.code_generator = code_generator
 
@@ -675,6 +516,10 @@ class TypeVisitor(object):
 
     def visit_ArrayType(self, fortran_type, fortran_expr, index_expr_map,
             *args):
+        if (self.recurse_only_if_allocatable
+                and not fortran_type.element_type.is_allocatable()):
+            return
+
         alm = _ArrayLoopManager(fortran_type)
         index_expr_map, _, f_index_names = \
                 alm.enter(self.code_generator, index_expr_map)
@@ -687,12 +532,20 @@ class TypeVisitor(object):
 
     def visit_PointerType(self, fortran_type, fortran_expr, index_expr_map,
             *args):
+        if (self.recurse_only_if_allocatable
+                and not fortran_type.pointee_type.is_allocatable()):
+            return
+
         self.rec(fortran_type.pointee_type, fortran_expr, index_expr_map,
                 *args)
 
     def visit_StructureType(self, fortran_type, fortran_expr, index_expr_map,
             *args):
-        for member_name, member_type in self.members:
+        for member_name, member_type in fortran_type.members:
+            if (self.recurse_only_if_allocatable
+                    and not member_type.is_allocatable()):
+                continue
+
             self.rec(member_type,
                     fortran_expr+"%"+member_name,
                     index_expr_map,
@@ -732,6 +585,60 @@ class AssignmentEmitter(TypeVisitor):
                     fortran_expr+"%"+member_name,
                     index_expr_map,
                     sla(rhs_expr))
+
+
+class AllocationEmitter(TypeVisitor):
+    recurse_only_if_allocatable = True
+
+    def visit_PointerType(self, fortran_type, fortran_expr, index_expr_map):
+        pointee_type = fortran_type.pointee_type
+        code_generator = self.code_generator
+
+        dimension = ""
+        if isinstance(pointee_type, ArrayType):
+            if pointee_type.dimension:
+                dimension = '(%s)' % ', '.join(
+                        str(dim_axis) for dim_axis in pointee_type.dimension)
+
+        code_generator.emit_traceable(
+                'allocate({name}{dimension}, stat=leap_ierr)'.format(
+                    name=fortran_expr,
+                    dimension=_replace_indices(index_expr_map, dimension)))
+        with FortranIfEmitter(
+                code_generator.emitter, 'leap_ierr.ne.0', code_generator):
+            code_generator.emit(
+                    "write(leap_stderr,*) 'failed to allocate {name}'".format(
+                        name=fortran_expr))
+            code_generator.emit("stop")
+
+        if pointee_type.is_allocatable():
+            self.rec(pointee_type, fortran_expr, index_expr_map)
+
+
+class DeallocationEmitter(TypeVisitor):
+    recurse_only_if_allocatable = True
+
+    def __init__(self, code_generator, deinitializer):
+        super(DeallocationEmitter, self).__init__(code_generator)
+        self.deinitializer = deinitializer
+
+    def visit_PointerType(self, fortran_type, fortran_expr, index_expr_map):
+        pointee_type = fortran_type.pointee_type
+        code_generator = self.code_generator
+
+        if pointee_type.is_allocatable():
+            self.rec(pointee_type, fortran_expr, index_expr_map)
+        self.deinitializer(pointee_type, fortran_expr, index_expr_map)
+
+        code_generator.emit_traceable('deallocate({id})'.format(id=fortran_expr))
+        code_generator.emit_traceable("nullify(%s)" % fortran_expr)
+
+
+class InitializationEmitter(TypeVisitor):
+    recurse_only_if_allocatable = True
+
+    def visit_PointerType(self, fortran_type, fortran_expr, index_expr_map):
+        self.code_generator.emit_traceable("nullify(%s)" % fortran_expr)
 
 # }}}
 
@@ -1025,7 +932,7 @@ class CodeGenerator(StructuredCodeGenerator):
         from leap.vm.codegen.data import ODEComponent
         if isinstance(sym_kind, ODEComponent):
             comp_type = self.get_ode_component_type(sym_kind.component_id)
-            comp_type.emit_variable_init(self, self.name_manager[name], {})
+            InitializationEmitter(self)(comp_type, self.name_manager[name], {})
 
     def emit_variable_deinit(self, name, sym_kind):
         fortran_name = self.name_manager[name]
@@ -1041,14 +948,15 @@ class CodeGenerator(StructuredCodeGenerator):
                     self.emitter, '{refcnt}.eq.1'.format(refcnt=refcnt_name), self) \
                             as if_emit:
                 comp_type = self.get_ode_component_type(sym_kind.component_id)
-                comp_type.emit_variable_deallocate(self, self.name_manager[name], {})
+                DeallocationEmitter(self, InitializationEmitter(self))(
+                        comp_type, self.name_manager[name], {})
 
                 self.emit_traceable(
                         'deallocate({refcnt})'.format(refcnt=refcnt_name))
 
                 if_emit.emit_else()
 
-                comp_type.emit_variable_deinit(self, self.name_manager[name], {})
+                InitializationEmitter(self)(comp_type, self.name_manager[name], {})
                 self.emit_traceable(
                         '{refcnt} = {refcnt} - 1'
                         .format(refcnt=refcnt_name))
@@ -1077,7 +985,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def emit_allocation(self, fortran_name, sym_kind):
         comp_type = self.get_ode_component_type(sym_kind.component_id)
-        comp_type.emit_allocation(self, fortran_name, {})
+        AllocationEmitter(self)(comp_type, fortran_name, {})
 
     def emit_allocation_check(self, sym, sym_kind):
         fortran_name = self.name_manager[sym]
@@ -1160,15 +1068,12 @@ class CodeGenerator(StructuredCodeGenerator):
                 except KeyError:
                     pass
 
-        lines = codegen(
+        codegen(
                 result=result_fortran_name,
                 function=function,
                 arg_strings_dict=arg_strs_dict,
                 arg_kinds_dict=arg_kinds_dict,
                 code_generator=self)
-
-        for l in lines:
-            self.emit(l)
 
     def emit_assign_expr_inner(self, assignee_fortran_name, expr, sym_kind):
         if isinstance(expr, (Call, CallWithKwargs)):
@@ -1189,7 +1094,6 @@ class CodeGenerator(StructuredCodeGenerator):
             else:
                 comp_type = self.get_ode_component_type(sym_kind.component_id)
                 AssignmentEmitter(self)(comp_type, assignee_fortran_name, {}, expr)
-                #comp_type.emit_assignment(self, assignee_fortran_name, expr, {})
 
         self.emit('')
 
@@ -1503,6 +1407,8 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_assign_expr_inner(assignee_fortran_name, expr, sym_kind)
 
     def emit_return(self):
+        self.emit('999 continue ! exit label')
+
         # {{{ emit variable deinit
 
         sym_table = self.sym_kind_table.per_function_table.get(
@@ -1552,6 +1458,16 @@ class CodeGenerator(StructuredCodeGenerator):
                             component_id))
                         ))
 
+    def emit_raise(self, error_condition, error_message):
+        self.emit("write (leap_stderr,*) "
+                "'{condition}: {message}'".format(
+                    condition=error_condition.__name__,
+                    message=error_message))
+        self.emit("stop")
+
+    def emit_fail_step(self):
+        self.emit("goto 999")
+
     def emit_state_transition(self, next_state):
         self.emit(
                 'leap_state%leap_next_state = '
@@ -1560,5 +1476,115 @@ class CodeGenerator(StructuredCodeGenerator):
     # }}}
 
 # }}}
+
+
+# {{{ built-in functions
+
+class TypeVisitorWithResult(TypeVisitor):
+    def __init__(self, code_generator, result_expr):
+        super(TypeVisitorWithResult, self).__init__(code_generator)
+        self.result_expr = result_expr
+
+
+class Norm2Computer(TypeVisitorWithResult):
+    def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map):
+        self.code_generator.emit(
+                "{result} = {result} + abs({expr})**2"
+                .format(
+                    result=self.result_expr,
+                    expr=fortran_expr))
+
+
+def codegen_builtin_norm_2(result, function, arg_strings_dict, arg_kinds_dict,
+        code_generator):
+
+    from leap.vm.codegen.data import Scalar, ODEComponent
+    x_kind = arg_kinds_dict[0]
+    if isinstance(x_kind, Scalar):
+        if x_kind.is_real_valued:
+            ftype = BuiltinType("real*8")
+        else:
+            ftype = BuiltinType("complex*16")
+    elif isinstance(x_kind, ODEComponent):
+        ftype = code_generator.ode_component_type_map[x_kind.component_id]
+    else:
+        raise TypeError("unsupported kind for norm_2 argument: %s" % x_kind)
+
+    code_generator.emit("{result} = 0".format(result=result))
+    code_generator.emit("")
+
+    Norm2Computer(code_generator, result)(ftype, arg_strings_dict[0], {})
+
+    code_generator.emit("")
+    code_generator.emit("{result} = sqrt({result})".format(result=result))
+    code_generator.emit("")
+
+
+class LenComputer(TypeVisitorWithResult):
+    # FIXME: This could be made *way* more efficient by handling
+    # arrays of built-in types directly.
+
+    def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map):
+        self.code_generator.emit(
+                "{result} = {result} + 1"
+                .format(
+                    result=self.result_expr,
+                    expr=fortran_expr))
+
+
+def codegen_builtin_len(result, function, arg_strings_dict, arg_kinds_dict,
+        code_generator):
+
+    from leap.vm.codegen.data import Scalar, ODEComponent
+    x_kind = arg_kinds_dict[0]
+    if isinstance(x_kind, Scalar):
+        if x_kind.is_real_valued:
+            ftype = BuiltinType("real*8")
+        else:
+            ftype = BuiltinType("complex*16")
+    elif isinstance(x_kind, ODEComponent):
+        ftype = code_generator.ode_component_type_map[x_kind.component_id]
+    else:
+        raise TypeError("unsupported kind for norm_2 argument: %s" % x_kind)
+
+    code_generator.emit("{result} = 0".format(result=result))
+    code_generator.emit("")
+
+    LenComputer(code_generator, result)(ftype, arg_strings_dict[0], {})
+    code_generator.emit("")
+
+
+class IsNaNComputer(TypeVisitorWithResult):
+    def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map):
+        self.code_generator.emit(
+                "{result} = {result} .or. isnan({expr})"
+                .format(
+                    result=self.result_expr,
+                    expr=fortran_expr))
+
+
+def codegen_builtin_isnan(result, function, arg_strings_dict, arg_kinds_dict,
+        code_generator):
+
+    from leap.vm.codegen.data import Scalar, ODEComponent
+    x_kind = arg_kinds_dict[0]
+    if isinstance(x_kind, Scalar):
+        if x_kind.is_real_valued:
+            ftype = BuiltinType("real*8")
+        else:
+            ftype = BuiltinType("complex*16")
+    elif isinstance(x_kind, ODEComponent):
+        ftype = code_generator.ode_component_type_map[x_kind.component_id]
+    else:
+        raise TypeError("unsupported kind for norm_2 argument: %s" % x_kind)
+
+    code_generator.emit("{result} = .false.".format(result=result))
+    code_generator.emit("")
+
+    IsNaNComputer(code_generator, result)(ftype, arg_strings_dict[0], {})
+    code_generator.emit("")
+
+# }}}
+
 
 # vim: foldmethod=marker
