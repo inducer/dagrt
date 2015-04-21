@@ -96,15 +96,19 @@ class NumpyInterpreter(object):
         self.context = {}
         self.next_state = self.code.initial_state
 
-        def builtin_norm(x, ord=None):
+        def builtin_norm(x, ord):
             if np.isscalar(x):
                 return abs(x)
             return np.linalg.norm(x, ord)
 
+        from functools import partial
+
         builtins = {
                 "<builtin>len": np.size,
                 "<builtin>isnan": np.isnan,
-                "<builtin>norm": builtin_norm,
+                "<builtin>norm_1": partial(builtin_norm, ord=1),
+                "<builtin>norm_2": partial(builtin_norm, ord=2),
+                "<builtin>norm_inf": partial(builtin_norm, ord=np.inf),
                 "<builtin>dot_product": np.vdot
                 }
 

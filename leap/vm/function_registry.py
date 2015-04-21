@@ -163,22 +163,35 @@ class FunctionRegistry(RecordWithoutPickling):
 
 # {{{ built-in functions
 
-class _Norm(Function):
-    """norm(x, ord)`` returns the *ord*-norm of *x*."""
+class _NormBase(Function):
+    """norm(x)`` returns the *ord*-norm of *x*."""
 
     identifier = "<builtin>norm"
-    arg_names = ("x", "ord")
+    arg_names = ("x",)
     default_dict = {}
 
     def get_result_kind(self, arg_kinds):
-        x_kind, ord_kind = self.resolve_args(arg_kinds)
+        x_kind, = self.resolve_args(arg_kinds)
 
-        if not isinstance(ord_kind, (NoneType, Scalar)):
-            raise TypeError("argument 'ord' of 'norm' is not a scalar")
         if not isinstance(x_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'x' of 'norm' is not an ODE component")
 
         return Scalar(is_real_valued=True)
+
+
+class _Norm1(_NormBase):
+    """norm_1(x)`` returns the 1-norm of *x*."""
+    identifier = "<builtin>norm_1"
+
+
+class _Norm2(_NormBase):
+    """norm_2(x)`` returns the 2-norm of *x*."""
+    identifier = "<builtin>norm_2"
+
+
+class _NormInf(_NormBase):
+    """norm_inf(x)`` returns the infinity-norm of *x*."""
+    identifier = "<builtin>norm_inf"
 
 
 class _DotProduct(Function):
@@ -249,7 +262,9 @@ def _make_bfr():
     bfr = FunctionRegistry()
 
     for func, py_pattern in [
-            (_Norm(), "self._builtin_norm({args})"),
+            (_Norm1(), "self._builtin_norm_1({args})"),
+            (_Norm2(), "self._builtin_norm_2({args})"),
+            (_NormInf(), "self._builtin_norm_inf({args})"),
             (_DotProduct(), "{numpy}.vdot({args})"),
             (_Len(), "{numpy}.size({args})"),
             (_IsNaN(), "{numpy}.isnan({args})"),

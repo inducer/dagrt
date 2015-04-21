@@ -90,7 +90,7 @@ class EmbeddedRungeKuttaMethod(Method):
 
         cb.fence()
 
-        norm = lambda expr: var('<builtin>norm')(expr, ord=2)
+        norm = lambda expr: var('<builtin>norm_2')(expr)
         cb(norm_start_state, norm(self.state))
         cb(norm_end_state, norm(low_order_estimate))
         cb(rel_error_raw, norm((high_order_estimate - low_order_estimate) /

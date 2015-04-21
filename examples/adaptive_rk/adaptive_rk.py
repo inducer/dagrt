@@ -51,7 +51,7 @@ def adaptive_rk_method(tol):
 
     # Helpers for expression fragments
     def norm(val):
-        return var("<builtin>norm")(val, 2)
+        return var("<builtin>norm_2")(val)
 
     def dt_scaling(tol, err):
         # Return a suitable scaling factor for dt.

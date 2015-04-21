@@ -74,10 +74,13 @@ def test_isnan(python_method_impl, value):
     assert result == np.isnan(value)
 
 
-@pytest.mark.parametrize(('order'), [2, np.inf])
+@pytest.mark.parametrize(('order', 'norm_suffix'), [
+    (2, '2'),
+    (np.inf, 'inf'),
+    ])
 @pytest.mark.parametrize(('test_vector'),
                          [6, 1j, np.array([-3]), np.array([-3, 4])])
-def test_norm(python_method_impl, order, test_vector):
+def test_norm(python_method_impl, order, norm_suffix, test_vector):
 
     def true_norm(x):
         if np.isscalar(x):
@@ -89,8 +92,8 @@ def test_norm(python_method_impl, order, test_vector):
         AssignExpression(id='assign_1', assignee='x',
                          expression=test_vector),
         AssignExpression(id='assign_2', assignee='n',
-                         expression=var('<builtin>norm')(var('x'),
-                                                         ord=order),
+                         expression=(
+                             var('<builtin>norm_%s' % norm_suffix)(var('x'))),
                          depends_on=['assign_1']),
         YieldState(id='return', time=0, time_id='final',
                    expression=var('n'), component_id='<state>',
