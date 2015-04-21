@@ -198,15 +198,29 @@ class CallCode(object):
 
         self.template = Template(template, strict_undefined=True)
 
-    def __call__(self, result, function, arg_dict, functions):
+    def __call__(self, result, function, arg_strings_dict, arg_kinds_dict,
+            code_generator):
         from leap.vm.codegen.utils import (
                 remove_common_indentation,
                 remove_redundant_blank_lines)
 
-        args = function.resolve_args(arg_dict)
+        args = function.resolve_args(arg_strings_dict)
 
-        template_names = {"result": result}
-        template_names.update(functions)
+        def add_declaration(decl):
+            code_generator.declaration_emitter(decl)
+
+        def declare_new(decl_without_name, prefix):
+            new_name = code_generator.name_manager.make_unique_fortran_name(prefix)
+            code_generator.declaration_emitter(decl_without_name + " :: " + new_name)
+            return new_name
+
+        template_names = dict(
+                result=result,
+                get_new_identifier=(
+                    code_generator.name_manager.make_unique_fortran_name),
+                add_declaration=add_declaration,
+                declare_new=declare_new)
+
         template_names.update(zip(function.arg_names, args))
 
         return remove_redundant_blank_lines(
@@ -1084,29 +1098,39 @@ class CodeGenerator(StructuredCodeGenerator):
         function = self.function_registry[expr.function.name]
         codegen = function.get_codegen(self.language)
 
-        def add_declaration(decl):
-            self.declaration_emitter(decl)
-
-        def declare_new(decl_without_name, prefix):
-            new_name = self.name_manager.make_unique_fortran_name(prefix)
-            self.declaration_emitter(decl_without_name + " :: " + new_name)
-            return new_name
-
         arg_strs_dict = {}
+        arg_kinds_dict = {}
         for i, arg in enumerate(expr.parameters):
             arg_strs_dict[i] = self.expr(arg)
+            assert isinstance(arg, Variable)
+
+            # FIXME: This can fail for args of state update notification,
+            # hence the try/catch.
+            try:
+                arg_kinds_dict[i] = self.sym_kind_table.get(
+                        self.current_function, arg.name)
+            except KeyError:
+                pass
+
         if isinstance(expr, CallWithKwargs):
             for arg_name, arg in expr.kw_parameters.items():
                 arg_strs_dict[arg_name] = self.expr(arg)
+                assert isinstance(arg, Variable)
+
+                # FIXME: This can fail for args of state update notification,
+                # hence the try/catch.
+                try:
+                    arg_kinds_dict[arg_name] = self.sym_kind_table.get(
+                            self.current_function, arg.name)
+                except KeyError:
+                    pass
 
         lines = codegen(
                 result=result_fortran_name,
                 function=function,
-                arg_dict=arg_strs_dict,
-                functions=dict(
-                    get_new_identifier=self.name_manager.make_unique_fortran_name,
-                    add_declaration=add_declaration,
-                    declare_new=declare_new))
+                arg_strings_dict=arg_strs_dict,
+                arg_kinds_dict=arg_kinds_dict,
+                code_generator=self)
 
         for l in lines:
             self.emit(l)
