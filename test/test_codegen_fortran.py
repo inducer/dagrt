@@ -352,6 +352,47 @@ def test_adaptive_rk_codegen():
         ])
 
 
+def test_adaptive_rk_codegen_error():
+    """Test whether Fortran code generation for the Runge-Kutta
+    timestepper works.
+    """
+
+    component_id = 'y'
+    rhs_function = '<func>y'
+
+    stepper = ODE45TimeStepper(component_id, use_high_order=False, atol=1e-6)
+
+    from leap.vm.function_registry import (
+            base_function_registry, register_ode_rhs)
+    freg = register_ode_rhs(base_function_registry, component_id,
+                            identifier=rhs_function)
+    freg = freg.register_codegen(rhs_function, "fortran",
+            f.CallCode("""
+                ${result} = -2*${y}
+                """))
+
+    code = stepper.generate()
+
+    codegen = f.CodeGenerator(
+            'RKMethod',
+            ode_component_type_map={
+                component_id: f.ArrayType(
+                    (2,),
+                    f.BuiltinType('real (kind=8)'),
+                    )
+                },
+            function_registry=freg,
+            module_preamble="""
+            ! lines copied to the start of the module, e.g. to say:
+            ! use ModStuff
+            """)
+
+    run_fortran([
+        ("rkmethod.f90", codegen(code)),
+        ("test_rk_adaptive_error.f90", read_file("test_rk_adaptive_error.f90")),
+        ])
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])
