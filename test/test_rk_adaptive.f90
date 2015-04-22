@@ -11,63 +11,64 @@ program test_rkmethod
   type(leap_state_type), target :: state
   type(leap_state_type), pointer :: state_ptr
 
-  real*8, dimension(2) :: initial_condition, true_sol
-  integer, dimension(2) :: ntrips
+  real*8, dimension(2) :: initial_condition
+  real*8, dimension(100) :: step_sizes
 
-  integer run_count
-  real*8 t_fin
-  parameter (run_count=2, t_fin=1d0)
-
-  real*8, dimension(run_count):: dt_values, errors
-
-  real*8 est_order, min_order
+  real*8 t_fin, dt_value, small_step_frac, big_step_frac, old_time
+  parameter (t_fin=1d0)
 
   integer stderr
   parameter(stderr=0)
 
-  integer istep, irun
+  integer istep, nruns, num_big_steps, num_small_steps
+  parameter (nruns = 100)
 
   ! start code ----------------------------------------------------------------
 
   state_ptr => state
 
   initial_condition(1) = 2
-  initial_condition(2) = 2.3
+  initial_condition(2) = 0
 
-  ntrips(1) = 20
-  ntrips(2) = 50
+  dt_value = 1e-5
+  old_time = 0d0
+  num_big_steps = 0
+  num_small_steps = 0
 
-  do irun = 1,run_count
-    dt_values(irun) = t_fin/ntrips(irun)
-
-    call timestep_initialize( &
+  call timestep_initialize( &
       leap_state=state_ptr, &
       state_y=initial_condition, &
       leap_t=0d0, &
-      leap_dt=dt_values(irun))
+      leap_dt=dt_value)
 
-    do istep = 1,ntrips(irun)
-      call timestep_run(leap_state=state_ptr)
-      write(*,*) state%ret_state_y
-    enddo
+  do istep = 1, nruns
 
-    true_sol = initial_condition * exp(-2*state%ret_time_y)
-    errors(irun) = sqrt(sum((true_sol-state%ret_state_y)**2))
+    call timestep_run(leap_state=state_ptr)
 
-    write(*,*) errors
+    step_sizes(istep) = state%ret_time_y - old_time
+    old_time = state%ret_time_y
 
-    call timestep_shutdown(leap_state=state_ptr)
-    write(*,*) 'done'
+    if (step_sizes(istep)<0.01d0) then
+      num_small_steps = num_small_steps + 1
+    elseif (step_sizes(istep)>0.05d0) then
+      num_big_steps = num_big_steps + 1
+    endif
+
   enddo
 
-  ! min_order = MIN_ORDER
-  ! est_order = log(errors(2)/errors(1))/log(dt_values(2)/dt_values(1))
+  call timestep_shutdown(leap_state=state_ptr)
+  write(*,*) 'done'
 
-  ! write(*,*) 'estimated order:', est_order
-  ! if (est_order < min_order) then
-  !   write(stderr,*) 'ERROR: achieved order too low:', est_order, ' < ', &
-  !       min_order
-  ! endif
+  big_step_frac = num_big_steps/real(nruns)
+  small_step_frac = num_small_steps/real(nruns)
+
+  if (big_step_frac>=0.16d0 .and. small_step_frac<=0.35d0) then
+    write(*,*), "Test passes: big_step_frac = ", big_step_frac
+    write(*,*), "Test passes: small_step_frac = ", small_step_frac
+  else
+    write(*,*), "Test fails: big_step_frac = ", big_step_frac
+    write(*,*), "Test fails: small_step_frac = ", small_step_frac
+  endif
 
 end program
 

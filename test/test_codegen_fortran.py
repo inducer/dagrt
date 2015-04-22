@@ -319,10 +319,10 @@ def test_adaptive_rk_codegen():
     timestepper works.
     """
 
-    stepper = ODE45TimeStepper("y", use_high_order=False, rtol=1e-6)
-
     component_id = 'y'
     rhs_function = '<func>y'
+
+    stepper = ODE45TimeStepper(component_id, use_high_order=False, rtol=1e-6)
 
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs)
@@ -330,7 +330,8 @@ def test_adaptive_rk_codegen():
                             identifier=rhs_function)
     freg = freg.register_codegen(rhs_function, "fortran",
             f.CallCode("""
-                ${result} = -2*${y}
+                ${result}(1) = ${y}(2)
+                ${result}(2) = -30*((${y}(1))**2 - 1)*${y}(2) - ${y}(1)
                 """))
 
     code = stepper.generate()
@@ -338,10 +339,10 @@ def test_adaptive_rk_codegen():
     codegen = f.CodeGenerator(
             'RKMethod',
             ode_component_type_map={
-                component_id: f.ArrayType(
+                "y": f.ArrayType(
                     (2,),
                     f.BuiltinType('real (kind=8)'),
-                    )
+                    ),
                 },
             function_registry=freg)
 
