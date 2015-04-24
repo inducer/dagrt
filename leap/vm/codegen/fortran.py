@@ -193,10 +193,17 @@ class FortranTypeEmitter(FortranSubblockEmitter):
 
 
 class CallCode(object):
-    def __init__(self, template):
+    def __init__(self, template, extra_args=None):
+        """
+        :arg extra_args: a dictionary of names that should be made available
+            in template expansion.
+        """
+
         from mako.template import Template
 
         self.template = Template(template, strict_undefined=True)
+
+        self.extra_args = extra_args
 
     def __call__(self, result, function, arg_strings_dict, arg_kinds_dict,
             code_generator):
@@ -222,6 +229,9 @@ class CallCode(object):
                 declare_new=declare_new)
 
         template_names.update(zip(function.arg_names, args))
+
+        if self.extra_args:
+            template_names.update(self.extra_args)
 
         lines = remove_redundant_blank_lines(
                 remove_common_indentation(
