@@ -112,7 +112,7 @@ def test_simplify():
 
     # Check that simplification respects redefinitions.
     from leap.vm.language import AssignExpression
-    redef = InstructionWrapper(AssignExpression("p", 10))
+    redef = InstructionWrapper(AssignExpression("p", (), 10))
     input_same_as_output = lambda f, x: f(x) == x
     assert input_same_as_output(simplify_ast, Block(IfThen(p, redef), IfThen(p, 0)))
     assert input_same_as_output(simplify_ast, Block(IfThenElse(p, 0, redef),

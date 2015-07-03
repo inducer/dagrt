@@ -66,6 +66,21 @@ class Scalar(SymbolKind):
         return (self.is_real_valued,)
 
 
+class Array(SymbolKind):
+    """A variable-sized one-dimensional array.
+
+    .. attribute:: is_real_valued
+
+        Whether the value is definitely real-valued
+    """
+
+    def __init__(self, is_real_valued):
+        super(Array, self).__init__(is_real_valued=is_real_valued)
+
+    def __getinitargs__(self):
+        return (self.is_real_valued,)
+
+
 class ODEComponent(SymbolKind):
     def __init__(self, component_id):
         super(ODEComponent, self).__init__(component_id=component_id)
@@ -159,9 +174,18 @@ def unify(kind_a, kind_b):
 
         return kind_a
 
+    if isinstance(kind_a, Array):
+        assert isinstance(kind_b, (Array, Scalar))
+
+        return Array(
+                not (not kind_a.is_real_valued or not kind_b.is_real_valued))
+
     elif isinstance(kind_a, Scalar):
         if isinstance(kind_b, ODEComponent):
             return kind_b
+        if isinstance(kind_b, Array):
+            return Array(
+                    not (not kind_a.is_real_valued or not kind_b.is_real_valued))
 
         assert isinstance(kind_b, Scalar)
         return Scalar(
@@ -290,6 +314,16 @@ class KindInferenceMapper(Mapper):
         return Scalar(is_real_valued=True)
 
     map_min = map_max
+
+    def map_subscript(self, expr):
+        agg_kind = self.rec(expr.aggregate)
+        if not isinstance(agg_kind, Array):
+            raise ValueError(
+                    "only arrays can be subscripted, not '%s' "
+                    "which is a '%s'"
+                    % (expr.aggregate, type(agg_kind).__name__))
+
+        return Scalar(is_real_valued=agg_kind.is_real_valued)
 
 # }}}
 

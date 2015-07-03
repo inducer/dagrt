@@ -108,6 +108,45 @@ def _builtin_norm_inf(self, x):
     if self._numpy.isscalar(x):
         return abs(x)
     return self._numpy.linalg.norm(x, self._numpy.inf)
+
+def _builtin_array(self, n):
+    if n != self._numpy.floor(n):
+        raise ValueError("array() argument n is not an integer")
+    n = int(n)
+
+    return self._numpy.empty(n)
+
+def _builtin_matmul(self, a, b, a_cols, b_cols):
+    if a_cols != self._numpy.floor(a_cols):
+        raise ValueError("matmul() argument a_cols is not an integer")
+    if b_cols != self._numpy.floor(b_cols):
+        raise ValueError("matmul() argument b_cols is not an integer")
+    a_cols = int(a_cols)
+    b_cols = int(b_cols)
+
+    a_mat = a.reshape(-1, a_cols, order="F")
+    b_mat = b.reshape(-1, b_cols, order="F")
+
+    res_mat = a_mat.dot(b_mat)
+
+    return res_mat.reshape(-1, order="F")
+
+def _builtin_linear_solve(self, a, b, a_cols, b_cols):
+    if a_cols != self._numpy.floor(a_cols):
+        raise ValueError("linear_solve() argument a_cols is not an integer")
+    if b_cols != self._numpy.floor(b_cols):
+        raise ValueError("linear_solve() argument b_cols is not an integer")
+    a_cols = int(a_cols)
+    b_cols = int(b_cols)
+
+    a_mat = a.reshape(-1, a_cols, order="F")
+    b_mat = b.reshape(-1, b_cols, order="F")
+
+    import numpy.linalg as la
+    res_mat = la.solve(a_mat, b_mat)
+
+    return res_mat.reshape(-1, order="F")
+
 '''
 
 
@@ -116,6 +155,7 @@ class PythonClassEmitter(PythonEmitter):
 
     def __init__(self, class_name, superclass='object'):
         super(PythonClassEmitter, self).__init__()
+        self('from __future__ import division')
         self('class {cls}({superclass}):'.format(cls=class_name,
                                                  superclass=superclass))
         self.indent()
@@ -375,10 +415,6 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         self._emit('else:')
         self._emitter.indent()
 
-    def emit_assign_expr(self, name, expr):
-        self._emit('{name} = {expr}'.format(name=self._name_manager[name],
-                                           expr=self._expr(expr)))
-
     def emit_return(self):
         self._emit('return')
         # Ensure that Python recognizes this method as a generator function by
@@ -392,29 +428,66 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         if not self._has_yield_inst:
             self._emit('yield')
 
-    def emit_yield_state(self, component_id, expression, time, time_id):
+    # {{{ instructions
+
+    def emit_inst_AssignExpression(self, inst):
+        emitter = self._emitter
+        for ident, start, stop in inst.loops:
+            managed_ident = self._name_manager[ident]
+            emitter("for {ident} in range({start}, {stop}):"
+                    .format(
+                        ident=managed_ident,
+                        start=self._expr(start),
+                        stop=self._expr(stop)))
+            emitter.indent()
+
+        if inst.assignee_subscript:
+            subscript_code = "[%s]" % (
+                    ", ".join(
+                        self._expr(sub_i)
+                        for sub_i in inst.assignee_subscript))
+        else:
+            subscript_code = ""
+
+        self._emit(
+                '{name}{sub} = {expr}'
+                .format(
+                    name=self._name_manager[inst.assignee],
+                    sub=subscript_code,
+                    expr=self._expr(inst.expression)))
+
+        for ident, start, stop in inst.loops:
+            emitter.dedent()
+
+        for ident, start, stop in inst.loops:
+            managed_ident = self._name_manager[ident]
+            emitter("del {name}".format(name=managed_ident))
+
+    def emit_inst_YieldState(self, inst):
         self._emit('yield self.StateComputed(t={t}, time_id={time_id}, '
                    'component_id={component_id}, '
                    'state_component={state_component})'.format(
-                       t=self._expr(time),
-                       time_id=repr(time_id),
-                       component_id=repr(component_id),
-                       state_component=self._expr(expression)))
+                       t=self._expr(inst.time),
+                       time_id=repr(inst.time_id),
+                       component_id=repr(inst.component_id),
+                       state_component=self._expr(inst.expression)))
 
-    def emit_raise(self, error_condition, error_message):
+    def emit_inst_Raise(self, inst):
         self._emit('raise self.{condition}("{message}")'.format(
-                   condition=error_condition.__name__,
-                   message=error_message))
+                   condition=inst.error_condition.__name__,
+                   message=inst.error_message))
         if not self._has_yield_inst:
             self._emit('yield')
 
-    def emit_fail_step(self):
+    def emit_inst_FailStep(self, inst):
         self._emit('raise self.FailStepException()')
         if not self._has_yield_inst:
             self._emit('yield')
 
-    def emit_state_transition(self, next_state):
-        assert '\'' not in next_state
-        self._emit('raise self.TransitionEvent(\'' + next_state + '\')')
+    def emit_inst_StateTransition(self, inst):
+        assert '\'' not in inst.next_state
+        self._emit('raise self.TransitionEvent(\'' + inst.next_state + '\')')
         if not self._has_yield_inst:
             self._emit('yield')
+
+    # }}}

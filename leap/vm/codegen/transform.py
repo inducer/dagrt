@@ -55,7 +55,7 @@ def eliminate_self_dependencies(dag):
             tmp_insn_ids.append(tmp_insn_id)
 
             new_tmp_insn = AssignExpression(
-                    tmp_var_name, var(var_name),
+                    tmp_var_name, (), var(var_name),
                     condition=insn.condition,
                     id=tmp_insn_id,
                     depends_on=insn.depends_on)
@@ -101,7 +101,7 @@ class FunctionArgumentIsolator(IdentityMapper):
 
         from leap.vm.language import AssignExpression
         new_insn = AssignExpression(
-                tmp_var_name, rec_result,
+                tmp_var_name, (), rec_result,
                 condition=base_condition,
                 depends_on=base_deps | frozenset(sub_extra_deps),
                 id=tmp_insn_id)
@@ -180,7 +180,7 @@ class FunctionCallIsolator(IdentityMapper):
 
         from leap.vm.language import AssignExpression
         new_insn = AssignExpression(
-                tmp_var_name, rec_result, id=tmp_insn_id,
+                tmp_var_name, (), rec_result, id=tmp_insn_id,
                 condition=base_condition,
                 depends_on=base_deps | frozenset(sub_extra_deps))
 
@@ -286,23 +286,30 @@ class IfThenElseExpander(IdentityMapper):
         from leap.vm.language import AssignExpression
 
         self.new_instructions.extend([
-            AssignExpression(assignee=flag.name,
-                             expression=rec_condition,
-                             condition=base_condition,
-                             id=if_insn_id,
-                             depends_on=base_deps | frozenset(sub_condition_deps)),
-            AssignExpression(assignee=tmp_result,
-                             condition=then_condition,
-                             expression=rec_then,
-                             id=then_insn_id,
-                             depends_on=base_deps | frozenset(sub_then_deps) |
-                             frozenset([if_insn_id])),
-            AssignExpression(assignee=tmp_result,
-                             condition=else_condition,
-                             expression=rec_else,
-                             id=else_insn_id,
-                             depends_on=base_deps | frozenset(sub_else_deps) |
-                             frozenset([if_insn_id]))])
+            AssignExpression(
+                assignee=flag.name,
+                assignee_subscript=(),
+                expression=rec_condition,
+                condition=base_condition,
+                id=if_insn_id,
+                depends_on=base_deps | frozenset(sub_condition_deps)),
+            AssignExpression(
+                assignee=tmp_result,
+                assignee_subscript=(),
+                condition=then_condition,
+                expression=rec_then,
+                id=then_insn_id,
+                depends_on=(
+                    base_deps | frozenset(sub_then_deps) |
+                    frozenset([if_insn_id]))),
+            AssignExpression(
+                assignee=tmp_result,
+                assignee_subscript=(),
+                condition=else_condition,
+                expression=rec_else,
+                id=else_insn_id,
+                depends_on=base_deps | frozenset(sub_else_deps) |
+                frozenset([if_insn_id]))])
 
         extra_deps.extend([then_insn_id, else_insn_id])
         return var(tmp_result)

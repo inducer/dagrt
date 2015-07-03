@@ -26,7 +26,7 @@ THE SOFTWARE.
 """
 
 from pytools import RecordWithoutPickling
-from leap.vm.codegen.data import ODEComponent, Boolean, Scalar
+from leap.vm.codegen.data import ODEComponent, Boolean, Scalar, Array
 
 NoneType = type(None)
 
@@ -164,7 +164,7 @@ class FunctionRegistry(RecordWithoutPickling):
 # {{{ built-in functions
 
 class _NormBase(Function):
-    """norm(x)`` returns the *ord*-norm of *x*."""
+    """``norm(x)`` returns the *ord*-norm of *x*."""
 
     identifier = "<builtin>norm"
     arg_names = ("x",)
@@ -180,17 +180,17 @@ class _NormBase(Function):
 
 
 class _Norm1(_NormBase):
-    """norm_1(x)`` returns the 1-norm of *x*."""
+    """``norm_1(x)`` returns the 1-norm of *x*."""
     identifier = "<builtin>norm_1"
 
 
 class _Norm2(_NormBase):
-    """norm_2(x)`` returns the 2-norm of *x*."""
+    """``norm_2(x)`` returns the 2-norm of *x*."""
     identifier = "<builtin>norm_2"
 
 
 class _NormInf(_NormBase):
-    """norm_inf(x)`` returns the infinity-norm of *x*."""
+    """``norm_inf(x)`` returns the infinity-norm of *x*."""
     identifier = "<builtin>norm_inf"
 
 
@@ -215,7 +215,7 @@ class _DotProduct(Function):
 
 
 class _Len(Function):
-    """len(x)`` returns the number of degrees of freedom in *x* """
+    """``len(x)`` returns the number of degrees of freedom in *x* """
 
     identifier = "<builtin>len"
     arg_names = ("x",)
@@ -231,7 +231,7 @@ class _Len(Function):
 
 
 class _IsNaN(Function):
-    """isnan(x)`` returns True if there are any NaNs in *x*"""
+    """``isnan(x)`` returns True if there are any NaNs in *x*"""
 
     identifier = "<builtin>isnan"
     arg_names = ("x",)
@@ -244,6 +244,74 @@ class _IsNaN(Function):
             raise TypeError("argument 'x' of 'len' is not an ODE component")
 
         return Boolean()
+
+
+class _Array(Function):
+    """``array(n)`` returns an empty array with n entries in it.
+    n must be an integer.
+    """
+
+    identifier = "<builtin>array"
+    arg_names = ("n",)
+    default_dict = {}
+
+    def get_result_kind(self, arg_kinds):
+        n_kind, = self.resolve_args(arg_kinds)
+
+        if not isinstance(n_kind, Scalar):
+            raise TypeError("argument 'n' of 'array' is not a scalar")
+
+        return Array()
+
+
+class _MatMul(Function):
+    """``matmul(a, b, a_cols, b_cols)`` returns a 1D array containing the
+    matrix resulting from multiplying the arrays a and b (both interpreted
+    as matrices, with a number of columns *a_cols* and *b_cols* respectively)
+    """
+
+    identifier = "<builtin>matmul"
+    arg_names = ("a", "b", "a_cols", "b_cols")
+    default_dict = {}
+
+    def get_result_kind(self, arg_kinds):
+        a_kind, b_kind, a_cols_kind, b_cols_kind = self.resolve_args(arg_kinds)
+
+        if not isinstance(a_kind, Array):
+            raise TypeError("argument 'a' of 'matmul' is not an array")
+        if not isinstance(b_kind, Array):
+            raise TypeError("argument 'a' of 'matmul' is not an array")
+        if not isinstance(a_cols_kind, Scalar):
+            raise TypeError("argument 'a_cols' of 'matmul' is not a scalar")
+        if not isinstance(b_cols_kind, Scalar):
+            raise TypeError("argument 'b_cols' of 'matmul' is not a scalar")
+
+        return Array()
+
+
+class _LinearSolve(Function):
+    """``linear_solve(a, b, a_cols, b_cols)`` returns a 1D array containing the
+    matrix resulting from multiplying the matrix inverse of a by b (both interpreted
+    as matrices, with a number of columns *a_cols* and *b_cols* respectively)
+    """
+
+    identifier = "<builtin>linear_solve"
+    arg_names = ("a", "b", "a_cols", "b_cols")
+    default_dict = {}
+
+    def get_result_kind(self, arg_kinds):
+        a_kind, b_kind, a_cols_kind, b_cols_kind = self.resolve_args(arg_kinds)
+
+        if not isinstance(a_kind, Array):
+            raise TypeError("argument 'a' of 'linear_solve' is not an array")
+        if not isinstance(b_kind, Array):
+            raise TypeError("argument 'a' of 'linear_solve' is not an array")
+        if not isinstance(a_cols_kind, Scalar):
+            raise TypeError("argument 'a_cols' of 'linear_solve' is not a scalar")
+        if not isinstance(b_cols_kind, Scalar):
+            raise TypeError("argument 'b_cols' of 'linear_solve' is not a scalar")
+
+        return Array()
 
 
 class _PythonBuiltinFunctionCodeGenerator(object):
@@ -268,6 +336,9 @@ def _make_bfr():
             (_DotProduct(), "{numpy}.vdot({args})"),
             (_Len(), "{numpy}.size({args})"),
             (_IsNaN(), "{numpy}.isnan({args})"),
+            (_Array(), "self._builtin_array({args})"),
+            (_MatMul(), "self._builtin_matmul({args})"),
+            (_LinearSolve(), "self._builtin_linear_solve({args})"),
             ]:
 
         bfr = bfr.register(func)

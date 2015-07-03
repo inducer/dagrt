@@ -1389,6 +1389,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emitter.emit_else()
 
     def emit_assign_expr(self, assignee_sym, expr):
+
         from leap.vm.codegen.data import ODEComponent
 
         assignee_fortran_name = self.name_manager[assignee_sym]
@@ -1416,6 +1417,9 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_allocation_check(assignee_sym, sym_kind)
         self.emit_assign_expr_inner(assignee_fortran_name, expr, sym_kind)
 
+    def emit_inst_AssignExpression(self, inst):
+        self.emit_assign_expr(inst.assignee, inst.expression)
+
     def emit_return(self):
         self.emit('999 continue ! exit label')
 
@@ -1433,13 +1437,13 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.emit('return')
 
-    def emit_yield_state(self, component_id, expression, time, time_id):
+    def emit_inst_YieldState(self, inst):
         self.emit_assign_expr(
-                '<ret_time_id>'+component_id,
-                Variable("leap_time_"+str(time_id)))
+                '<ret_time_id>'+inst.component_id,
+                Variable("leap_time_"+str(inst.time_id)))
         self.emit_assign_expr(
-                '<ret_time>'+component_id,
-                time)
+                '<ret_time>'+inst.component_id,
+                inst.time)
 
         if self.call_before_state_update or self.call_after_state_update:
             dummy_name = self.name_manager.make_unique_fortran_name("dummy_logical")
@@ -1452,12 +1456,12 @@ class CodeGenerator(StructuredCodeGenerator):
                     dummy_name,
                     var(self.call_before_state_update)(
                         var(self.component_name_to_component_sym(
-                            component_id))
+                            inst.component_id))
                         ))
 
         self.emit_assign_expr(
-                '<ret_state>'+component_id,
-                expression)
+                '<ret_state>'+inst.component_id,
+                inst.expression)
 
         if self.call_after_state_update:
             from pymbolic import var
@@ -1465,23 +1469,23 @@ class CodeGenerator(StructuredCodeGenerator):
                     dummy_name,
                     var(self.call_after_state_update)(
                         var(self.component_name_to_component_sym(
-                            component_id))
+                            inst.component_id))
                         ))
 
-    def emit_raise(self, error_condition, error_message):
+    def emit_inst_Raise(self, inst):
         self.emit("write (leap_stderr,*) "
                 "'{condition}: {message}'".format(
-                    condition=error_condition.__name__,
-                    message=error_message))
+                    condition=inst.error_condition.__name__,
+                    message=inst.error_message))
         self.emit("stop")
 
-    def emit_fail_step(self):
+    def emit_inst_FailStep(self, inst):
         self.emit("goto 999")
 
-    def emit_state_transition(self, next_state):
+    def emit_inst_StateTransition(self, inst):
         self.emit(
                 'leap_state%leap_next_state = '
-                + self.state_name_to_state_sym(next_state))
+                + self.state_name_to_state_sym(inst.next_state))
 
     # }}}
 
