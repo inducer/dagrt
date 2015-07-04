@@ -719,6 +719,12 @@ class CodeBuilder(object):
         """Create a new block that is conditionally executed."""
         if len(condition_arg) == 1:
             condition = condition_arg[0]
+
+            from leap.vm.expression import parse
+
+            if isinstance(condition, str):
+                condition = parse(condition)
+
         elif len(condition_arg) == 3:
             from pymbolic.primitives import Comparison
             condition = Comparison(*condition_arg)

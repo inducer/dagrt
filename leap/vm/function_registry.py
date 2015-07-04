@@ -26,7 +26,8 @@ THE SOFTWARE.
 """
 
 from pytools import RecordWithoutPickling
-from leap.vm.codegen.data import ODEComponent, Boolean, Scalar, Array
+from leap.vm.codegen.data import (
+        ODEComponent, Boolean, Scalar, Array, UnableToInferKind)
 
 NoneType = type(None)
 
@@ -258,10 +259,13 @@ class _Array(Function):
     def get_result_kind(self, arg_kinds):
         n_kind, = self.resolve_args(arg_kinds)
 
+        if n_kind is None:
+            raise UnableToInferKind()
+
         if not isinstance(n_kind, Scalar):
             raise TypeError("argument 'n' of 'array' is not a scalar")
 
-        return Array()
+        return Array(is_real_valued=True)
 
 
 class _MatMul(Function):
@@ -277,6 +281,9 @@ class _MatMul(Function):
     def get_result_kind(self, arg_kinds):
         a_kind, b_kind, a_cols_kind, b_cols_kind = self.resolve_args(arg_kinds)
 
+        if a_kind is None or b_kind is None:
+            raise UnableToInferKind()
+
         if not isinstance(a_kind, Array):
             raise TypeError("argument 'a' of 'matmul' is not an array")
         if not isinstance(b_kind, Array):
@@ -286,7 +293,9 @@ class _MatMul(Function):
         if not isinstance(b_cols_kind, Scalar):
             raise TypeError("argument 'b_cols' of 'matmul' is not a scalar")
 
-        return Array()
+        is_real_valued = a_kind.is_real_valued and b_kind.is_real_valued
+
+        return Array(is_real_valued)
 
 
 class _LinearSolve(Function):
@@ -302,6 +311,9 @@ class _LinearSolve(Function):
     def get_result_kind(self, arg_kinds):
         a_kind, b_kind, a_cols_kind, b_cols_kind = self.resolve_args(arg_kinds)
 
+        if a_kind is None or b_kind is None:
+            raise UnableToInferKind()
+
         if not isinstance(a_kind, Array):
             raise TypeError("argument 'a' of 'linear_solve' is not an array")
         if not isinstance(b_kind, Array):
@@ -311,7 +323,9 @@ class _LinearSolve(Function):
         if not isinstance(b_cols_kind, Scalar):
             raise TypeError("argument 'b_cols' of 'linear_solve' is not a scalar")
 
-        return Array()
+        is_real_valued = a_kind.is_real_valued and b_kind.is_real_valued
+
+        return Array(is_real_valued)
 
 
 class _PythonBuiltinFunctionCodeGenerator(object):
@@ -348,17 +362,20 @@ def _make_bfr():
             _PythonBuiltinFunctionCodeGenerator(
                 func, py_pattern))
 
-    from leap.vm.codegen.fortran import (
-            codegen_builtin_len,
-            codegen_builtin_norm_2,
-            codegen_builtin_isnan)
+    import leap.vm.codegen.fortran as f
 
     bfr = bfr.register_codegen(_Norm2.identifier, "fortran",
-            codegen_builtin_norm_2)
+            f.codegen_builtin_norm_2)
     bfr = bfr.register_codegen(_Len.identifier, "fortran",
-            codegen_builtin_len)
+            f.codegen_builtin_len)
     bfr = bfr.register_codegen(_IsNaN.identifier, "fortran",
-            codegen_builtin_isnan)
+            f.codegen_builtin_isnan)
+    bfr = bfr.register_codegen(_Array.identifier, "fortran",
+            f.builtin_array)
+    bfr = bfr.register_codegen(_MatMul.identifier, "fortran",
+            f.builtin_matmul)
+    bfr = bfr.register_codegen(_LinearSolve.identifier, "fortran",
+            f.builtin_linear_solve)
 
     return bfr
 

@@ -52,6 +52,10 @@ class Boolean(SymbolKind):
     pass
 
 
+class Integer(SymbolKind):
+    pass
+
+
 class Scalar(SymbolKind):
     """
     .. attribute:: is_real_valued
@@ -370,6 +374,12 @@ class SymbolKindFinder(object):
                         result.global_table,
                         result.per_function_table.get(func_name, {}),
                         self.function_registry)
+
+                for ident, _, _ in insn.loops:
+                    result.set(func_name, ident, kind=Integer())
+
+                if insn.assignee_subscript:
+                    continue
 
                 try:
                     kind = kim(insn.expression)

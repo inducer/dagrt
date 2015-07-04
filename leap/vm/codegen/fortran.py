@@ -81,7 +81,7 @@ class FortranNameManager(object):
         return self.name_generator.is_name_conflicting(name)
 
     def __getitem__(self, name):
-        """Provide an interface to PythonExpressionMapper to look up
+        """Provide an interface to the expression mapper to look up
         the name of a local or global variable.
         """
         if is_state_variable(name):
@@ -90,7 +90,7 @@ class FortranNameManager(object):
             return self.name_local(name)
 
     def name_refcount(self, name):
-        """Provide an interface to PythonExpressionMapper to look up
+        """Provide an interface to the expression mapper to look up
         the name of a local or global variable.
         """
         if is_state_variable(name):
@@ -212,6 +212,7 @@ class CallCode(object):
                 remove_redundant_blank_lines)
 
         args = function.resolve_args(arg_strings_dict)
+        arg_kinds = function.resolve_args(arg_kinds_dict)
 
         def add_declaration(decl):
             code_generator.declaration_emitter(decl)
@@ -221,14 +222,23 @@ class CallCode(object):
             code_generator.declaration_emitter(decl_without_name + " :: " + new_name)
             return new_name
 
+        import leap.vm.codegen.data as kinds
+
         template_names = dict(
                 result=result,
+                real_scalar_kind=code_generator.real_scalar_kind,
+                complex_scalar_kind=code_generator.complex_scalar_kind,
                 get_new_identifier=(
                     code_generator.name_manager.make_unique_fortran_name),
                 add_declaration=add_declaration,
-                declare_new=declare_new)
+                declare_new=declare_new,
+                kinds=kinds)
 
         template_names.update(zip(function.arg_names, args))
+
+        template_names.update(
+                (name+"_kind", kind)
+                for name, kind in zip(function.arg_names, arg_kinds))
 
         if self.extra_args:
             template_names.update(self.extra_args)
@@ -897,7 +907,7 @@ class CodeGenerator(StructuredCodeGenerator):
         if emit is None:
             emit = self.emit
 
-        from leap.vm.codegen.data import Boolean, Scalar
+        from leap.vm.codegen.data import Boolean, Scalar, Array, Integer
 
         type_specifiers = other_specifiers
 
@@ -905,11 +915,21 @@ class CodeGenerator(StructuredCodeGenerator):
         if isinstance(sym_kind, Boolean):
             type_name = 'logical'
 
+        elif isinstance(sym_kind, Array):
+            if sym_kind.is_real_valued or not self.use_complex_scalars:
+                type_name = 'real (kind=%s)' % self.real_scalar_kind
+            else:
+                type_name = 'complex (kind=%s)' % self.complex_scalar_kind
+            type_specifiers = type_specifiers + ("allocatable", "dimension(:)")
+
         elif isinstance(sym_kind, Scalar):
             if sym_kind.is_real_valued or not self.use_complex_scalars:
                 type_name = 'real (kind=%s)' % self.real_scalar_kind
             else:
                 type_name = 'complex (kind=%s)' % self.complex_scalar_kind
+
+        elif isinstance(sym_kind, Integer):
+            type_name = 'integer'
 
         elif isinstance(sym_kind, ODEComponent):
             comp_type = self.get_ode_component_type(sym_kind.component_id,
@@ -1042,10 +1062,10 @@ class CodeGenerator(StructuredCodeGenerator):
                 tgt_refcnt=self.name_manager.name_refcount(assignee_sym)))
         self.emit('')
 
-    def emit_assign_from_function_call(self, result_fortran_name, expr):
-        self.emit_trace("func call {result_fortran_name} = {expr}..."
+    def emit_assign_from_function_call(self, result_fortran_expr_str, expr):
+        self.emit_trace("func call {result_fortran_expr_str} = {expr}..."
                 .format(
-                    result_fortran_name=result_fortran_name,
+                    result_fortran_expr_str=result_fortran_expr_str,
                     expr=str(expr)[:50]))
 
         function = self.function_registry[expr.function.name]
@@ -1063,7 +1083,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 arg_kinds_dict[i] = self.sym_kind_table.get(
                         self.current_function, arg.name)
             except KeyError:
-                pass
+                arg_kinds_dict[i] = None
 
         if isinstance(expr, CallWithKwargs):
             for arg_name, arg in expr.kw_parameters.items():
@@ -1079,27 +1099,39 @@ class CodeGenerator(StructuredCodeGenerator):
                     pass
 
         codegen(
-                result=result_fortran_name,
+                result=result_fortran_expr_str,
                 function=function,
                 arg_strings_dict=arg_strs_dict,
                 arg_kinds_dict=arg_kinds_dict,
                 code_generator=self)
 
-    def emit_assign_expr_inner(self, assignee_fortran_name, expr, sym_kind):
-        if isinstance(expr, (Call, CallWithKwargs)):
-            self.emit_assign_from_function_call(assignee_fortran_name, expr)
+    def emit_assign_expr_inner(self,
+            assignee_fortran_name, assignee_subscript, expr, sym_kind):
+        if assignee_subscript:
+            subscript_str = "(%s)" % (
+                    ", ".join(
+                        "int(%s)" % self.expr(i)
+                        for i in assignee_subscript))
         else:
-            self.emit_trace("{assignee_fortran_name} = {expr}..."
+            subscript_str = ""
+
+        if isinstance(expr, (Call, CallWithKwargs)):
+            self.emit_assign_from_function_call(
+                    assignee_fortran_name+subscript_str, expr)
+        else:
+            self.emit_trace("{assignee_fortran_name}{subscript_str} = {expr}..."
                     .format(
                         assignee_fortran_name=assignee_fortran_name,
+                        subscript_str=subscript_str,
                         expr=str(expr)[:50]))
 
             from leap.vm.codegen.data import ODEComponent
             if not isinstance(sym_kind, ODEComponent):
                 self.emit(
-                        "{name} = {expr}"
+                        "{name}{subscript_str} = {expr}"
                         .format(
                             name=assignee_fortran_name,
+                            subscript_str=subscript_str,
                             expr=self.expr(expr)))
             else:
                 comp_type = self.get_ode_component_type(sym_kind.component_id)
@@ -1388,18 +1420,25 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_else_begin(self):
         self.emitter.emit_else()
 
-    def emit_assign_expr(self, assignee_sym, expr):
-
-        from leap.vm.codegen.data import ODEComponent
+    def emit_assign_expr(self, assignee_sym, assignee_subscript, expr):
+        from leap.vm.codegen.data import ODEComponent, Array
 
         assignee_fortran_name = self.name_manager[assignee_sym]
 
         sym_kind = self.sym_kind_table.get(
                 self.current_function, assignee_sym)
 
-        if not isinstance(sym_kind, ODEComponent):
-            self.emit_assign_expr_inner(assignee_fortran_name, expr, sym_kind)
+        if assignee_subscript and not isinstance(sym_kind, Array):
+            raise TypeError("only arrays support subscripted assignment")
             return
+
+        if not isinstance(sym_kind, ODEComponent):
+            self.emit_assign_expr_inner(
+                    assignee_fortran_name, assignee_subscript, expr, sym_kind)
+            return
+
+        if assignee_subscript:
+            raise ValueError("ODE components do not support subscripting")
 
         if isinstance(expr, Variable):
             self.emit_ode_component_move(
@@ -1415,10 +1454,26 @@ class CodeGenerator(StructuredCodeGenerator):
         assert var(assignee_sym) not in DependencyMapper()(expr)
 
         self.emit_allocation_check(assignee_sym, sym_kind)
-        self.emit_assign_expr_inner(assignee_fortran_name, expr, sym_kind)
+        self.emit_assign_expr_inner(assignee_fortran_name, assignee_subscript, expr, sym_kind)
 
     def emit_inst_AssignExpression(self, inst):
-        self.emit_assign_expr(inst.assignee, inst.expression)
+        start_em = self.emitter
+
+        for ident, start, stop in inst.loops:
+            em = FortranDoEmitter(
+                    self.emitter,
+                    ident,
+                    "int(%s), int(%s)" % (self.expr(start), self.expr(stop-1)),
+                    code_generator=self)
+            em.__enter__()
+
+        self.emit_assign_expr(
+                inst.assignee, inst.assignee_subscript, inst.expression)
+
+        for ident, start, stop in inst.loops[::-1]:
+            self.emitter.__exit__(None, None, None)
+
+        assert start_em is self.emitter
 
     def emit_return(self):
         self.emit('999 continue ! exit label')
@@ -1440,9 +1495,11 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_inst_YieldState(self, inst):
         self.emit_assign_expr(
                 '<ret_time_id>'+inst.component_id,
+                (),
                 Variable("leap_time_"+str(inst.time_id)))
         self.emit_assign_expr(
                 '<ret_time>'+inst.component_id,
+                (),
                 inst.time)
 
         if self.call_before_state_update or self.call_after_state_update:
@@ -1461,6 +1518,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.emit_assign_expr(
                 '<ret_state>'+inst.component_id,
+                (),
                 inst.expression)
 
         if self.call_after_state_update:
@@ -1512,7 +1570,7 @@ class Norm2Computer(TypeVisitorWithResult):
 def codegen_builtin_norm_2(result, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
 
-    from leap.vm.codegen.data import Scalar, ODEComponent
+    from leap.vm.codegen.data import Scalar, ODEComponent, Array
     x_kind = arg_kinds_dict[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
@@ -1521,6 +1579,12 @@ def codegen_builtin_norm_2(result, function, arg_strings_dict, arg_kinds_dict,
             ftype = BuiltinType("complex*16")
     elif isinstance(x_kind, ODEComponent):
         ftype = code_generator.ode_component_type_map[x_kind.component_id]
+
+    elif isinstance(x_kind, Array):
+        code_generator.emit("{result} = norm2({arg})".format(
+            result=result, arg=arg_strings_dict[0]))
+        return
+
     else:
         raise TypeError("unsupported kind for norm_2 argument: %s" % x_kind)
 
@@ -1549,7 +1613,7 @@ class LenComputer(TypeVisitorWithResult):
 def codegen_builtin_len(result, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
 
-    from leap.vm.codegen.data import Scalar, ODEComponent
+    from leap.vm.codegen.data import Scalar, Array, ODEComponent
     x_kind = arg_kinds_dict[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
@@ -1558,6 +1622,11 @@ def codegen_builtin_len(result, function, arg_strings_dict, arg_kinds_dict,
             ftype = BuiltinType("complex*16")
     elif isinstance(x_kind, ODEComponent):
         ftype = code_generator.ode_component_type_map[x_kind.component_id]
+    elif isinstance(x_kind, Array):
+        code_generator.emit("{result} = size({arg})".format(
+            result=result,
+            arg=arg_strings_dict[0]))
+        return
     else:
         raise TypeError("unsupported kind for norm_2 argument: %s" % x_kind)
 
@@ -1598,6 +1667,153 @@ def codegen_builtin_isnan(result, function, arg_strings_dict, arg_kinds_dict,
     IsNaNComputer(code_generator, result)(ftype, arg_strings_dict[0], {})
     code_generator.emit("")
 
+
+builtin_array = CallCode("""
+        if (int(${n}).ne.${n}) then
+            write(leap_stderr,*) 'argument to array() is not an integer'
+            stop
+        endif
+
+        allocate(${result}(0:int(${n})-1))
+        """)
+
+
+UTIL_MACROS = """
+    <%def name="write_matrix(mat_array, rows_var)" >
+        <%
+        i = declare_new("integer", "i")
+        %>
+        do ${i} = 0, int(${rows_var})-1
+            write(*,*) ${mat_array}(${i}::${rows_var})
+        end do
+    </%def>
+
+    <%def name="check_matrix(mat_array, cols_var, rows_var, func_name)" >
+        if (int(${cols_var}).ne.${cols_var}) then
+            write(leap_stderr,*) &
+                'argument ${cols_var} to ${func_name} is not an integer'
+            stop
+        endif
+
+        ${rows_var} = size(${a}) / int(${cols_var})
+
+        if (${rows_var} * int(${cols_var}) .ne. size(${mat_array})) then
+            write(leap_stderr,*) &
+                'size of argument ${mat_array} to ${func_name} ' // &
+                'not divisible by ${cols_var}'
+            stop
+        endif
+    </%def>
+
+    <%
+    def get_lapack_letter(kind):
+        if kind.is_real_valued:
+            if real_scalar_kind == "4":
+                return "s"
+            elif real_scalar_kind == "8":
+                return "d"
+            else:
+                raise TypeError("unrecognized real kind %s" % real_scalar_kind)
+        else:
+            if complex_scalar_kind == "8":
+                return "c"
+            elif complex_scalar_kind == "16":
+                return "z"
+            else:
+                raise TypeError("unrecognized complex kind %s"
+                    % complex_scalar_kind)
+
+    def kind_to_fortran(kind):
+        if kind.is_real_valued:
+            return "real (kind=%s)" % real_scalar_kind
+        else:
+            return "compelx (kind=%s)" % complex_scalar_kind
+    %>
+
+    """
+
+builtin_matmul = CallCode(UTIL_MACROS + """
+        <%
+        a_rows = declare_new("integer", "a_rows")
+        b_rows = declare_new("integer", "b_rows")
+        res_size = declare_new("integer", "res_size")
+        %>
+
+        ${check_matrix(a, a_cols, a_rows, "matmul")}
+        ${check_matrix(b, b_cols, b_rows, "matmul")}
+
+        ${a_rows} = size(${a}) / int(${a_cols})
+        ${b_rows} = size(${b}) / int(${b_cols})
+
+        ${res_size} = ${a_rows} * int(${b_cols})
+
+        allocate(${result}(0:${res_size}-1))
+
+        ${result} = reshape( &
+                matmul( &
+                    reshape(${a}, (/${a_rows}, int(${a_cols})/)), &
+                    reshape(${b}, (/${b_rows}, int(${b_cols})/))), &
+                (/${res_size}/))
+        """)
+
+builtin_linear_solve = CallCode(UTIL_MACROS + """
+        <%
+        a_rows = declare_new("integer", "a_rows")
+        b_rows = declare_new("integer", "b_rows")
+        res_size = declare_new("integer", "res_size")
+
+        %>
+
+        ${check_matrix(a, a_cols, a_rows, "linear_solve")}
+        ${check_matrix(b, b_cols, b_rows, "linear_solve")}
+
+        if (int(${a_rows}).ne.int(${b_rows})) then
+            write(leap_stderr,*) 'inconsistent matrix sizes in linear_solve'
+            stop
+        endif
+        if (int(${a_rows}).ne.int(${a_cols})) then
+            write(leap_stderr,*) 'non-square matrix sizes in linear_solve'
+            stop
+        endif
+
+        ${res_size} = int(${b_rows}) * int(${b_cols})
+
+        <%
+        if a_kind != b_kind:
+            raise TypeError("linear_solve requires both arguments "
+                "to have same kind")
+
+        ltr = get_lapack_letter(a_kind)
+
+        lu_temp = declare_new(
+                kind_to_fortran(a_kind)+", dimension(:), allocatable"
+                , "lu_temp")
+        ipiv = declare_new("integer, dimension(:), allocatable", "ipiv")
+        info = declare_new("integer", "info")
+        %>
+
+        allocate(${lu_temp}(0:size(${a})-1))
+        allocate(${ipiv}(${a_rows}))
+
+        ${lu_temp} = ${a}
+
+        allocate(${result}(0:${res_size}-1))
+        ${result} = ${b}
+
+        call ${ltr}gesv(int(${a_rows}), int(${b_cols}), &
+            ${lu_temp}, int(${a_rows}), ${ipiv}, &
+            ${result}, int(${b_rows}), ${info})
+
+        if (${info}.ne.0) then
+            write(leap_stderr,*) &
+                'gesv on ${a} failed with info=', info
+            stop
+        endif
+
+        deallocate(${lu_temp})
+        deallocate(${ipiv})
+
+        """)
 # }}}
 
 
