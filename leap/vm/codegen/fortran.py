@@ -248,7 +248,7 @@ class CallCode(object):
                     self.template.render(**template_names)))
 
         for l in lines:
-            code_generator.emit(l)
+            code_generator.emit(l.encode())
 
 
 # {{{ expression modifiers
