@@ -24,6 +24,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import sys
+from functools import partial
+import re  # noqa
+import six
+
 from .expressions import FortranExpressionMapper
 from .codegen_base import StructuredCodeGenerator
 from leap.vm.utils import is_state_variable
@@ -34,9 +39,6 @@ from pymbolic.primitives import (Call, CallWithKwargs, Variable,
         Subscript, Lookup)
 from pymbolic.mapper import IdentityMapper
 from .utils import wrap_line_base, KeyToUniqueNameMap
-from functools import partial
-import re  # noqa
-import six
 
 
 def pad_fortran(line, width):
@@ -243,12 +245,16 @@ class CallCode(object):
         if self.extra_args:
             template_names.update(self.extra_args)
 
+        rendered = self.template.render(**template_names)
+
+        if sys.version < (3,):
+            rendered = rendered.encode()
+
         lines = remove_redundant_blank_lines(
-                remove_common_indentation(
-                    self.template.render(**template_names)))
+                remove_common_indentation(rendered))
 
         for l in lines:
-            code_generator.emit(l.encode())
+            code_generator.emit(l)
 
 
 # {{{ expression modifiers
