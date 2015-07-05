@@ -247,7 +247,7 @@ class CallCode(object):
 
         rendered = self.template.render(**template_names)
 
-        if sys.version < (3,):
+        if sys.version_info < (3,):
             rendered = rendered.encode()
 
         lines = remove_redundant_blank_lines(
