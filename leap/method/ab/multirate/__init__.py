@@ -372,16 +372,102 @@ class MRABCodeEmitter(MRABProcessor):
         start_time_level = self.eval_expr(insn.start)
         end_time_level = self.eval_expr(insn.end)
 
-        self_coefficients = self.stepper.get_coefficients(
-            self.stepper.hist_is_fast[self_hn],
-            self.hist_head_time_level[self_hn],
-            start_time_level, end_time_level,
-            self.stepper.orders[self_hn])
-        cross_coefficients = self.stepper.get_coefficients(
-            self.stepper.hist_is_fast[cross_hn],
-            self.hist_head_time_level[cross_hn],
-            start_time_level, end_time_level,
-            self.stepper.orders[cross_hn])
+        levels_self = numpy.arange(0, -self.stepper.orders[self_hn], -1, dtype=numpy.float64)
+        levels_cross = numpy.arange(0, -self.stepper.orders[cross_hn], -1, dtype=numpy.float64)
+
+        self.cb("dt", self.stepper.large_dt)
+
+        # This commented section is the old way...
+
+        ##self_coefficients = self.stepper.get_coefficients(
+        ##    self.stepper.hist_is_fast[self_hn],
+        ##    self.hist_head_time_level[self_hn],
+        ##    start_time_level, end_time_level,
+        ##    self.stepper.orders[self_hn])
+        ##cross_coefficients = self.stepper.get_coefficients(
+        ##    self.stepper.hist_is_fast[cross_hn],
+        ##    self.hist_head_time_level[cross_hn],
+        ##    start_time_level, end_time_level,
+        ##    self.stepper.orders[cross_hn])
+
+        ##if start_time_level == 0 or (insn.result_name not in self.context):
+        ##    my_y = self.last_y[insn.component]
+        ##    assert start_time_level == 0
+        ##else:
+        ##    my_y = self.context[insn.result_name]
+        ##    assert start_time_level == self.var_time_level[insn.result_name]
+
+        ##hists = self.stepper.histories
+        ##self_history = hists[self_hn][:]
+        ##cross_history = hists[cross_hn][:]
+
+        #my_new_y = my_y + self.stepper.large_dt * (
+        #        linear_comb(self_coefficients, self_history)
+        #        + linear_comb(cross_coefficients, cross_history))
+
+        ##needs_fence = insn.result_name in self.name_to_variable
+        ##new_y_var = self.get_variable(insn.result_name)
+
+        ##if needs_fence:
+        ##    self.cb.fence()
+        ##self.cb(new_y_var, my_new_y)
+
+        ##self.context[insn.result_name] = new_y_var
+        ##self.var_time_level[insn.result_name] = end_time_level
+
+        # Compute AB coefficients
+
+        self.cb("start_time_level", self.t_start)
+        self.cb.fence()
+
+        self.cb("end_time_level", "start_time_level + dt")
+        self.cb("levels_cross",levels_cross)
+        self.cb("levels_self",levels_self)
+        self.cb("n_cross",len(levels_cross))
+        self.cb("n_self",len(levels_self))
+        self.cb.fence()
+
+        self.cb("point_eval_vec_cross", "`<builtin>array`(n_cross)")
+        self.cb("point_eval_vec_self", "`<builtin>array`(n_self)")
+
+        self.cb("vdm_cross", "`<builtin>array`(n_cross*n_cross)")
+        self.cb("identity_cross", "`<builtin>array`(n_cross*n_cross)")
+        self.cb("vdm_self", "`<builtin>array`(n_self*n_self)")
+        self.cb("identity_self", "`<builtin>array`(n_self*n_self)")
+        self.cb.fence()
+
+        self.cb("point_eval_vec_cross[i]", "1 / (i + 1) * (end_time_level ** (i + 1)- start_time_level ** (i + 1)) ",
+                loops=[("i", 1, "n_cross")])
+        self.cb("identity_cross[i]", "0",
+                loops=[("i", 1, "n_cross*n_cross")])
+        self.cb("point_eval_vec_self[i]", "1 / (i + 1) * (end_time_level ** (i + 1)- start_time_level ** (i + 1)) ",
+                loops=[("i", 1, "n_self")])
+        self.cb("identity_self[i]", "0",
+                loops=[("i", 1, "n_self*n_self")])
+        self.cb.fence()
+
+        # Now use built-in loops to fill VDM matrix and identity matrix
+        # (We will use the ID matrix to calculate VDM_inverse)
+
+        self.cb("identity_cross[i*n_cross + i]", "1",
+                loops=[("i", 1, "n_cross")])
+        self.cb("vdm_cross[j*n_cross + i]", "levels_cross[i]**j",
+                loops=[("i", 1, "n_cross"), ("j", 1, "n_cross")])
+        self.cb("identity_self[i*n_self + i]", "1",
+                loops=[("i", 1, "n_self")])
+        self.cb("vdm_self[j*n_self + i]", "levels_self[i]**j",
+                loops=[("i", 1, "n_self"), ("j", 1, "n_self")])
+
+        self.cb.fence()
+
+        self.cb("vdm_inverse_cross", "`<builtin>linear_solve`(vdm_cross, identity_cross, n_cross, n_cross)")
+        self.cb("vdm_inverse_self", "`<builtin>linear_solve`(vdm_self, identity_self, n_self, n_self)")
+
+        # Finally, use this inverse to calculate the new AB coefficients
+        self.cb("new_cross_coeffs", "`<builtin>matmul`(point_eval_vec_cross, vdm_cross_inverse_cross, n_cross, n_cross)")
+        self.cb("new_self_coeffs", "`<builtin>matmul`(point_eval_vec_self, vdm__inverse_self, n_self, n_self)")
+
+        # We can complete the integration by then performing the necessary linear combination, again using new built-ins
 
         if start_time_level == 0 or (insn.result_name not in self.context):
             my_y = self.last_y[insn.component]
@@ -390,23 +476,43 @@ class MRABCodeEmitter(MRABProcessor):
             my_y = self.context[insn.result_name]
             assert start_time_level == self.var_time_level[insn.result_name]
 
+        self.cb("my_y", my_y)
+        self.cb.fence()
+
         hists = self.stepper.histories
         self_history = hists[self_hn][:]
         cross_history = hists[cross_hn][:]
+        
+        self.cb("self_history", self_history)
+        self.cb("cross_history", cross_history)
+        self.cb("len_self_history",len(self_history))
+        self.cb("len_cross_history",len(cross_history))
 
-        my_new_y = my_y + self.stepper.large_dt * (
-                linear_comb(self_coefficients, self_history)
-                + linear_comb(cross_coefficients, cross_history))
+        self.cb.fence()
+
+        # Add self terms
+
+        self.cb("my_new_y_1", "dt * ((self_history[i]*new_self_coeffs[i]))", 
+                loops=[("i", 1, "len_self_history")])
+
+        # Add cross terms
+
+        self.cb("my_new_y_2", "dt * ((cross_history[i]*new_cross_coeffs[i]))", 
+                loops=[("i", 1, "len_cross_history")])
+
+        self.cb.fence()
+        self.cb("my_new_y", "my_y + my_new_y_1 + my_new_y_2")
 
         needs_fence = insn.result_name in self.name_to_variable
         new_y_var = self.get_variable(insn.result_name)
 
         if needs_fence:
             self.cb.fence()
-        self.cb(new_y_var, my_new_y)
+        self.cb(new_y_var, "my_new_y")
 
         self.context[insn.result_name] = new_y_var
         self.var_time_level[insn.result_name] = end_time_level
+
 
         MRABProcessor.integrate_in_time(self, insn)
 
