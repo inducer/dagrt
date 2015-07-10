@@ -811,6 +811,10 @@ class CodeBuilder(object):
             asub = assignee.index
             if not isinstance(asub, tuple):
                 asub = (asub,)
+        else:
+            raise ValueError("asignee (left-hand side) must be either a variable "
+                    "or a subscribted variable, not '%s'"
+                    % type(assignee))
 
         self._add_inst_to_context(AssignExpression(
                 assignee=aname,
