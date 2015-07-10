@@ -42,7 +42,7 @@ from utils import execute_and_return_single_result, RawCodeBuilder
 def test_len(python_method_impl, obj, len_):
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(id='assign_1', assignee='x',
+        AssignExpression(id='assign_1', assignee='x', assignee_subscript=(),
                          expression=var('<builtin>len')(obj)),
         YieldState(id='return', time=0, time_id='final',
                    expression=var('x'), component_id='<state>',
@@ -60,7 +60,7 @@ def test_len(python_method_impl, obj, len_):
 def test_isnan(python_method_impl, value):
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(id='assign_1', assignee='x',
+        AssignExpression(id='assign_1', assignee='x', assignee_subscript=(),
                          expression=var('<builtin>isnan')(value)),
         YieldState(id='return', time=0, time_id='final',
                    expression=var('x'), component_id='<state>',
@@ -89,9 +89,9 @@ def test_norm(python_method_impl, order, norm_suffix, test_vector):
 
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(id='assign_1', assignee='x',
+        AssignExpression(id='assign_1', assignee='x', assignee_subscript=(),
                          expression=test_vector),
-        AssignExpression(id='assign_2', assignee='n',
+        AssignExpression(id='assign_2', assignee='n', assignee_subscript=(),
                          expression=(
                              var('<builtin>norm_%s' % norm_suffix)(var('x'))),
                          depends_on=['assign_1']),
@@ -112,7 +112,7 @@ def test_norm(python_method_impl, order, norm_suffix, test_vector):
 def test_dot_product(python_method_impl, x, y):
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(id='assign_1', assignee='x',
+        AssignExpression(id='assign_1', assignee='x', assignee_subscript=(),
                          expression=var('<builtin>dot_product')(x, y)),
         YieldState(id='return', time=0, time_id='final',
                    expression=var('x'), component_id='<state>',

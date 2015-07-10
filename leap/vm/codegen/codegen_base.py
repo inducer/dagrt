@@ -23,11 +23,7 @@ THE SOFTWARE.
 """
 
 from .ast_ import Block, IfThen, IfThenElse, InstructionWrapper
-from leap.vm.language import AssignExpression, YieldState, Raise, FailStep, \
-    StateTransition, Nop
 
-
-# {{{ structured code generator
 
 class StructuredCodeGenerator(object):
     """Code generation for structured languages"""
@@ -70,30 +66,19 @@ class StructuredCodeGenerator(object):
     def lower_inst(self, inst):
         """Emit the code for an instruction."""
 
-        if isinstance(inst, AssignExpression):
-            self.emit_assign_expr(inst.assignee, inst.expression)
+        method_name = "emit_inst_"+type(inst).__name__
+        try:
+            method = getattr(self, method_name)
+        except AttributeError:
+            raise RuntimeError(
+                    "{gen} cannot handle instruction of type {inst}"
+                    .format(
+                        gen=repr(type(self)),
+                        inst=type(inst).__name__))
 
-        elif isinstance(inst, YieldState):
-            self.emit_yield_state(inst.component_id, inst.expression,
-                                  inst.time, inst.time_id)
+        return method(inst)
 
-        elif isinstance(inst, Raise):
-            self.emit_raise(inst.error_condition, inst.error_message)
-
-        elif isinstance(inst, FailStep):
-            self.emit_fail_step()
-
-        elif isinstance(inst, StateTransition):
-            self.emit_state_transition(inst.next_state)
-
-        elif isinstance(inst, Nop):
-            pass
-
-        else:
-            raise ValueError("Unrecognized instruction type {type}".format(
-                type=type(inst).__name__))
-
-    # Emit routines (to be implemented by subclass)
+    # Emit routines (to be implemented by subclass, in addition to emit_inst_)
 
     def begin_emit(self, dag):
         raise NotImplementedError()
@@ -116,22 +101,5 @@ class StructuredCodeGenerator(object):
     def emit_else_begin(self):
         raise NotImplementedError()
 
-    def emit_assign_expr(self, name, expr):
-        raise NotImplementedError()
-
-    def emit_yield_state(self, component_id, expression, time, time_id):
-        raise NotImplementedError()
-
     def emit_return(self):
         raise NotImplementedError()
-
-    def emit_raise(self, error_condition, error_message):
-        raise NotImplementedError()
-
-    def emit_fail_step(self):
-        raise NotImplementedError()
-
-    def emit_state_transition(self, next_state):
-        raise NotImplementedError()
-
-# }}}

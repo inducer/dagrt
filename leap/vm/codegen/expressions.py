@@ -74,51 +74,45 @@ class FortranExpressionMapper(StringifyMapper):
         else:
             return self._name_manager[expr.name]
 
-    def map_lookup(self, expr, enclosing_prec, *args, **kwargs):
+    def map_lookup(self, expr, enclosing_prec):
         return self.parenthesize_if_needed(
                 self.format("%s%%%s",
-                    self.rec(expr.aggregate, PREC_CALL, *args, **kwargs),
+                    self.rec(expr.aggregate, PREC_CALL),
                     expr.name),
                 enclosing_prec, PREC_CALL)
 
-    def map_subscript(self, expr, enclosing_prec, *args, **kwargs):
+    def map_subscript(self, expr, enclosing_prec):
         if isinstance(expr.index, tuple):
-            index_str = self.join_rec(", ", expr.index, PREC_NONE, *args, **kwargs)
+            index_str = ", ".join(
+                    "int(%s)" % self.rec(i, PREC_NONE)
+                    for i in expr.index)
         else:
-            index_str = self.rec(expr.index, PREC_NONE, *args, **kwargs)
+            index_str = "int(%s)" % self.rec(expr.index, PREC_NONE)
 
         return self.parenthesize_if_needed(
                 self.format("%s(%s)",
-                    self.rec(expr.aggregate, PREC_CALL, *args, **kwargs),
+                    self.rec(expr.aggregate, PREC_CALL),
                     index_str),
                 enclosing_prec, PREC_CALL)
 
-    def map_numpy_array(self, expr, *args):
-        if len(expr.shape) > 1:
-            raise ValueError('Representing multidimensional arrays is ' +
-                             'not supported')
-        elements = [self.rec(element, *args) for element in expr]
-        return '{numpy}.array([{elements}],dtype=\'object\')'.format(
-            numpy=self._numpy, elements=', '.join(elements))
-
-    def map_logical_not(self, expr, enclosing_prec, *args, **kwargs):
+    def map_logical_not(self, expr, enclosing_prec):
         from pymbolic.mapper.stringifier import PREC_UNARY
         return self.parenthesize_if_needed(
-                ".not. " + self.rec(expr.child, PREC_UNARY, *args, **kwargs),
+                ".not. " + self.rec(expr.child, PREC_UNARY),
                 enclosing_prec, PREC_UNARY)
 
-    def map_logical_or(self, expr, enclosing_prec, *args, **kwargs):
+    def map_logical_or(self, expr, enclosing_prec):
         from pymbolic.mapper.stringifier import PREC_LOGICAL_OR
         return self.parenthesize_if_needed(
                 self.join_rec(
-                    " .or. ", expr.children, PREC_LOGICAL_OR, *args, **kwargs),
+                    " .or. ", expr.children, PREC_LOGICAL_OR),
                 enclosing_prec, PREC_LOGICAL_OR)
 
-    def map_logical_and(self, expr, enclosing_prec, *args, **kwargs):
+    def map_logical_and(self, expr, enclosing_prec):
         from pymbolic.mapper.stringifier import PREC_LOGICAL_AND
         return self.parenthesize_if_needed(
                 self.join_rec(
-                    " .and. ", expr.children, PREC_LOGICAL_AND, *args, **kwargs),
+                    " .and. ", expr.children, PREC_LOGICAL_AND),
                 enclosing_prec, PREC_LOGICAL_AND)
 
 # }}}

@@ -27,12 +27,16 @@ THE SOFTWARE.
 import sys
 import pytest
 
+import numpy.linalg as la
+import numpy as np
+
 from leap.vm.language import AssignExpression, YieldState, FailStep, Raise, Nop
 from leap.vm.language import CodeBuilder, TimeIntegratorCode
 from leap.vm.codegen import PythonCodeGenerator
 from pymbolic import var
 
-from utils import RawCodeBuilder
+from utils import (  # noqa
+        RawCodeBuilder, python_method_impl_interpreter, python_method_impl_codegen)
 
 
 def test_basic_codegen():
@@ -48,7 +52,7 @@ def test_basic_codegen():
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
-    Method = codegen.get_class(code)
+    Method = codegen.get_class(code)  # noqa
     method = Method({})
     print(codegen(code))
     method.set_up(t_start=0, dt_start=0, context={})
@@ -66,10 +70,13 @@ def test_basic_conditional_codegen():
     """Test whether the code generator generates branches properly."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(id='then_branch', assignee='<state>y', expression=1,
-                         condition=True),
-        AssignExpression(id='else_branch', assignee='<state>y', expression=0,
-                         condition=False),
+        AssignExpression(
+            id='then_branch',
+            assignee='<state>y', assignee_subscript=(),
+            expression=1, condition=True),
+        AssignExpression(id='else_branch',
+            assignee='<state>y', assignee_subscript=(),
+            expression=0, condition=False),
         Nop(id='branch', depends_on=['then_branch', 'else_branch']),
         YieldState(id='return', time=0, time_id='final',
             expression=var('<state>y'), component_id='<state>',
@@ -79,7 +86,7 @@ def test_basic_conditional_codegen():
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
-    Method = codegen.get_class(code)
+    Method = codegen.get_class(code)  # noqa
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={'y': 6})
     hist = [s for s in method.run(max_steps=2)]
@@ -96,10 +103,12 @@ def test_basic_assign_rhs_codegen():
     cbuild.add_and_get_ids(
         AssignExpression(id='assign_rhs1',
                          assignee='<state>y',
+                         assignee_subscript=(),
                          expression=var('y')(t=var('<t>')),
                          depends_on=[]),
         AssignExpression(id='assign_rhs2',
                          assignee='<state>y',
+                         assignee_subscript=(),
                          expression=var('yy')(t=var('<t>'), y=var('<state>y')),
                          depends_on=['assign_rhs1']),
         YieldState(id='return', time=0, time_id='final',
@@ -111,7 +120,7 @@ def test_basic_assign_rhs_codegen():
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
-    Method = codegen.get_class(code)
+    Method = codegen.get_class(code)  # noqa
 
     def y(t):
         return 6
@@ -138,7 +147,7 @@ def test_basic_raise_codegen():
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=["raise"])
     codegen = PythonCodeGenerator(class_name="Method")
-    Method = codegen.get_class(code)
+    Method = codegen.get_class(code)  # noqa
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={})
     try:
@@ -163,7 +172,7 @@ def test_basic_fail_step_codegen():
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=["fail"])
     codegen = PythonCodeGenerator(class_name="Method")
-    Method = codegen.get_class(code)
+    Method = codegen.get_class(code)  # noqa
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={})
     print(codegen(code))
@@ -180,8 +189,12 @@ def test_local_name_distinctness():
     """Test whether the code generator gives locals distinct names."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(id='assign_y^', assignee='y^', expression=1),
-        AssignExpression(id='assign_y*', assignee='y*', expression=0),
+        AssignExpression(
+            id='assign_y^',
+            assignee='y^', assignee_subscript=(), expression=1),
+        AssignExpression(
+            id='assign_y*',
+            assignee='y*', assignee_subscript=(), expression=0),
         YieldState(id='return', time=0, time_id='final',
             expression=var('y^') + var('y*'),
             component_id='y', depends_on=['assign_y^', 'assign_y*']))
@@ -190,7 +203,7 @@ def test_local_name_distinctness():
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
-    Method = codegen.get_class(code)
+    Method = codegen.get_class(code)  # noqa
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={})
     hist = list(method.run(max_steps=2))
@@ -203,8 +216,12 @@ def test_global_name_distinctness():
     """Test whether the code generator gives globals distinct names."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(id='assign_y^', assignee='<p>y^', expression=1),
-        AssignExpression(id='assign_y*', assignee='<p>y*', expression=0),
+        AssignExpression(
+            id='assign_y^',
+            assignee='<p>y^', assignee_subscript=(), expression=1),
+        AssignExpression(
+            id='assign_y*',
+            assignee='<p>y*', assignee_subscript=(), expression=0),
         YieldState(id='return', time=0, time_id='final',
             expression=var('<p>y^') + var('<p>y*'),
             component_id='y', depends_on=['assign_y^', 'assign_y*']))
@@ -213,7 +230,7 @@ def test_global_name_distinctness():
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
-    Method = codegen.get_class(code)
+    Method = codegen.get_class(code)  # noqa
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={})
     hist = list(method.run(max_steps=2))
@@ -234,7 +251,7 @@ def test_function_name_distinctness():
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
-    Method = codegen.get_class(code)
+    Method = codegen.get_class(code)  # noqa
     method = Method({'<func>y^': lambda: 0,
                      '<func>y*': lambda: 1})
     method.set_up(t_start=0, dt_start=0, context={})
@@ -306,6 +323,58 @@ def test_IfThenElse_expansion(python_method_impl):
     code = expand_IfThenElse(code)
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == expected_result
+
+
+def test_arrays_and_looping(python_method_impl):
+    with CodeBuilder(label="primary") as cb:
+        cb("myarray", "`<builtin>array`(20)")
+        cb.fence()
+        cb("myarray[i]", "i", loops=[("i", 0, 20)])
+        cb.yield_state("myarray[15]", "result", 0, "final")
+
+    from utils import execute_and_return_single_result
+
+    code = TimeIntegratorCode.create_with_steady_state(
+        cb.state_dependencies, cb.instructions)
+    result = execute_and_return_single_result(python_method_impl, code)
+    assert result == 15
+
+
+def test_arrays_and_linalg(python_method_impl):
+    with CodeBuilder(label="primary") as cb:
+        cb("n", "4")
+        cb("nodes", "`<builtin>array`(n)")
+        cb("vdm", "`<builtin>array`(n*n)")
+        cb("identity", "`<builtin>array`(n*n)")
+        cb.fence()
+
+        cb("nodes[i]", "i/n",
+                loops=[("i", 0, "n")])
+        cb("identity[i]", "0",
+                loops=[("i", 0, "n*n")])
+        cb.fence()
+
+        cb("identity[i*n + i]", "1",
+                loops=[("i", 0, "n")])
+        cb("vdm[j*n + i]", "nodes[i]**j",
+                loops=[("i", 0, "n"), ("j", 0, "n")])
+
+        cb.fence()
+
+        cb("vdm_inverse", "`<builtin>linear_solve`(vdm, identity, n, n)")
+        cb("myarray", "`<builtin>matmul`(vdm, vdm_inverse, n, n)")
+
+        cb.yield_state("myarray", "result", 0, "final")
+
+    from utils import execute_and_return_single_result
+
+    code = TimeIntegratorCode.create_with_steady_state(
+        cb.state_dependencies, cb.instructions)
+    result = execute_and_return_single_result(python_method_impl, code)
+
+    result = result.reshape(4, 4, order="F")
+
+    assert la.norm(result - np.eye(4)) < 1e-10
 
 
 if __name__ == "__main__":

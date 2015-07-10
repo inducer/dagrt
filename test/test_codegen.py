@@ -40,10 +40,14 @@ def test_circular_dependency_detection():
     dependency."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(id='assign', assignee='<state>y', expression=1,
-                         depends_on=['assign2']),
-        AssignExpression(id='assign2', assignee='<state>y', expression=1,
-                         depends_on=['assign']),
+        AssignExpression(
+            id='assign',
+            assignee='<state>y',
+            assignee_subscript=(),
+            expression=1,
+            depends_on=['assign2']),
+        AssignExpression(id='assign2', assignee='<state>y', assignee_subscript=(),
+            expression=1, depends_on=['assign']),
         YieldState(id='return', time=0, time_id='final',
             expression=var('<state>y'), component_id='<state>',
         depends_on=['assign']))
@@ -64,8 +68,8 @@ def test_missing_dependency_detection():
     """Check that the code generator detects that there is a missing
     dependency."""
     instructions = set([
-        AssignExpression(id='assign', assignee='<state>y', expression=1,
-                         depends_on=['assign2']),
+        AssignExpression(id='assign', assignee='<state>y', assignee_subscript=(),
+            expression=1, depends_on=['assign2']),
         YieldState(id='return', time=0, time_id='final',
             expression=var('<state>y'), component_id='<state>',
             depends_on=['assign'])

@@ -101,6 +101,44 @@ class NumpyInterpreter(object):
                 return abs(x)
             return np.linalg.norm(x, ord)
 
+        def builtin_array(n):
+            if n != np.floor(n):
+                raise ValueError("array() argument n is not an integer")
+            n = int(n)
+
+            return np.empty(n, dtype=np.float64)
+
+        def builtin_matmul(a, b, a_cols, b_cols):
+            if a_cols != np.floor(a_cols):
+                raise ValueError("matmul() argument a_cols is not an integer")
+            if b_cols != np.floor(b_cols):
+                raise ValueError("matmul() argument b_cols is not an integer")
+            a_cols = int(a_cols)
+            b_cols = int(b_cols)
+
+            a_mat = a.reshape(-1, a_cols, order="F")
+            b_mat = b.reshape(-1, b_cols, order="F")
+
+            res_mat = a_mat.dot(b_mat)
+
+            return res_mat.reshape(-1, order="F")
+
+        def builtin_linear_solve(a, b, a_cols, b_cols):
+            if a_cols != np.floor(a_cols):
+                raise ValueError("linear_solve() argument a_cols is not an integer")
+            if b_cols != np.floor(b_cols):
+                raise ValueError("linear_solve() argument b_cols is not an integer")
+            a_cols = int(a_cols)
+            b_cols = int(b_cols)
+
+            a_mat = a.reshape(-1, a_cols, order="F")
+            b_mat = b.reshape(-1, b_cols, order="F")
+
+            import numpy.linalg as la
+            res_mat = la.solve(a_mat, b_mat)
+
+            return res_mat.reshape(-1, order="F")
+
         from functools import partial
 
         builtins = {
@@ -109,7 +147,10 @@ class NumpyInterpreter(object):
                 "<builtin>norm_1": partial(builtin_norm, ord=1),
                 "<builtin>norm_2": partial(builtin_norm, ord=2),
                 "<builtin>norm_inf": partial(builtin_norm, ord=np.inf),
-                "<builtin>dot_product": np.vdot
+                "<builtin>dot_product": np.vdot,
+                "<builtin>array": builtin_array,
+                "<builtin>matmul": builtin_matmul,
+                "<builtin>linear_solve": builtin_linear_solve,
                 }
 
         # Ensure none of the names in the function map conflict with the
@@ -192,7 +233,7 @@ class NumpyInterpreter(object):
     # {{{ execution methods
 
     def exec_AssignSolved(self, insn):
-        raise RuntimeError("Encountered AssignSolved.")
+        raise NotImplementedError("Encountered AssignSolved.")
 
     def exec_YieldState(self, insn):
         return self.StateComputed(
@@ -202,7 +243,38 @@ class NumpyInterpreter(object):
                     state_component=self.eval_mapper(insn.expression)), []
 
     def exec_AssignExpression(self, insn):
-        self.context[insn.assignee] = self.eval_mapper(insn.expression)
+        if not insn.loops:
+            if insn.assignee_subscript:
+                self.context[insn.assignee][
+                        self.eval_mapper(insn.assignee_subscript)] = \
+                                self.eval_mapper(insn.expression)
+            else:
+                self.context[insn.assignee] = self.eval_mapper(insn.expression)
+
+        else:
+            def implement_loops(loops):
+                if not loops:
+                    yield
+                    return
+
+                ident, start, stop = loops[0]
+                for i in six.moves.range(
+                        self.eval_mapper(start), self.eval_mapper(stop)):
+                    self.context[ident] = i
+
+                    for val in implement_loops(loops[1:]):
+                        yield
+
+            for val in implement_loops(insn.loops):
+                if insn.assignee_subscript:
+                    self.context[insn.assignee][
+                            self.eval_mapper(insn.assignee_subscript)] = \
+                                    self.eval_mapper(insn.expression)
+                else:
+                    self.context[insn.assignee] = self.eval_mapper(insn.expression)
+
+            for ident, _, _ in insn.loops:
+                del self.context[ident]
 
     def exec_Raise(self, insn):
         raise insn.error_condition(insn.error_message)

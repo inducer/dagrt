@@ -226,7 +226,7 @@ class ScipySolverGenerator(object):
 
 def replace_AssignSolved(dag, *solver_hooks):
     """
-    :arg dag: The TimeIntegratorCode instance
+    :arg dag: The :class:`TimeIntegratorCode` instance
     :arg solver_hooks: A map from solver names to expression generators
     """
 
@@ -252,11 +252,13 @@ def replace_AssignSolved(dag, *solver_hooks):
         solver = solver_hooks[insn.solver_id]
 
         new_instructions.append(
-            AssignExpression(assignee=insn.assignees[0],
-                             expression=solver(expression, solve_component,
-                                               **other_params),
-                             id=insn.id,
-                             condition=insn.condition,
-                             depends_on=insn.depends_on))
+            AssignExpression(
+                assignee=insn.assignees[0],
+                assignee_subscript=(),
+                expression=solver(expression, solve_component,
+                    **other_params),
+                id=insn.id,
+                condition=insn.condition,
+                depends_on=insn.depends_on))
 
     return dag.copy(instructions=new_instructions)

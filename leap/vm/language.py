@@ -281,30 +281,68 @@ class AssignSolved(Instruction):
 class AssignExpression(Instruction):
     """
     .. attribute:: assignee
+    .. attribute:: assignee_subscript
+
+        The subscript in :attr:`assignee` which is being assigned.
+        A tuple, which may be empty, to indicate 'no subscript'.
+
     .. attribute:: expression
+    .. attribute:: loops
+
+        A list of triples *(identifier, start, end)* that the assignment
+        should be carried out inside of these loops.
+        No ordering of loop iterations is implied.
+        The loops will typically be nested outer-to-inner, but a target
+        may validly use any order it likes.
+
     """
-    def __init__(self, assignee, expression, **kwargs):
+    def __init__(self, assignee, assignee_subscript, expression, loops=[], **kwargs):
+        assert isinstance(assignee_subscript, tuple)
+
+        if len(assignee_subscript) > 1:
+            raise ValueError("assignee subscript may have a length of at most one")
+
         Instruction.__init__(self,
                 assignee=assignee,
+                assignee_subscript=assignee_subscript,
                 expression=expression,
+                loops=loops,
                 **kwargs)
 
     def get_assignees(self):
         return frozenset([self.assignee])
 
     def get_read_variables(self):
-        return get_variables(self.expression) | get_variables(self.condition)
+        result = (get_variables(self.expression)
+                | get_variables(self.condition)
+                | get_variables(self.assignee_subscript))
+
+        for ident, start, end in self.loops:
+            result = result | (get_variables(start) | get_variables(end))
+
+        return result
 
     def map_expressions(self, mapper):
         return self.copy(
                 expression=mapper(self.expression),
-                condition=mapper(self.condition))
+                condition=mapper(self.condition),
+                loops=[
+                    (ident, mapper(start), mapper(end))
+                    for ident, start, end in self.loops])
 
     def __str__(self):
-        return "{assignee} <- {expr}{cond}".format(
+        result = "{assignee} <- {expr}{cond}".format(
             assignee=self.assignee,
             expr=str(self.expression),
             cond=self._condition_printing_suffix())
+
+        for ident, start, end in self.loops:
+            result += " [{ident}={start}..{end}]".format(
+                    ident=ident,
+                    start=start,
+                    end=end)
+
+        return result
 
     exec_method = "exec_AssignExpression"
 
@@ -681,6 +719,12 @@ class CodeBuilder(object):
         """Create a new block that is conditionally executed."""
         if len(condition_arg) == 1:
             condition = condition_arg[0]
+
+            from leap.vm.expression import parse
+
+            if isinstance(condition, str):
+                condition = parse(condition)
+
         elif len(condition_arg) == 3:
             from pymbolic.primitives import Comparison
             condition = Comparison(*condition_arg)
@@ -689,8 +733,10 @@ class CodeBuilder(object):
 
         # Create an instruction as a lead instruction to assign a logical flag.
         cond_var = self.fresh_var("<cond>")
-        cond_assignment = AssignExpression(assignee=cond_var.name,
-                                           expression=condition)
+        cond_assignment = AssignExpression(
+                assignee=cond_var.name,
+                assignee_subscript=(),
+                expression=condition)
 
         self._contexts.append(
             self._make_new_context(cond_assignment, additional_condition=cond_var))
@@ -733,13 +779,44 @@ class CodeBuilder(object):
         self._instruction_count += 1
         return self.label + "_" + str(self._instruction_count)
 
-    def __call__(self, assignee, expression):
-        """Assign a value."""
-        from pymbolic.primitives import Variable
-        assert isinstance(assignee, Variable)
+    def __call__(self, assignee, expression, loops=[]):
+        """Generate code for an assignment.
+
+        *assignee* may be a variable or a subscript (if referring to an
+        array)
+        """
+
+        from leap.vm.expression import parse
+
+        if isinstance(assignee, str):
+            assignee = parse(assignee)
+
+        if isinstance(expression, str):
+            expression = parse(expression)
+
+        new_loops = []
+        for ident, start, stop in loops:
+            if isinstance(start, str):
+                start = parse(start)
+            if isinstance(stop, str):
+                stop = parse(stop)
+            new_loops.append((ident, start, stop))
+
+        from pymbolic.primitives import Variable, Subscript
+        if isinstance(assignee, Variable):
+            aname = assignee.name
+            asub = ()
+        elif isinstance(assignee, Subscript):
+            aname = assignee.aggregate.name
+            asub = assignee.index
+            if not isinstance(asub, tuple):
+                asub = (asub,)
+
         self._add_inst_to_context(AssignExpression(
-                assignee=assignee.name,
-                expression=expression))
+                assignee=aname,
+                assignee_subscript=asub,
+                expression=expression,
+                loops=new_loops))
 
     assign = __call__
 
@@ -821,6 +898,12 @@ class CodeBuilder(object):
 
     def yield_state(self, expression, component_id, time, time_id):
         """Yield a value."""
+
+        from leap.vm.expression import parse
+
+        if isinstance(expression, str):
+            expression = parse(expression)
+
         self._add_inst_to_context(YieldState(
                 expression=expression,
                 component_id=component_id,
