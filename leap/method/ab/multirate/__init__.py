@@ -370,44 +370,6 @@ class MRABCodeEmitter(MRABProcessor):
         else:
             self_hn, cross_hn = HIST_S2S, HIST_F2S
 
-        # This commented section is the old way...
-
-        ##self_coefficients = self.stepper.get_coefficients(
-        ##    self.stepper.hist_is_fast[self_hn],
-        ##    self.hist_head_time_level[self_hn],
-        ##    start_time_level, end_time_level,
-        ##    self.stepper.orders[self_hn])
-        ##cross_coefficients = self.stepper.get_coefficients(
-        ##    self.stepper.hist_is_fast[cross_hn],
-        ##    self.hist_head_time_level[cross_hn],
-        ##    start_time_level, end_time_level,
-        ##    self.stepper.orders[cross_hn])
-
-        ##if start_time_level == 0 or (insn.result_name not in self.context):
-        ##    my_y = self.last_y[insn.component]
-        ##    assert start_time_level == 0
-        ##else:
-        ##    my_y = self.context[insn.result_name]
-        ##    assert start_time_level == self.var_time_level[insn.result_name]
-
-        ##hists = self.stepper.histories
-        ##self_history = hists[self_hn][:]
-        ##cross_history = hists[cross_hn][:]
-
-        #my_new_y = my_y + self.stepper.large_dt * (
-        #        linear_comb(self_coefficients, self_history)
-        #        + linear_comb(cross_coefficients, cross_history))
-
-        ##needs_fence = insn.result_name in self.name_to_variable
-        ##new_y_var = self.get_variable(insn.result_name)
-
-        ##if needs_fence:
-        ##    self.cb.fence()
-        ##self.cb(new_y_var, my_new_y)
-
-        ##self.context[insn.result_name] = new_y_var
-        ##self.var_time_level[insn.result_name] = end_time_level
-
         # Compute AB coefficients
 
         start_time_level = self.eval_expr(insn.start)
@@ -488,9 +450,6 @@ class MRABCodeEmitter(MRABProcessor):
             my_y = self.context[insn.result_name]
             assert start_time_level == self.var_time_level[insn.result_name]
 
-        self.cb("my_y", my_y)
-        self.cb.fence()
-
         hists = self.stepper.histories
         self_history = hists[self_hn][:]
         cross_history = hists[cross_hn][:]
@@ -514,14 +473,16 @@ class MRABCodeEmitter(MRABProcessor):
         self.cb("self_lin", linear_comb(new_self_coeffs_py, self_history))
         self.cb("cross_lin", linear_comb(new_cross_coeffs_py, cross_history))
 
-        self.cb("my_new_y", "my_y + timestep * (self_lin + cross_lin)")
+        additive = var("additive")
+
+        self.cb(additive, "timestep * (self_lin + cross_lin)")
 
         needs_fence = insn.result_name in self.name_to_variable
         new_y_var = self.get_variable(insn.result_name)
 
         if needs_fence:
             self.cb.fence()
-        self.cb(new_y_var, "my_new_y")
+        self.cb(new_y_var, additive + my_y)
 
         self.cb.fence()
 
