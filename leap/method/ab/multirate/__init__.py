@@ -363,6 +363,7 @@ class MRABCodeEmitter(MRABProcessor):
         from leap.method.ab.multirate.methods import CO_FAST
         from leap.method.ab.multirate.methods import \
             HIST_F2F, HIST_S2F, HIST_F2S, HIST_S2S
+        from pymbolic import var
 
         if insn.component == CO_FAST:
             self_hn, cross_hn = HIST_F2F, HIST_S2F
@@ -384,61 +385,42 @@ class MRABCodeEmitter(MRABProcessor):
         self.cb("end_time_level", end_time_level)
         self.cb("n_cross",len(levels_cross))
         self.cb("n_self",len(levels_self))
+
+        self.cb.fence()
         self.cb("levels_cross","`<builtin>array`(n_cross)")
         self.cb("levels_self","`<builtin>array`(n_self)")
         self.cb.fence()
 
         for i in range(len(levels_self)):
-            self.cb("levels_self[j+1]", levels_self[i],
-                    loops=[("j", i, i)])
+            self.cb("levels_self[{0}+1]".format(i), levels_self[i])
             self.cb.fence()
 
         for i in range(len(levels_cross)):
-            self.cb("levels_cross[j+1]", levels_cross[i],
-                    loops=[("j", i, i)])
+            self.cb("levels_cross[{0}+1]".format(i), levels_cross[i])
             self.cb.fence()
 
         self.cb("point_eval_vec_cross", "`<builtin>array`(n_cross)")
         self.cb("point_eval_vec_self", "`<builtin>array`(n_self)")
 
         self.cb("vdm_cross", "`<builtin>array`(n_cross*n_cross)")
-        self.cb("identity_cross", "`<builtin>array`(n_cross*n_cross)")
         self.cb("vdm_self", "`<builtin>array`(n_self*n_self)")
-        self.cb("identity_self", "`<builtin>array`(n_self*n_self)")
         self.cb.fence()
 
         self.cb("point_eval_vec_cross[i]", "1 / (i + 1) * (end_time_level ** (i + 1)- start_time_level ** (i + 1)) ",
                 loops=[("i", 1, "n_cross")])
-        self.cb("identity_cross[i]", "0",
-                loops=[("i", 1, "n_cross*n_cross")])
         self.cb("point_eval_vec_self[i]", "1 / (i + 1) * (end_time_level ** (i + 1)- start_time_level ** (i + 1)) ",
                 loops=[("i", 1, "n_self")])
-        self.cb("identity_self[i]", "0",
-                loops=[("i", 1, "n_self*n_self")])
-        self.cb.fence()
-
-        # Now use built-in loops to fill VDM matrix and identity matrix
-        # (We will use the ID matrix to calculate VDM_inverse)
-
-        self.cb("identity_cross[i*n_cross + i]", "1",
-                loops=[("i", 1, "n_cross")])
         self.cb("vdm_cross[j*n_cross + i]", "levels_cross[i]**j",
                 loops=[("i", 1, "n_cross"), ("j", 1, "n_cross")])
-        self.cb("identity_self[i*n_self + i]", "1",
-                loops=[("i", 1, "n_self")])
         self.cb("vdm_self[j*n_self + i]", "levels_self[i]**j",
                 loops=[("i", 1, "n_self"), ("j", 1, "n_self")])
 
         self.cb.fence()
 
-        self.cb("vdm_inverse_cross", "`<builtin>linear_solve`(vdm_cross, identity_cross, n_cross, n_cross)")
-        self.cb("vdm_inverse_self", "`<builtin>linear_solve`(vdm_self, identity_self, n_self, n_self)")
+        self.cb("new_cross_coeffs", "`<builtin>linear_solve`(point_eval_vec_cross, vdm_cross, n_cross, n_cross)")
+        self.cb("new_self_coeffs", "`<builtin>linear_solve`(point_eval_vec_self, vdm_self, n_self, n_self)")
 
         self.cb.fence()
-
-        # Finally, use this inverse to calculate the new AB coefficients
-        self.cb("new_cross_coeffs", "`<builtin>matmul`(point_eval_vec_cross, vdm_inverse_cross, n_cross, n_cross)")
-        self.cb("new_self_coeffs", "`<builtin>matmul`(point_eval_vec_self, vdm_inverse_self, n_self, n_self)")
 
         # We can complete the integration by then performing the necessary linear combination, again using new built-ins
 
@@ -457,21 +439,20 @@ class MRABCodeEmitter(MRABProcessor):
 
         # Define a Python-side vector for the calculated coefficients (will be used with linear_comb)
 
-        new_self_coeffs_pyvar = self.get_variable("newself")
-        new_cross_coeffs_pyvar = self.get_variable("newcross")
+        new_self_coeffs_pyvar = var("newself")
+        new_cross_coeffs_pyvar = var("newcross")
 
         new_self_coeffs_py = [new_self_coeffs_pyvar[i] for i in range(len(levels_self))]
         new_cross_coeffs_py = [new_cross_coeffs_pyvar[i] for i in range(len(levels_cross))]
 
         # Use loops to assign each element of this vector to an element from our newly calculated coeff vector (Fortran-side)
+
         for i in range(len(levels_self)):
-            self.cb(new_self_coeffs_py[i], "new_self_coeffs[j+1]",
-                    loops=[("j", i, i)])
+            self.cb(new_self_coeffs_py[i], "new_self_coeffs[{0}+1]".format(i))
             self.cb.fence()
 
         for i in range(len(levels_cross)):
-            self.cb(new_cross_coeffs_py[i], "new_cross_coeffs[j+1]",
-                    loops=[("j", i, i)])
+            self.cb(new_cross_coeffs_py[i], "new_cross_coeffs[{0}+1]".format(i))
             self.cb.fence()
 
         # Perform the linear combination using the Python built-in
@@ -479,9 +460,11 @@ class MRABCodeEmitter(MRABProcessor):
         self.cb("self_lin", linear_comb(new_self_coeffs_py, self_history))
         self.cb("cross_lin", linear_comb(new_cross_coeffs_py, cross_history))
 
+        self.cb.fence()
+
         # Build the new y to be passed back
 
-        additive = self.get_variable("additive")
+        additive = var("additive")
 
         self.cb(additive, "timestep * (self_lin + cross_lin)")
 
