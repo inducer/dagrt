@@ -47,6 +47,11 @@ class SymbolKind(RecordWithoutPickling):
     def __getinitargs__(self):
         return ()
 
+    def __repr__(self):
+        return "%s(%s)" % (
+                type(self).__name__,
+                ", ".join(repr(arg) for arg in self.__getinitargs__()))
+
 
 class Boolean(SymbolKind):
     pass
@@ -125,8 +130,8 @@ class SymbolKindTable(object):
                         "inconsistent 'kind' derived for '%s' in "
                         "'%s': '%s' vs '%s'"
                         % (name, func_name,
-                            type(kind).__name__,
-                            type(tbl[name]).__name__))
+                            repr(kind),
+                            repr(tbl[name])))
         else:
             tbl[name] = kind
 
