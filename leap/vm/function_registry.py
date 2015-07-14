@@ -53,7 +53,7 @@ class Function(RecordWithoutPickling):
                 language_to_codegen=language_to_codegen,
                 **kwargs)
 
-    def get_result_kind(self, arg_kinds):
+    def get_result_kind(self, arg_kinds, check):
         """Return the :class:`leap.vm.codegen.data.SymbolKind` this function
         returns if arguments of the kinds *arg_kinds* are supplied.
 
@@ -61,6 +61,11 @@ class Function(RecordWithoutPickling):
             or identifiers (for keyword arguments) to
             :class:`leap.vm.codegen.data.SymbolKind` instances indicating the
             types of the arguments being passed to the function.
+            Some elements of *arg_kinds* may be None if their kinds
+            have yet not been determined.
+
+        :arg check: A :class:`bool`. If True, none of *arg_kinds* will
+            be None, and argument kind checking should be performed.
         """
         raise NotImplementedError()
 
@@ -96,7 +101,7 @@ class FixedResultKindFunction(Function):
 
         super(FixedResultKindFunction, self).__init__(**kwargs)
 
-    def get_result_kind(self, arg_kinds):
+    def get_result_kind(self, arg_kinds, check):
         return self.result_kind
 
 # }}}
@@ -171,10 +176,10 @@ class _NormBase(Function):
     arg_names = ("x",)
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds):
+    def get_result_kind(self, arg_kinds, check):
         x_kind, = self.resolve_args(arg_kinds)
 
-        if not isinstance(x_kind, (NoneType, ODEComponent)):
+        if check and not isinstance(x_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'x' of 'norm' is not an ODE component")
 
         return Scalar(is_real_valued=True)
@@ -204,12 +209,12 @@ class _DotProduct(Function):
     arg_names = ("x", "y")
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds):
+    def get_result_kind(self, arg_kinds, check):
         x_kind, y_kind = self.resolve_args(arg_kinds)
 
-        if not isinstance(x_kind, (NoneType, ODEComponent)):
+        if check and not isinstance(x_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'x' of 'dot_product' is not an ODE component")
-        if not isinstance(y_kind, (NoneType, ODEComponent)):
+        if check and not isinstance(y_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'y' of 'dot_product' is not an ODE component")
 
         return Scalar(is_real_valued=False)
@@ -222,10 +227,10 @@ class _Len(Function):
     arg_names = ("x",)
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds):
+    def get_result_kind(self, arg_kinds, check):
         x_kind, = self.resolve_args(arg_kinds)
 
-        if not isinstance(x_kind, (NoneType, ODEComponent)):
+        if check and not isinstance(x_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'x' of 'len' is not an ODE component")
 
         return Scalar(is_real_valued=True)
@@ -238,10 +243,10 @@ class _IsNaN(Function):
     arg_names = ("x",)
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds):
+    def get_result_kind(self, arg_kinds, check):
         x_kind, = self.resolve_args(arg_kinds)
 
-        if not isinstance(x_kind, (NoneType, ODEComponent)):
+        if check and not isinstance(x_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'x' of 'len' is not an ODE component")
 
         return Boolean()
@@ -256,13 +261,10 @@ class _Array(Function):
     arg_names = ("n",)
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds):
+    def get_result_kind(self, arg_kinds, check):
         n_kind, = self.resolve_args(arg_kinds)
 
-        if n_kind is None:
-            raise UnableToInferKind()
-
-        if not isinstance(n_kind, Scalar):
+        if check and not isinstance(n_kind, Scalar):
             raise TypeError("argument 'n' of 'array' is not a scalar")
 
         return Array(is_real_valued=True)
@@ -278,19 +280,20 @@ class _MatMul(Function):
     arg_names = ("a", "b", "a_cols", "b_cols")
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds):
+    def get_result_kind(self, arg_kinds, check):
         a_kind, b_kind, a_cols_kind, b_cols_kind = self.resolve_args(arg_kinds)
 
         if a_kind is None or b_kind is None:
-            raise UnableToInferKind()
+            raise UnableToInferKind(
+                    "matmul needs to know both arguments to infer result kind")
 
-        if not isinstance(a_kind, Array):
+        if check and not isinstance(a_kind, Array):
             raise TypeError("argument 'a' of 'matmul' is not an array")
-        if not isinstance(b_kind, Array):
+        if check and not isinstance(b_kind, Array):
             raise TypeError("argument 'a' of 'matmul' is not an array")
-        if not isinstance(a_cols_kind, Scalar):
+        if check and not isinstance(a_cols_kind, Scalar):
             raise TypeError("argument 'a_cols' of 'matmul' is not a scalar")
-        if not isinstance(b_cols_kind, Scalar):
+        if check and not isinstance(b_cols_kind, Scalar):
             raise TypeError("argument 'b_cols' of 'matmul' is not a scalar")
 
         is_real_valued = a_kind.is_real_valued and b_kind.is_real_valued
@@ -308,19 +311,20 @@ class _LinearSolve(Function):
     arg_names = ("a", "b", "a_cols", "b_cols")
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds):
+    def get_result_kind(self, arg_kinds, check):
         a_kind, b_kind, a_cols_kind, b_cols_kind = self.resolve_args(arg_kinds)
 
         if a_kind is None or b_kind is None:
-            raise UnableToInferKind()
+            raise UnableToInferKind(
+                    "linear_solve needs to know both arguments to infer result kind")
 
-        if not isinstance(a_kind, Array):
+        if check and not isinstance(a_kind, Array):
             raise TypeError("argument 'a' of 'linear_solve' is not an array")
-        if not isinstance(b_kind, Array):
+        if check and not isinstance(b_kind, Array):
             raise TypeError("argument 'a' of 'linear_solve' is not an array")
-        if not isinstance(a_cols_kind, Scalar):
+        if check and not isinstance(a_cols_kind, Scalar):
             raise TypeError("argument 'a_cols' of 'linear_solve' is not a scalar")
-        if not isinstance(b_cols_kind, Scalar):
+        if check and not isinstance(b_cols_kind, Scalar):
             raise TypeError("argument 'b_cols' of 'linear_solve' is not a scalar")
 
         is_real_valued = a_kind.is_real_valued and b_kind.is_real_valued
@@ -405,16 +409,16 @@ class _ODERightHandSide(Function):
     def arg_names(self):
         return ("t",) + self.input_component_names
 
-    def get_result_kind(self, arg_kinds):
+    def get_result_kind(self, arg_kinds, check):
         arg_kinds = self.resolve_args(arg_kinds)
 
-        if not isinstance(arg_kinds[0], (NoneType, Scalar)):
+        if check and not isinstance(arg_kinds[0], Scalar):
             raise TypeError("argument 't' of '%s' is not a scalar"
                     % self.identifier)
 
         for arg_name, arg_kind_passed, input_component_id in zip(
                 self.arg_names[1:], arg_kinds[1:], self.input_component_ids):
-            if arg_kind_passed is None:
+            if arg_kind_passed is None and not check:
                 pass
             elif not (isinstance(arg_kind_passed, ODEComponent)
                     and arg_kind_passed.component_id == input_component_id):

@@ -201,8 +201,11 @@ class Nop(Instruction):
 
 # {{{ assignments
 
+class AssignmentBase(Instruction):
+    pass
 
-class AssignSolved(Instruction):
+
+class AssignSolved(AssignmentBase):
     """
     .. attribute:: assignees
 
@@ -278,7 +281,7 @@ class AssignSolved(Instruction):
         return "\n".join(lines)
 
 
-class AssignExpression(Instruction):
+class AssignExpression(AssignmentBase):
     """
     .. attribute:: assignee
     .. attribute:: assignee_subscript

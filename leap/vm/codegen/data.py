@@ -1,6 +1,6 @@
 """Mini-type inference for leap methods"""
 
-from __future__ import division, with_statement
+from __future__ import division, with_statement, print_function
 
 __copyright__ = """
 Copyright (C) 2013 Andreas Kloeckner
@@ -26,6 +26,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
+
+from leap.vm.utils import TODO
 
 import leap.vm.language as lang
 from leap.vm.utils import is_state_variable
@@ -195,10 +197,19 @@ def unify(kind_a, kind_b):
         if isinstance(kind_b, Array):
             return Array(
                     not (not kind_a.is_real_valued or not kind_b.is_real_valued))
+        if isinstance(kind_b, Integer):
+            return kind_a
 
         assert isinstance(kind_b, Scalar)
         return Scalar(
                 not (not kind_a.is_real_valued or not kind_b.is_real_valued))
+
+    elif isinstance(kind_a, Integer):
+        if isinstance(kind_b, (ODEComponent, Scalar, Array)):
+            return kind_b
+
+        assert isinstance(kind_b, Integer)
+        return Integer()
 
     raise NotImplementedError("unknown kind '%s'" % type(kind_a).__name__)
 
@@ -215,10 +226,11 @@ class KindInferenceMapper(Mapper):
         currently being processed.
     """
 
-    def __init__(self, global_table, local_table, function_registry):
+    def __init__(self, global_table, local_table, function_registry, check):
         self.global_table = global_table
         self.local_table = local_table
         self.function_registry = function_registry
+        self.check = check
 
     def map_constant(self, expr):
         if isinstance(expr, complex):
@@ -237,20 +249,31 @@ class KindInferenceMapper(Mapper):
         except KeyError:
             pass
 
-        raise UnableToInferKind()
+        raise UnableToInferKind(
+                "nothing known about '%s'"
+                % expr.name)
 
     def map_sum(self, expr):
         kind = None
+
+        last_exc = None
+
+        # Sums must be homogeneous, so being able to
+        # infer one child is good enough.
         for ch in expr.children:
             try:
                 ch_kind = self.rec(ch)
-            except UnableToInferKind:
-                pass
+            except UnableToInferKind as e:
+                if self.check:
+                    raise
+                else:
+                    last_exc = e
+
             else:
                 kind = unify(kind, ch_kind)
 
         if kind is None:
-            raise UnableToInferKind()
+            raise last_exc
         else:
             return kind
 
@@ -268,8 +291,8 @@ class KindInferenceMapper(Mapper):
         return self.map_product_like((expr.numerator, expr.denominator))
 
     def map_power(self, expr):
-        if not isinstance(self.rec(expr.exponent), Scalar):
-            raise ValueError(
+        if self.check and not isinstance(self.rec(expr.exponent), Scalar):
+            raise TypeError(
                     "exponentiation by '%s'"
                     "is meaningless"
                     % type(self.rec(expr.exponent)).__name__)
@@ -283,7 +306,7 @@ class KindInferenceMapper(Mapper):
             except UnableToInferKind:
                 arg_kinds[key] = None
 
-        z = func.get_result_kind(arg_kinds)
+        z = func.get_result_kind(arg_kinds, self.check)
         return z
 
     def map_call(self, expr):
@@ -301,7 +324,7 @@ class KindInferenceMapper(Mapper):
     def map_logical_or(self, expr):
         for ch in expr.children:
             ch_kind = self.rec(ch)
-            if not isinstance(ch_kind, Boolean):
+            if self.check and not isinstance(ch_kind, Boolean):
                 raise ValueError(
                         "logical operations on '%s' are undefined"
                         % type(ch_kind).__name__)
@@ -312,7 +335,7 @@ class KindInferenceMapper(Mapper):
 
     def map_logical_not(self, expr):
         ch_kind = self.rec(expr.child)
-        if not isinstance(ch_kind, Boolean):
+        if self.check and not isinstance(ch_kind, Boolean):
             raise ValueError(
                     "logical operations on '%s' are undefined"
                     % type(ch_kind).__name__)
@@ -326,7 +349,7 @@ class KindInferenceMapper(Mapper):
 
     def map_subscript(self, expr):
         agg_kind = self.rec(expr.aggregate)
-        if not isinstance(agg_kind, Array):
+        if self.check and not isinstance(agg_kind, Array):
             raise ValueError(
                     "only arrays can be subscripted, not '%s' "
                     "which is a '%s'"
@@ -358,10 +381,40 @@ class SymbolKindFinder(object):
         insn_queue_push_buffer = []
         made_progress = False
 
+        def make_kim(func_name, check):
+            return KindInferenceMapper(
+                    result.global_table,
+                    result.per_function_table.get(func_name, {}),
+                    self.function_registry,
+                    check=False)
+
         while insn_queue or insn_queue_push_buffer:
             if not insn_queue:
                 if not made_progress:
-                    raise RuntimeError("failed to infer types")
+                    print("Left-over instructions in kind inference:")
+                    for func_name, insn in insn_queue_push_buffer:
+                        print("[%s] %s" % (func_name, insn))
+
+                        kim = make_kim(func_name, check=False)
+
+                        try:
+                            if isinstance(insn, lang.AssignExpression):
+                                kim(insn.expression)
+
+                            elif isinstance(insn, lang.AssignmentBase):
+                                raise TODO()
+
+                            else:
+                                pass
+                        except UnableToInferKind as e:
+                            print("  -> %s" % str(e))
+                        else:
+                            # We aren't supposed to get here. Kind inference
+                            # didn't succeed earlier. Since we made no progress,
+                            # it shouldn't succeed now.
+                            assert False
+
+                    raise RuntimeError("failed to infer kinds")
 
                 insn_queue = insn_queue_push_buffer
                 insn_queue_push_buffer = []
@@ -369,16 +422,8 @@ class SymbolKindFinder(object):
 
             func_name, insn = insn_queue.pop()
 
-            if isinstance(insn, lang.AssignSolved):
-                made_progress = True
-                from leap.vm.utils import TODO
-                raise TODO()
-
-            elif isinstance(insn, lang.AssignExpression):
-                kim = KindInferenceMapper(
-                        result.global_table,
-                        result.per_function_table.get(func_name, {}),
-                        self.function_registry)
+            if isinstance(insn, lang.AssignExpression):
+                kim = make_kim(func_name, check=False)
 
                 for ident, _, _ in insn.loops:
                     result.set(func_name, ident, kind=Integer())
@@ -394,9 +439,29 @@ class SymbolKindFinder(object):
                     made_progress = True
                     result.set(func_name, insn.assignee, kind=kind)
 
+            elif isinstance(insn, lang.AssignmentBase):
+                raise TODO()
+
             else:
                 # We only care about assignments.
                 pass
+
+        # {{{ check consistency of obtained kinds
+
+        for func_name, func in zip(names, functions):
+            kim = make_kim(func_name, check=True)
+
+            for insn in get_instructions_in_ast(func):
+                if isinstance(insn, lang.AssignExpression):
+                    kim(insn.expression)
+
+                elif isinstance(insn, lang.AssignmentBase):
+                    raise TODO()
+
+                else:
+                    pass
+
+        # }}}
 
         return result
 
