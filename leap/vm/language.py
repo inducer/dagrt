@@ -334,8 +334,12 @@ class AssignExpression(AssignmentBase):
                     for ident, start, end in self.loops])
 
     def __str__(self):
+        assignee = self.assignee
+        if self.assignee_subscript:
+            assignee += "[%s]" % ", ".join(str(ax) for ax in self.assignee_subscript)
+
         result = "{assignee} <- {expr}{cond}".format(
-            assignee=self.assignee,
+            assignee=assignee,
             expr=str(self.expression),
             cond=self._condition_printing_suffix())
 
@@ -567,6 +571,32 @@ class TimeIntegratorCode(RecordWithoutPickling):
         return UniqueNameGenerator(self.existing_var_names())
 
     # }}}
+
+    def __str__(self):
+        lines = []
+
+        def print_insn(insn):
+            if insn.id in printed_insn_ids:
+                return
+            printed_insn_ids.add(insn.id)
+
+            for dep_id in insn.depends_on:
+                print_insn(self.id_to_insn[dep_id])
+
+            lines.append("    {%s} %s" % (insn.id, insn))
+
+        for state_name, state in six.iteritems(self.states):
+            printed_insn_ids = set()
+
+            lines.append("STATE %s" % state_name)
+
+            for root_id in state.depends_on:
+                print_insn(self.id_to_insn[root_id])
+
+            lines.append("    -> (next state) %s" % state.next_state)
+            lines.append("")
+
+        return "\n".join(lines)
 
 # }}}
 
