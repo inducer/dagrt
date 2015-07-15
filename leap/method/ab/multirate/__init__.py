@@ -389,14 +389,16 @@ class MRABCodeEmitter(MRABProcessor):
         self.cb.fence()
         self.cb("levels_cross","`<builtin>array`(n_cross)")
         self.cb("levels_self","`<builtin>array`(n_self)")
+        self.cb("new_self_coeffs","`<builtin>array`(n_self)")
+        self.cb("new_cross_coeffs","`<builtin>array`(n_cross)")
         self.cb.fence()
 
         for i in range(len(levels_self)):
-            self.cb("levels_self[{0}+1]".format(i), levels_self[i])
+            self.cb("levels_self[{0}]".format(i), levels_self[i])
             self.cb.fence()
 
         for i in range(len(levels_cross)):
-            self.cb("levels_cross[{0}+1]".format(i), levels_cross[i])
+            self.cb("levels_cross[{0}]".format(i), levels_cross[i])
             self.cb.fence()
 
         self.cb("point_eval_vec_cross", "`<builtin>array`(n_cross)")
@@ -411,9 +413,9 @@ class MRABCodeEmitter(MRABProcessor):
         self.cb("point_eval_vec_self[i]", "1 / (i + 1) * (end_time_level ** (i + 1)- start_time_level ** (i + 1)) ",
                 loops=[("i", 0, "n_self")])
         self.cb("vdm_cross[j*n_cross + i]", "levels_cross[i]**j",
-                loops=[("i", 0, "n_cross"), ("j", 1, "n_cross")])
+                loops=[("i", 0, "n_cross"), ("j", 0, "n_cross")])
         self.cb("vdm_self[j*n_self + i]", "levels_self[i]**j",
-                loops=[("i", 0, "n_self"), ("j", 1, "n_self")])
+                loops=[("i", 0, "n_self"), ("j", 0, "n_self")])
 
         self.cb.fence()
 
@@ -447,33 +449,37 @@ class MRABCodeEmitter(MRABProcessor):
 
         # Use loops to assign each element of this vector to an element from our newly calculated coeff vector (Fortran-side)
 
+        self.cb("newself","`<builtin>array`(n_self)")
+        self.cb("newcross","`<builtin>array`(n_cross)")
+        self.cb.fence()
+
         for i in range(len(levels_self)):
-            self.cb(new_self_coeffs_py[i], "new_self_coeffs[{0}+1]".format(i))
+            self.cb(new_self_coeffs_py[i], "new_self_coeffs[{0}]".format(i))
             self.cb.fence()
 
         for i in range(len(levels_cross)):
-            self.cb(new_cross_coeffs_py[i], "new_cross_coeffs[{0}+1]".format(i))
+            self.cb(new_cross_coeffs_py[i], "new_cross_coeffs[{0}]".format(i))
             self.cb.fence()
 
         # Perform the linear combination using the Python built-in
 
-        self.cb("self_lin", linear_comb(new_self_coeffs_py, self_history))
-        self.cb("cross_lin", linear_comb(new_cross_coeffs_py, cross_history))
+        #self.cb("self_lin", linear_comb(new_self_coeffs_py, self_history))
+        #self.cb("cross_lin", linear_comb(new_cross_coeffs_py, cross_history))
 
         self.cb.fence()
 
         # Build the new y to be passed back
 
-        additive = var("additive")
+        #additive = var("additive")
 
-        self.cb(additive, "timestep * (self_lin + cross_lin)")
+        #self.cb(additive, "timestep * (self_lin + cross_lin)")
 
         needs_fence = insn.result_name in self.name_to_variable
         new_y_var = self.get_variable(insn.result_name)
 
         if needs_fence:
             self.cb.fence()
-        self.cb(new_y_var, additive + my_y)
+        self.cb(new_y_var, my_y + self.stepper.large_dt * (linear_comb(new_cross_coeffs_py, cross_history) + linear_comb(new_self_coeffs_py, self_history)))
 
         self.cb.fence()
 
