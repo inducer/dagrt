@@ -1460,7 +1460,8 @@ class CodeGenerator(StructuredCodeGenerator):
         assert var(assignee_sym) not in DependencyMapper()(expr)
 
         self.emit_allocation_check(assignee_sym, sym_kind)
-        self.emit_assign_expr_inner(assignee_fortran_name, assignee_subscript, expr, sym_kind)
+        self.emit_assign_expr_inner(
+                assignee_fortran_name, assignee_subscript, expr, sym_kind)
 
     def emit_inst_AssignExpression(self, inst):
         start_em = self.emitter
@@ -1701,7 +1702,7 @@ UTIL_MACROS = """
             stop
         endif
 
-        ${rows_var} = size(${a}) / int(${cols_var})
+        ${rows_var} = size(${mat_array}) / int(${cols_var})
 
         if (${rows_var} * int(${cols_var}) .ne. size(${mat_array})) then
             write(leap_stderr,*) &
