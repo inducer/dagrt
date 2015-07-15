@@ -407,13 +407,13 @@ class MRABCodeEmitter(MRABProcessor):
         self.cb.fence()
 
         self.cb("point_eval_vec_cross[i]", "1 / (i + 1) * (end_time_level ** (i + 1)- start_time_level ** (i + 1)) ",
-                loops=[("i", 1, "n_cross")])
+                loops=[("i", 0, "n_cross")])
         self.cb("point_eval_vec_self[i]", "1 / (i + 1) * (end_time_level ** (i + 1)- start_time_level ** (i + 1)) ",
-                loops=[("i", 1, "n_self")])
+                loops=[("i", 0, "n_self")])
         self.cb("vdm_cross[j*n_cross + i]", "levels_cross[i]**j",
-                loops=[("i", 1, "n_cross"), ("j", 1, "n_cross")])
+                loops=[("i", 0, "n_cross"), ("j", 1, "n_cross")])
         self.cb("vdm_self[j*n_self + i]", "levels_self[i]**j",
-                loops=[("i", 1, "n_self"), ("j", 1, "n_self")])
+                loops=[("i", 0, "n_self"), ("j", 1, "n_self")])
 
         self.cb.fence()
 
