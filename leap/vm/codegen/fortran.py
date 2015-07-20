@@ -1681,6 +1681,10 @@ builtin_array = CallCode("""
             stop
         endif
 
+        if (allocated(${result})) then
+            deallocate(${result})
+        endif
+
         allocate(${result}(0:int(${n})-1))
         """)
 
@@ -1754,6 +1758,10 @@ builtin_matmul = CallCode(UTIL_MACROS + """
 
         ${res_size} = ${a_rows} * int(${b_cols})
 
+        if (allocated(${result})) then
+            deallocate(${result})
+        endif
+
         allocate(${result}(0:${res_size}-1))
 
         ${result} = reshape( &
@@ -1803,6 +1811,10 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
         allocate(${ipiv}(${a_rows}))
 
         ${lu_temp} = ${a}
+
+        if (allocated(${result})) then
+            deallocate(${result})
+        endif
 
         allocate(${result}(0:${res_size}-1))
         ${result} = ${b}
