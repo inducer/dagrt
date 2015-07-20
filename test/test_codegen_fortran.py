@@ -423,6 +423,7 @@ def test_arrays_and_linalg():
         cb("myarray", "`<builtin>matmul`(vdm, vdm_inverse, n, n)")
 
         cb("myzero", "myarray - identity")
+        cb("dummy", "`<builtin>print`(myzero)")
         with cb.if_("`<builtin>norm_2`(myzero) > 10**(-8)"):
             cb.raise_(MatrixInversionFailure)
 

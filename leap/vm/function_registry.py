@@ -27,7 +27,7 @@ THE SOFTWARE.
 
 from pytools import RecordWithoutPickling
 from leap.vm.codegen.data import (
-        ODEComponent, Boolean, Scalar, Array, UnableToInferKind)
+        ODEComponent, Integer, Boolean, Scalar, Array, UnableToInferKind)
 
 NoneType = type(None)
 
@@ -332,6 +332,25 @@ class _LinearSolve(Function):
         return Array(is_real_valued)
 
 
+class _Print(Function):
+    """``print(arg)`` prints the given operand to standard output. Returns an integer
+    that may be ignored.
+    """
+
+    identifier = "<builtin>print"
+    arg_names = ("arg",)
+    default_dict = {}
+
+    def get_result_kind(self, arg_kinds, check):
+        arg_kind, = self.resolve_args(arg_kinds)
+
+        if check and not isinstance(arg_kind, (Integer, Scalar, Array)):
+            raise TypeError(
+                    "argument of 'print' is not an integer, array, or scalar")
+
+        return Integer()
+
+
 class _PythonBuiltinFunctionCodeGenerator(object):
     def __init__(self, function, pattern):
         self.function = function
@@ -357,6 +376,7 @@ def _make_bfr():
             (_Array(), "self._builtin_array({args})"),
             (_MatMul(), "self._builtin_matmul({args})"),
             (_LinearSolve(), "self._builtin_linear_solve({args})"),
+            (_Print(), "self._builtin_print({args})"),
             ]:
 
         bfr = bfr.register(func)
@@ -380,6 +400,8 @@ def _make_bfr():
             f.builtin_matmul)
     bfr = bfr.register_codegen(_LinearSolve.identifier, "fortran",
             f.builtin_linear_solve)
+    bfr = bfr.register_codegen(_Print.identifier, "fortran",
+            f.builtin_print)
 
     return bfr
 

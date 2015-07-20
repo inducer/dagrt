@@ -139,6 +139,10 @@ class NumpyInterpreter(object):
 
             return res_mat.reshape(-1, order="F")
 
+        def builtin_print(arg):
+            print(arg)
+            return 0
+
         from functools import partial
 
         builtins = {
@@ -151,6 +155,7 @@ class NumpyInterpreter(object):
                 "<builtin>array": builtin_array,
                 "<builtin>matmul": builtin_matmul,
                 "<builtin>linear_solve": builtin_linear_solve,
+                "<builtin>print": builtin_print,
                 }
 
         # Ensure none of the names in the function map conflict with the

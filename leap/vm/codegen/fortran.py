@@ -1833,6 +1833,13 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
         deallocate(${ipiv})
 
         """)
+
+builtin_print = CallCode(UTIL_MACROS + """
+        write(*,*) ${arg}
+
+        ${result} = 0
+        """)
+
 # }}}
 
 

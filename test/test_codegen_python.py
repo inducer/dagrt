@@ -36,7 +36,8 @@ from leap.vm.codegen import PythonCodeGenerator
 from pymbolic import var
 
 from utils import (  # noqa
-        RawCodeBuilder, python_method_impl_interpreter, python_method_impl_codegen)
+        RawCodeBuilder, python_method_impl_interpreter as pmi_int,
+        python_method_impl_codegen as pmi_cg)
 
 
 def test_basic_codegen():
@@ -363,6 +364,8 @@ def test_arrays_and_linalg(python_method_impl):
 
         cb("vdm_inverse", "`<builtin>linear_solve`(vdm, identity, n, n)")
         cb("myarray", "`<builtin>matmul`(vdm, vdm_inverse, n, n)")
+
+        cb("dummy", "`<builtin>print`(myarray)")
 
         cb.yield_state("myarray", "result", 0, "final")
 
