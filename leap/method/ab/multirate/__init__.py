@@ -379,16 +379,31 @@ class MRABCodeEmitter(MRABProcessor):
         levels_cross = numpy.arange(0, -self.stepper.orders[cross_hn], -1, dtype=numpy.float64)
 
         self.cb("timestep", self.stepper.large_dt)
-        self.cb("start_time_level", start_time_level)
         self.cb.fence()
 
-        self.cb("end_time_level", end_time_level)
         self.cb("n_cross",len(levels_cross))
         self.cb("n_self",len(levels_self))
+
+        if self.stepper.hist_is_fast[self_hn]:
+            levels_self /= self.substep_count
+
+        levels_self += self.hist_head_time_level[self_hn]/self.substep_count
+
+        if self.stepper.hist_is_fast[cross_hn]:
+            levels_self /= self.substep_count
+
+        levels_cross += self.hist_head_time_level[cross_hn]/self.substep_count
+
+        t_start = start_time_level / self.substep_count
+        t_end = end_time_level / self.substep_count
 
         self.cb.fence()
         self.cb("levels_cross","`<builtin>array`(n_cross)")
         self.cb("levels_self","`<builtin>array`(n_self)")
+        self.cb.fence()
+
+        self.cb("start_time", t_start)
+        self.cb("end_time", t_end)
         self.cb.fence()
 
         for i in range(len(levels_self)):
@@ -402,23 +417,23 @@ class MRABCodeEmitter(MRABProcessor):
         self.cb("point_eval_vec_cross", "`<builtin>array`(n_cross)")
         self.cb("point_eval_vec_self", "`<builtin>array`(n_self)")
 
-        self.cb("vdm_cross", "`<builtin>array`(n_cross*n_cross)")
-        self.cb("vdm_self", "`<builtin>array`(n_self*n_self)")
+        self.cb("vdm_transpose_cross", "`<builtin>array`(n_cross*n_cross)")
+        self.cb("vdm_transpose_self", "`<builtin>array`(n_self*n_self)")
         self.cb.fence()
 
-        self.cb("point_eval_vec_cross[i]", "1 / (i + 1) * (end_time_level ** (i + 1)- start_time_level ** (i + 1)) ",
+        self.cb("point_eval_vec_cross[i]", "1 / (i + 1) * (end_time ** (i + 1)- start_time ** (i + 1)) ",
                 loops=[("i", 0, "n_cross")])
-        self.cb("point_eval_vec_self[i]", "1 / (i + 1) * (end_time_level ** (i + 1)- start_time_level ** (i + 1)) ",
+        self.cb("point_eval_vec_self[i]", "1 / (i + 1) * (end_time ** (i + 1)- start_time ** (i + 1)) ",
                 loops=[("i", 0, "n_self")])
-        self.cb("vdm_cross[j*n_cross + i]", "levels_cross[i]**j",
+        self.cb("vdm_transpose_cross[i*n_cross + j]", "levels_cross[i]**j",
                 loops=[("i", 0, "n_cross"), ("j", 0, "n_cross")])
-        self.cb("vdm_self[j*n_self + i]", "levels_self[i]**j",
+        self.cb("vdm_transpose_self[i*n_self + j]", "levels_self[i]**j",
                 loops=[("i", 0, "n_self"), ("j", 0, "n_self")])
 
         self.cb.fence()
 
-        self.cb("new_cross_coeffs", "`<builtin>linear_solve`(vdm_cross, point_eval_vec_cross, n_cross, 1)")
-        self.cb("new_self_coeffs", "`<builtin>linear_solve`(vdm_self, point_eval_vec_self, n_self, 1)")
+        self.cb("new_cross_coeffs", "`<builtin>linear_solve`(vdm_transpose_cross, point_eval_vec_cross, n_cross, 1)")
+        self.cb("new_self_coeffs", "`<builtin>linear_solve`(vdm_transpose_self, point_eval_vec_self, n_self, 1)")
 
         self.cb.fence()
 
