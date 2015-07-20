@@ -1701,7 +1701,7 @@ UTIL_MACROS = """
             stop
         endif
 
-        ${rows_var} = size(${a}) / int(${cols_var})
+        ${rows_var} = size(${mat_array}) / int(${cols_var})
 
         if (${rows_var} * int(${cols_var}) .ne. size(${mat_array})) then
             write(leap_stderr,*) &

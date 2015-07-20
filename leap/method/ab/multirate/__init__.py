@@ -389,8 +389,6 @@ class MRABCodeEmitter(MRABProcessor):
         self.cb.fence()
         self.cb("levels_cross","`<builtin>array`(n_cross)")
         self.cb("levels_self","`<builtin>array`(n_self)")
-        self.cb("new_self_coeffs","`<builtin>array`(n_self)")
-        self.cb("new_cross_coeffs","`<builtin>array`(n_cross)")
         self.cb.fence()
 
         for i in range(len(levels_self)):
@@ -419,8 +417,8 @@ class MRABCodeEmitter(MRABProcessor):
 
         self.cb.fence()
 
-        self.cb("new_cross_coeffs", "`<builtin>linear_solve`(point_eval_vec_cross, vdm_cross, n_cross, n_cross)")
-        self.cb("new_self_coeffs", "`<builtin>linear_solve`(point_eval_vec_self, vdm_self, n_self, n_self)")
+        self.cb("new_cross_coeffs", "`<builtin>linear_solve`(vdm_cross, point_eval_vec_cross, n_cross, 1)")
+        self.cb("new_self_coeffs", "`<builtin>linear_solve`(vdm_self, point_eval_vec_self, n_self, 1)")
 
         self.cb.fence()
 
@@ -444,6 +442,8 @@ class MRABCodeEmitter(MRABProcessor):
         new_self_coeffs_pyvar = var("newself")
         new_cross_coeffs_pyvar = var("newcross")
 
+        self.cb.fence()
+
         new_self_coeffs_py = [new_self_coeffs_pyvar[i] for i in range(len(levels_self))]
         new_cross_coeffs_py = [new_cross_coeffs_pyvar[i] for i in range(len(levels_cross))]
 
@@ -461,24 +461,12 @@ class MRABCodeEmitter(MRABProcessor):
             self.cb(new_cross_coeffs_py[i], "new_cross_coeffs[{0}]".format(i))
             self.cb.fence()
 
-        # Perform the linear combination using the Python built-in
-
-        #self.cb("self_lin", linear_comb(new_self_coeffs_py, self_history))
-        #self.cb("cross_lin", linear_comb(new_cross_coeffs_py, cross_history))
-
-        self.cb.fence()
-
-        # Build the new y to be passed back
-
-        #additive = var("additive")
-
-        #self.cb(additive, "timestep * (self_lin + cross_lin)")
-
         needs_fence = insn.result_name in self.name_to_variable
         new_y_var = self.get_variable(insn.result_name)
 
         if needs_fence:
             self.cb.fence()
+
         self.cb(new_y_var, my_y + self.stepper.large_dt * (linear_comb(new_cross_coeffs_py, cross_history) + linear_comb(new_self_coeffs_py, self_history)))
 
         self.cb.fence()
