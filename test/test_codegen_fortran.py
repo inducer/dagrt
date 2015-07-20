@@ -313,7 +313,8 @@ def test_multirate_codegen(min_order):
         ("abmethod.f90", code_str),
         ("test_mrab.f90", read_file("test_mrab.f90").replace(
             "MIN_ORDER", str(min_order - 0.3)+"d0")),
-        ])
+        ],
+        fortran_options=["-llapack", "-lblas"])
 
 
 def test_adaptive_rk_codegen():
