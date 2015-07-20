@@ -1460,7 +1460,8 @@ class CodeGenerator(StructuredCodeGenerator):
         assert var(assignee_sym) not in DependencyMapper()(expr)
 
         self.emit_allocation_check(assignee_sym, sym_kind)
-        self.emit_assign_expr_inner(assignee_fortran_name, assignee_subscript, expr, sym_kind)
+        self.emit_assign_expr_inner(
+                assignee_fortran_name, assignee_subscript, expr, sym_kind)
 
     def emit_inst_AssignExpression(self, inst):
         start_em = self.emitter
@@ -1680,6 +1681,10 @@ builtin_array = CallCode("""
             stop
         endif
 
+        if (allocated(${result})) then
+            deallocate(${result})
+        endif
+
         allocate(${result}(0:int(${n})-1))
         """)
 
@@ -1753,6 +1758,10 @@ builtin_matmul = CallCode(UTIL_MACROS + """
 
         ${res_size} = ${a_rows} * int(${b_cols})
 
+        if (allocated(${result})) then
+            deallocate(${result})
+        endif
+
         allocate(${result}(0:${res_size}-1))
 
         ${result} = reshape( &
@@ -1803,6 +1812,10 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
 
         ${lu_temp} = ${a}
 
+        if (allocated(${result})) then
+            deallocate(${result})
+        endif
+
         allocate(${result}(0:${res_size}-1))
         ${result} = ${b}
 
@@ -1820,6 +1833,13 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
         deallocate(${ipiv})
 
         """)
+
+builtin_print = CallCode(UTIL_MACROS + """
+        write(*,*) ${arg}
+
+        ${result} = 0
+        """)
+
 # }}}
 
 

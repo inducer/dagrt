@@ -147,6 +147,9 @@ def _builtin_linear_solve(self, a, b, a_cols, b_cols):
 
     return res_mat.reshape(-1, order="F")
 
+def _builtin_print(self, arg):
+    print(arg)
+    return 0
 '''
 
 
@@ -155,7 +158,7 @@ class PythonClassEmitter(PythonEmitter):
 
     def __init__(self, class_name, superclass='object'):
         super(PythonClassEmitter, self).__init__()
-        self('from __future__ import division')
+        self('from __future__ import division, print_function')
         self('class {cls}({superclass}):'.format(cls=class_name,
                                                  superclass=superclass))
         self.indent()

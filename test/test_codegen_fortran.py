@@ -313,7 +313,8 @@ def test_multirate_codegen(min_order):
         ("abmethod.f90", code_str),
         ("test_mrab.f90", read_file("test_mrab.f90").replace(
             "MIN_ORDER", str(min_order - 0.3)+"d0")),
-        ])
+        ],
+        fortran_options=["-llapack", "-lblas"])
 
 
 def test_adaptive_rk_codegen():
@@ -422,6 +423,7 @@ def test_arrays_and_linalg():
         cb("myarray", "`<builtin>matmul`(vdm, vdm_inverse, n, n)")
 
         cb("myzero", "myarray - identity")
+        cb("dummy", "`<builtin>print`(myzero)")
         with cb.if_("`<builtin>norm_2`(myzero) > 10**(-8)"):
             cb.raise_(MatrixInversionFailure)
 
