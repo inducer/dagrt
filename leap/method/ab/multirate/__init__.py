@@ -118,6 +118,15 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                 var_names.append(var('<p>' + name + '_n_minus_' + str(past)))
             self.histories[component] = var_names
 
+        self.time_histories = {}
+
+        for component in HIST_NAMES:
+            name = component().__class__.__name__.lower()
+            time_var_names = [var('time' + name + '_n')]
+            for past in range(1, self.orders[component]):
+                time_var_names.append(var('time' + name + '_n_minus_' + str(past)))
+            self.time_histories[component] = time_var_names
+
         self.hist_is_fast = {
                 HIST_F2F: True,
                 HIST_S2F: self.method.s2f_hist_is_fast,
@@ -240,6 +249,14 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         assert initialization_steps > 0
 
         assign_before = self.compute_history_assignments()
+
+        # Try initializing time histories
+
+        for hn in HIST_NAMES:
+            time_hist = self.time_histories[hn]
+            for i in range(len(time_hist)):
+                cb(time_hist[i], 0)
+                cb.fence()
 
         for substep_index in range(self.substep_count):
             # Add any assignments that need to be run ahead of this
@@ -421,14 +438,14 @@ class MRABCodeEmitter(MRABProcessor):
         self.cb("vdm_transpose_self", "`<builtin>array`(n_self*n_self)")
         self.cb.fence()
 
-        self.cb("point_eval_vec_cross[i]", "1 / (i + 1) * (end_time ** (i + 1)- start_time ** (i + 1)) ",
-                loops=[("i", 0, "n_cross")])
-        self.cb("point_eval_vec_self[i]", "1 / (i + 1) * (end_time ** (i + 1)- start_time ** (i + 1)) ",
-                loops=[("i", 0, "n_self")])
-        self.cb("vdm_transpose_cross[i*n_cross + j]", "levels_cross[i]**j",
-                loops=[("i", 0, "n_cross"), ("j", 0, "n_cross")])
-        self.cb("vdm_transpose_self[i*n_self + j]", "levels_self[i]**j",
-                loops=[("i", 0, "n_self"), ("j", 0, "n_self")])
+        self.cb("point_eval_vec_cross[g]", "1 / (g + 1) * (end_time ** (g + 1)- start_time ** (g + 1)) ",
+                loops=[("g", 0, "n_cross")])
+        self.cb("point_eval_vec_self[g]", "1 / (g + 1) * (end_time ** (g + 1)- start_time ** (g + 1)) ",
+                loops=[("g", 0, "n_self")])
+        self.cb("vdm_transpose_cross[g*n_cross + h]", "levels_cross[g]**h",
+                loops=[("g", 0, "n_cross"), ("h", 0, "n_cross")])
+        self.cb("vdm_transpose_self[g*n_self + h]", "levels_self[g]**h",
+                loops=[("g", 0, "n_self"), ("h", 0, "n_self")])
 
         self.cb.fence()
 
@@ -482,8 +499,9 @@ class MRABCodeEmitter(MRABProcessor):
         if needs_fence:
             self.cb.fence()
 
-        self.cb(new_y_var, my_y + self.stepper.large_dt * (linear_comb(new_cross_coeffs_py, cross_history) + linear_comb(new_self_coeffs_py, self_history)))
+        # Perform the linear combination to obtain our new_y
 
+        self.cb(new_y_var, my_y + self.stepper.large_dt * (linear_comb(new_cross_coeffs_py, cross_history) + linear_comb(new_self_coeffs_py, self_history)))
         self.cb.fence()
 
         self.context[insn.result_name] = new_y_var
@@ -507,6 +525,19 @@ class MRABCodeEmitter(MRABProcessor):
         for h, h_next in zip(reverse_hist, reverse_hist[1:]):
             self.cb.fence()
             self.cb(h, h_next)
+
+        time_hist = self.stepper.time_histories[insn.which]
+
+        reverse_time_hist = time_hist[::-1]
+
+        # Move time histories by one step forward
+        for th, th_next in zip(reverse_time_hist, reverse_time_hist[1:]):
+            self.cb.fence()
+            self.cb(th, th_next)
+
+        # Tack on the new time
+        self.cb.fence()
+        self.cb(time_hist[0], t)
 
         # Compute the new RHS
         self.cb.fence()
