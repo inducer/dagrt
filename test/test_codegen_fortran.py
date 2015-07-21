@@ -444,6 +444,126 @@ def test_arrays_and_linalg():
         fortran_options=["-llapack", "-lblas"])
 
 
+@pytest.mark.parametrize("min_order", [2, 3, 4, 5])
+def test_singlerate_squarewave(min_order):
+    from leap.method.ab import AdamsBashforthTimeStepper
+
+    component_id = 'y'
+    rhs_function = '<func>y'
+
+    stepper = AdamsBashforthTimeStepper("y", min_order)
+
+    from leap.vm.function_registry import (
+            base_function_registry, register_ode_rhs)
+    freg = register_ode_rhs(base_function_registry, component_id,
+                            identifier=rhs_function)
+    freg = freg.register_codegen(rhs_function, "fortran",
+            f.CallCode("""
+                ${result} = -2*${y}
+                """))
+
+    code = stepper.generate()
+
+    codegen = f.CodeGenerator(
+            'ABMethod',
+            ode_component_type_map={
+                component_id: f.ArrayType(
+                    (2,),
+                    f.BuiltinType('real (kind=8)'),
+                    )
+                },
+            function_registry=freg,
+            module_preamble="""
+            ! lines copied to the start of the module, e.g. to say:
+            ! use ModStuff
+            """)
+
+    code_str = codegen(code)
+
+    run_fortran([
+        ("abmethod.f90", code_str),
+        ("test_ab_squarewave.f90", read_file("test_ab_squarewave.f90").replace(
+            "MIN_ORDER", str(min_order - 0.3)+"d0")),
+        ],
+        fortran_options=["-llapack", "-lblas"])
+
+
+@pytest.mark.parametrize("min_order", [2, 3, 4, 5])
+def test_multirate_squarewave(min_order):
+    from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
+    from leap.method.ab.multirate.methods import methods
+    from pytools import DictionaryWithDefault
+
+    orders = DictionaryWithDefault(lambda x: min_order)
+
+    stepper = TwoRateAdamsBashforthTimeStepper(methods['F'], orders, 4)
+
+    code = stepper.generate()
+
+    from leap.vm.function_registry import (
+            base_function_registry, register_ode_rhs)
+
+    freg = base_function_registry
+    for func_name in [
+            "<func>s2s",
+            "<func>f2s",
+            "<func>s2f",
+            "<func>f2f",
+            ]:
+        component_id = {
+                "s": "slow",
+                "f": "fast",
+                }[func_name[-1]]
+        freg = register_ode_rhs(freg, identifier=func_name,
+                component_id=component_id,
+                input_component_ids=("slow", "fast"),
+                input_component_names=("s", "f"))
+
+    freg = freg.register_codegen("<func>s2f", "fortran",
+        f.CallCode("""
+            ${result} = (sin(2*${t}) - 1)*${s}
+            """))
+    freg = freg.register_codegen("<func>f2s", "fortran",
+      f.CallCode("""
+          ${result} = (sin(2*${t}) + 1)*${f}
+          """))
+    freg = freg.register_codegen("<func>f2f", "fortran",
+      f.CallCode("""
+          ${result} = cos(2*${t})*${f}
+          """))
+    freg = freg.register_codegen("<func>s2s", "fortran",
+      f.CallCode("""
+          ${result} = -cos(2*${t})*${s}
+          """))
+
+    codegen = f.CodeGenerator(
+            'MRAB',
+            ode_component_type_map={
+                "slow": f.ArrayType(
+                    (1,),
+                    f.BuiltinType('real (kind=8)'),
+                    ),
+                "fast": f.ArrayType(
+                    (1,),
+                    f.BuiltinType('real (kind=8)'),
+                    )
+                },
+            function_registry=freg,
+            module_preamble="""
+            ! lines copied to the start of the module, e.g. to say:
+            ! use ModStuff
+            """)
+
+    code_str = codegen(code)
+
+    run_fortran([
+        ("abmethod.f90", code_str),
+        ("test_mrab_squarewave.f90", read_file("test_mrab_squarewave.f90").replace(
+            "MIN_ORDER", str(min_order - 0.3)+"d0")),
+        ],
+        fortran_options=["-llapack", "-lblas"])
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])
