@@ -122,9 +122,9 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         for component in HIST_NAMES:
             name = component().__class__.__name__.lower()
-            time_var_names = [var('time' + name + '_n')]
+            time_var_names = [var('<p>' + 'time' + name + '_n')]
             for past in range(1, self.orders[component]):
-                time_var_names.append(var('time' + name + '_n_minus_' + str(past)))
+                time_var_names.append(var('<p>' + 'time' + name + '_n_minus_' + str(past)))
             self.time_histories[component] = time_var_names
 
         self.hist_is_fast = {
