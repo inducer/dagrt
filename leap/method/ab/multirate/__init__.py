@@ -407,7 +407,7 @@ class MRABCodeEmitter(MRABProcessor):
         levels_self += self.hist_head_time_level[self_hn]/self.substep_count
 
         if self.stepper.hist_is_fast[cross_hn]:
-            levels_self /= self.substep_count
+            levels_cross /= self.substep_count
 
         levels_cross += self.hist_head_time_level[cross_hn]/self.substep_count
 
