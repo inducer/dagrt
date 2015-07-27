@@ -35,8 +35,8 @@ program test_mrabmethod
   initial_condition(1) = (exp(0d0))*cos(0d0) ! fast
   initial_condition(2) = (exp(0d0))*sin(0d0) ! slow
 
-  ntrips(1) = 200
-  ntrips(2) = 500
+  ntrips(1) = 100
+  ntrips(2) = 150
 
   do irun = 1,run_count
     dt_values(irun) = t_fin/ntrips(irun)

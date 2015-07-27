@@ -30,6 +30,8 @@ THE SOFTWARE.
 import numpy
 import pytest
 from pytools import memoize_method
+from leap.method.ab.multirate.methods import methods as MRAB_METHODS  # noqa
+
 
 from utils import (  # noqa
         python_method_impl_interpreter as pmi_int,
@@ -153,24 +155,28 @@ class MultirateTimestepperAccuracyChecker(object):
 
 @pytest.mark.slowtest
 @pytest.mark.parametrize("order", [1, 3])
-@pytest.mark.parametrize("system", ["Basic", "Full", "Comp", "Tria"])
-def test_multirate_accuracy(python_method_impl, order, system):
+@pytest.mark.parametrize("system", [
+        #"Basic",
+        "Full",
+        #"Comp",
+        #"Tria"
+        ])
+@pytest.mark.parametrize("method_name", list(MRAB_METHODS.keys()))
+def test_multirate_accuracy(python_method_impl, order, system, method_name):
     """Check that the multirate timestepper has the advertised accuracy"""
 
-    from leap.method.ab.multirate.methods import methods
     import multirate_test_systems
 
     step_ratio = 2
 
     system = getattr(multirate_test_systems, system)
 
-    for name in methods:
-        print("------------------------------------------------------")
-        print("METHOD: %s" % name)
-        print("------------------------------------------------------")
-        MultirateTimestepperAccuracyChecker(
-            methods[name], order, step_ratio, ode=system(),
-            method_impl=python_method_impl)()
+    print("------------------------------------------------------")
+    print("METHOD: %s" % method_name)
+    print("------------------------------------------------------")
+    MultirateTimestepperAccuracyChecker(
+        MRAB_METHODS[method_name], order, step_ratio, ode=system(),
+        method_impl=python_method_impl)()
 
 
 def test_diagram_generation():
