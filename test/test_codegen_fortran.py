@@ -32,6 +32,8 @@ from leap.vm.language import TimeIntegratorCode, CodeBuilder
 import leap.vm.codegen.fortran as f
 from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
 
+from leap.method.ab.multirate.methods import methods as MRAB_METHODS  # noqa
+
 from utils import RawCodeBuilder
 
 
@@ -238,14 +240,15 @@ def test_rk_codegen_fancy():
 
 
 @pytest.mark.parametrize("min_order", [2, 3, 4, 5])
-def test_multirate_codegen(min_order):
+@pytest.mark.parametrize("method_name", list(MRAB_METHODS.keys())[::3])
+def test_multirate_codegen(min_order, method_name):
     from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
-    from leap.method.ab.multirate.methods import methods
     from pytools import DictionaryWithDefault
 
     orders = DictionaryWithDefault(lambda x: min_order)
 
-    stepper = TwoRateAdamsBashforthTimeStepper(methods['F'], orders, 4)
+    stepper = TwoRateAdamsBashforthTimeStepper(
+            MRAB_METHODS[method_name], orders, 4)
 
     code = stepper.generate()
 
