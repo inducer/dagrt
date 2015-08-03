@@ -432,12 +432,10 @@ class MRABCodeEmitter(MRABProcessor):
         else:
             self_hn, cross_hn = HIST_S2S, HIST_F2S
 
-        # Compute AB coefficients
+        # Build levels
 
         start_time_level = self.eval_expr(insn.start)
         end_time_level = self.eval_expr(insn.end)
-
-        # Build levels
 
         levels_self = self.stepper.time_histories[self_hn]
         levels_cross = self.stepper.time_histories[cross_hn]
@@ -449,10 +447,31 @@ class MRABCodeEmitter(MRABProcessor):
 
         # FIXME: definition of start and end times is not general
 
+        if self.stepper.hist_is_fast[self_hn]:
+            self.cb("start_time_self", self.stepper.time_histories[self_hn][0])
+            self.cb.fence()
+            self.cb("end_time_self", self.t_start + end_time_level*self.stepper.large_dt/self.substep_count)
+            self.cb.fence()
+        else:
+            self.cb("time_self_cond", self.stepper.time_histories[self_hn][0])
+            self.cb.fence()
+            self.cb("time_self_cond2", self.stepper.time_histories[HIST_F2F][0])
+            self.cb.fence()
+            with self.cb.if_("time_self_cond > time_self_cond2"):
+                self.cb("start_time_self", self.stepper.time_histories[self_hn][1])
+                self.cb.fence()
+                self.cb("end_time_self", self.stepper.time_histories[self_hn][1] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb.fence()
+            with self.cb.else_():
+                self.cb("start_time_self", self.stepper.time_histories[self_hn][0])
+                self.cb.fence()
+                self.cb("end_time_self", self.stepper.time_histories[self_hn][0] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb.fence()
+
         if self.stepper.hist_is_fast[cross_hn]:
             self.cb("start_time_cross", self.stepper.time_histories[cross_hn][0])
             self.cb.fence()
-            self.cb("end_time_cross", self.stepper.time_histories[cross_hn][0] + end_time_level * self.stepper.large_dt/self.substep_count)
+            self.cb("end_time_cross", self.t_start + end_time_level*self.stepper.large_dt/self.substep_count)
             self.cb.fence()
         else:
             self.cb("time_cross_cond", self.stepper.time_histories[cross_hn][0])
@@ -469,26 +488,10 @@ class MRABCodeEmitter(MRABProcessor):
                 self.cb.fence()
                 self.cb("end_time_cross", self.stepper.time_histories[cross_hn][0] + end_time_level * self.stepper.large_dt/self.substep_count)
                 self.cb.fence()
-
-        if self.stepper.hist_is_fast[self_hn]:
-            self.cb("start_time_self", self.stepper.time_histories[self_hn][0])
-            self.cb.fence()
-            self.cb("end_time_self", self.stepper.time_histories[self_hn][0] + end_time_level * self.stepper.large_dt/self.substep_count)
-            self.cb.fence()
-        else:
-            self.cb("time_self_cond", self.stepper.time_histories[self_hn][0])
-            self.cb.fence()
-            self.cb("time_self_cond2", self.stepper.time_histories[HIST_F2F][0])
-            self.cb.fence()
-            with self.cb.if_("time_self_cond > time_self_cond2"):
-                self.cb("start_time_self", self.stepper.time_histories[self_hn][1])
+            if self.stepper.hist_is_fast[self_hn]:
+                self.cb("start_time_cross", "start_time_self")
                 self.cb.fence()
-                self.cb("end_time_self", self.stepper.time_histories[self_hn][1] + end_time_level * self.stepper.large_dt/self.substep_count)
-                self.cb.fence()
-            with self.cb.else_():
-                self.cb("start_time_self", self.stepper.time_histories[self_hn][0])
-                self.cb.fence()
-                self.cb("end_time_self", self.stepper.time_histories[self_hn][0] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb("end_time_cross", "end_time_self")
                 self.cb.fence()
 
         self.cb.fence()
