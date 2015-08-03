@@ -445,41 +445,55 @@ class MRABCodeEmitter(MRABProcessor):
         self.cb("n_cross",len(levels_cross))
         self.cb("n_self",len(levels_self))
 
-        if self.stepper.hist_is_fast[self_hn]:
-            for i in range(len(levels_self)):
-                self.cb(levels_self[i], levels_self[i]/self.substep_count)
-                self.cb.fence()
-
-        for i in range(len(levels_self)):
-            self.cb(levels_self[i], levels_self[i] + self.hist_head_time_level[self_hn]/self.substep_count)
-
-        if self.stepper.hist_is_fast[cross_hn]:
-            for i in range(len(levels_cross)):
-                self.cb(levels_cross[i], levels_cross[i]/self.substep_count)
-                self.cb.fence()
-
-        for i in range(len(levels_cross)):
-            self.cb(levels_cross[i], levels_cross[i] + self.hist_head_time_level[cross_hn]/self.substep_count)
-
         self.cb.fence()
 
         # FIXME: definition of start and end times is not general
 
-        t_start_cross = self.stepper.time_histories[cross_hn][1]
-        t_end_cross = self.stepper.time_histories[cross_hn][0]
+        if self.stepper.hist_is_fast[cross_hn]:
+            self.cb("start_time_cross", self.stepper.time_histories[cross_hn][0])
+            self.cb.fence()
+            self.cb("end_time_cross", self.stepper.time_histories[cross_hn][0] + end_time_level * self.stepper.large_dt/self.substep_count)
+            self.cb.fence()
+        else:
+            self.cb("time_cross_cond", self.stepper.time_histories[cross_hn][0])
+            self.cb.fence()
+            self.cb("time_cross_cond2", self.stepper.time_histories[HIST_F2F][0])
+            self.cb.fence()
+            with self.cb.if_("time_cross_cond > time_cross_cond2"):
+                self.cb("start_time_cross", self.stepper.time_histories[cross_hn][1])
+                self.cb.fence()
+                self.cb("end_time_cross", self.stepper.time_histories[cross_hn][1] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb.fence()
+            with self.cb.else_():
+                self.cb("start_time_cross", self.stepper.time_histories[cross_hn][0])
+                self.cb.fence()
+                self.cb("end_time_cross", self.stepper.time_histories[cross_hn][0] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb.fence()
 
-        t_start_self = self.stepper.time_histories[self_hn][1]
-        t_end_self = self.stepper.time_histories[self_hn][0]
+        if self.stepper.hist_is_fast[self_hn]:
+            self.cb("start_time_self", self.stepper.time_histories[self_hn][0])
+            self.cb.fence()
+            self.cb("end_time_self", self.stepper.time_histories[self_hn][0] + end_time_level * self.stepper.large_dt/self.substep_count)
+            self.cb.fence()
+        else:
+            self.cb("time_self_cond", self.stepper.time_histories[self_hn][0])
+            self.cb.fence()
+            self.cb("time_self_cond2", self.stepper.time_histories[HIST_F2F][0])
+            self.cb.fence()
+            with self.cb.if_("time_self_cond > time_self_cond2"):
+                self.cb("start_time_self", self.stepper.time_histories[self_hn][1])
+                self.cb.fence()
+                self.cb("end_time_self", self.stepper.time_histories[self_hn][1] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb.fence()
+            with self.cb.else_():
+                self.cb("start_time_self", self.stepper.time_histories[self_hn][0])
+                self.cb.fence()
+                self.cb("end_time_self", self.stepper.time_histories[self_hn][0] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb.fence()
 
         self.cb.fence()
         self.cb("levels_cross","`<builtin>array`(n_cross)")
         self.cb("levels_self","`<builtin>array`(n_self)")
-        self.cb.fence()
-
-        self.cb("start_time_cross", t_start_cross)
-        self.cb("end_time_cross", t_end_cross)
-        self.cb("start_time_self", t_start_self)
-        self.cb("end_time_self", t_end_self)
         self.cb.fence()
 
         for i in range(len(levels_self)):
