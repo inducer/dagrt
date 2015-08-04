@@ -217,6 +217,12 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
             assignee = self.current_rhss[hist_component]
             cb(assignee, function(t=self.t, s=self.slow, f=self.fast))
 
+        for hn in HIST_NAMES:
+            time_hist = self.time_histories[hn]
+            for i in range(len(time_hist)):
+                cb(time_hist[i], 0)
+                cb.fence()
+
     def emit_small_rk_step(self, cb, t, name_prefix):
         """Emit a single step of an RK method."""
 
@@ -348,12 +354,6 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         # Bootstrap state
         with CodeBuilder(label="bootstrap") as cb_bootstrap:
-
-            for hn in HIST_NAMES:
-                time_hist = self.time_histories[hn]
-                for i in range(len(time_hist)):
-                    cb_bootstrap(time_hist[i], 0)
-                    cb_bootstrap.fence()
 
             self.emit_rk_startup(cb_bootstrap)
 
