@@ -7,6 +7,7 @@ from __future__ import division
 __copyright__ = """
 Copyright (C) 2007 Andreas Kloeckner
 Copyright (C) 2014, 2015 Matt Wala
+Copyright (C) 2015 Cory Mikida
 """
 
 __license__ = """
@@ -445,7 +446,15 @@ class MRABCodeEmitter(MRABProcessor):
 
         self.cb.fence()
 
-        # FIXME: definition of start and end times is not general
+        if self.stepper.orders[self_hn] == 1:
+            time_index_self = 0
+        else:
+            time_index_self = 1
+
+        if self.stepper.orders[cross_hn] == 1:
+            time_index_cross = 0
+        else:
+            time_index_cross = 1
 
         if self.stepper.hist_is_fast[self_hn]:
             self.cb("start_time_self", self.stepper.time_histories[self_hn][0])
@@ -458,9 +467,9 @@ class MRABCodeEmitter(MRABProcessor):
             self.cb("time_self_cond2", self.stepper.time_histories[HIST_F2F][0])
             self.cb.fence()
             with self.cb.if_("time_self_cond > time_self_cond2"):
-                self.cb("start_time_self", self.stepper.time_histories[self_hn][1])
+                self.cb("start_time_self", self.stepper.time_histories[self_hn][time_index_self])
                 self.cb.fence()
-                self.cb("end_time_self", self.stepper.time_histories[self_hn][1] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb("end_time_self", self.stepper.time_histories[self_hn][time_index_self] + end_time_level * self.stepper.large_dt/self.substep_count)
                 self.cb.fence()
             with self.cb.else_():
                 self.cb("start_time_self", self.stepper.time_histories[self_hn][0])
@@ -479,9 +488,9 @@ class MRABCodeEmitter(MRABProcessor):
             self.cb("time_cross_cond2", self.stepper.time_histories[HIST_F2F][0])
             self.cb.fence()
             with self.cb.if_("time_cross_cond > time_cross_cond2"):
-                self.cb("start_time_cross", self.stepper.time_histories[cross_hn][1])
+                self.cb("start_time_cross", self.stepper.time_histories[cross_hn][time_index_cross])
                 self.cb.fence()
-                self.cb("end_time_cross", self.stepper.time_histories[cross_hn][1] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb("end_time_cross", self.stepper.time_histories[cross_hn][time_index_cross] + end_time_level * self.stepper.large_dt/self.substep_count)
                 self.cb.fence()
             with self.cb.else_():
                 self.cb("start_time_cross", self.stepper.time_histories[cross_hn][0])
