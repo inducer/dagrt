@@ -5,6 +5,7 @@ from __future__ import division
 __copyright__ = """
 Copyright (C) 2007 Andreas Kloeckner
 Copyright (C) 2014, 2015 Matt Wala
+Copyright (C) 2015 Cory Mikida
 """
 
 __license__ = """
@@ -28,7 +29,6 @@ THE SOFTWARE.
 """
 
 import numpy
-from leap.method.ab.utils import make_ab_coefficients
 from leap.method import Method
 
 
@@ -92,7 +92,6 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
     def __init__(self, component_id, order):
         super(AdamsBashforthTimeStepper, self).__init__()
         self.order = order
-        self.coeffs = numpy.asarray(make_ab_coefficients(order))[::-1]
 
         from pymbolic import var
 
@@ -104,12 +103,15 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         self.rhs = var('<p>f_n')
         self.history = \
             [var('<p>f_n_minus_' + str(i)) for i in range(self.order - 1, 0, -1)]
+        self.time_history = \
+            [var('<p>t_n_minus_' + str(i)) for i in range(self.order - 1, 0, -1)]
         self.state = var('<state>' + component_id)
         self.t = var('<t>')
         self.dt = var('<dt>')
 
     def generate(self):
         from leap.vm.language import TimeIntegratorCode, CodeBuilder
+        from pymbolic import var
 
         # Initialization
         with CodeBuilder(label="initialization") as cb_init:
@@ -119,15 +121,63 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         # Primary
         with CodeBuilder(label="primary") as cb_primary:
+
+            time_history = self.time_history + [self.t]
+
+            cb_primary("n", len(time_history))
+            cb_primary.fence()
+
+            cb_primary("start_time", self.t)
+            cb_primary.fence()
+            cb_primary("end_time", self.t + self.dt)
+            cb_primary.fence()
+
+            cb_primary("time_history", "`<builtin>array`(n)")
+            cb_primary.fence()
+
+            for i in range(len(time_history)):
+                cb_primary("time_history[{0}]".format(i), time_history[i])
+                cb_primary.fence()
+
+            cb_primary("point_eval_vec", "`<builtin>array`(n)")
+            cb_primary("vdm_transpose", "`<builtin>array`(n*n)")
+            cb_primary.fence()
+
+            cb_primary("point_eval_vec[g]", "1 / (g + 1) * (end_time ** (g + 1)- start_time ** (g + 1)) ",
+                    loops=[("g", 0, "n")])
+            cb_primary("vdm_transpose[g*n + h]", "time_history[g]**h",
+                    loops=[("g", 0, "n"), ("h", 0, "n")])
+
+            cb_primary.fence()
+            cb_primary("new_coeffs", "`<builtin>linear_solve`(vdm_transpose, point_eval_vec, n, 1)")
+
+            # Define a Python-side vector for the calculated coefficients
+
+            new_coeffs_pyvar = var("new")
+            cb_primary.fence()
+
+            new_coeffs_py = [new_coeffs_pyvar[i] for i in range(len(time_history))]
+
+            # Use a loop to assign each element of this vector to an element from our newly calculated coeff vector (Fortran-side)
+
+            cb_primary("new", "`<builtin>array`(n)")
+            cb_primary.fence()
+
+            for i in range(len(time_history)):
+                cb_primary(new_coeffs_py[i], "new_coeffs[{0}]".format(i))
+                cb_primary.fence()
+
             cb_primary(self.rhs, self.eval_rhs(self.t, self.state))
             cb_primary.fence()
             history = self.history + [self.rhs]
-            ab_sum = sum(self.coeffs[i] * history[i] for i in range(steps))
-            cb_primary(self.state, self.state + self.dt * ab_sum)
-            # Rotate history.
+            ab_sum = sum(new_coeffs_pyvar[i] * history[i] for i in range(steps))
+            cb_primary(self.state, self.state + ab_sum)
+            # Rotate history and time history.
             for i in range(len(self.history)):
                 cb_primary.fence()
                 cb_primary(self.history[i], history[i + 1])
+                cb_primary(self.time_history[i], time_history[i + 1])
+                cb_primary.fence()
             cb_primary(self.t, self.t + self.dt)
             cb_primary.yield_state(expression=self.state,
                                    component_id=self.component_id,
@@ -182,6 +232,10 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         for i in range(len(self.history)):
             with cb.if_(self.step, "==", i + 1):
                 cb(self.history[i], self.rhs)
+
+        for i in range(len(self.time_history)):
+            with cb.if_(self.step, "==", i + 1):
+                cb(self.time_history[i], self.t)
 
         rk_tableau, rk_coeffs = self.get_rk_tableau_and_coeffs(self.order)
 
