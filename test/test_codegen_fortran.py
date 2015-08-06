@@ -491,15 +491,16 @@ def test_singlerate_squarewave(min_order):
         fortran_options=["-llapack", "-lblas"])
 
 
+@pytest.mark.parametrize("method_name", list(MRAB_METHODS.keys())[::3])
 @pytest.mark.parametrize("min_order", [2, 3, 4, 5])
-def test_multirate_squarewave(min_order):
+def test_multirate_squarewave(min_order, method_name):
     from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
     from leap.method.ab.multirate.methods import methods
     from pytools import DictionaryWithDefault
 
     orders = DictionaryWithDefault(lambda x: min_order)
 
-    stepper = TwoRateAdamsBashforthTimeStepper(methods['F'], orders, 4)
+    stepper = TwoRateAdamsBashforthTimeStepper(MRAB_METHODS[method_name], orders, 4)
 
     code = stepper.generate()
 
