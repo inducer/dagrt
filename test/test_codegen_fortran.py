@@ -591,7 +591,7 @@ def test_multirate_squarewave(min_order, method_name):
             run_fortran([
                 ("abmethod.f90", code_str),
                 ("test_mrab_squarewave.f90", read_file("test_mrab_squarewave.f90").replace(
-                    "MIN_ORDER", str(min_order - 0.3)+"d0").replace("NUM_TRIPS_ONE", str(125)).replace("NUM_TRIPS_TWO", str(200))),
+                    "MIN_ORDER", str(min_order - 0.3)+"d0").replace("NUM_TRIPS_ONE", str(130)).replace("NUM_TRIPS_TWO", str(200))),
                 ],
                 fortran_options=["-llapack", "-lblas"])
     else:
