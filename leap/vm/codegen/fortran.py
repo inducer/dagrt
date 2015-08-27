@@ -835,7 +835,18 @@ class CodeGenerator(StructuredCodeGenerator):
 
         del self.sym_kind_table
 
-        return self.get_code()
+        code = self.get_code()
+
+        new_lines = []
+        for l in code.split("\n"):
+            if l.lstrip().startswith("#"):
+                hashmark_pos = l.find("#")
+                assert hashmark_pos >= 0
+                l = "#" + l[:hashmark_pos] + l[hashmark_pos+1:]
+
+            new_lines.append(l)
+
+        return "\n".join(new_lines)
 
     def lower_function(self, function_name, ast):
         self.current_function = function_name
