@@ -415,6 +415,13 @@ base_function_registry = _make_bfr()
 class _ODERightHandSide(Function):
     default_dict = {}
 
+    # Explicitly specify the fields of this record, otherwise, the list of fields may
+    # be inherited from the superclass if an instance of the superclass is
+    # initialized first. We wish to exclude "arg_names" as a field, since this class
+    # synthesizes it as a member.
+    fields = set(["identifier", "component_id", "input_component_ids",
+                  "language_to_codegen", "input_component_names"])
+
     def __init__(self, identifier, component_id, input_component_ids,
             language_to_codegen=None, input_component_names=None):
         if input_component_names is None:
