@@ -98,8 +98,10 @@ def run_fortran(sources, fortran_options=[]):
         return p.returncode, stdout_data, stderr_data
 
 
-def read_file(name):
-    with open(name, "r") as inf:
+def read_file(rel_path):
+    from os.path import join, abspath, dirname
+    path = join(abspath(dirname(__file__)), rel_path)
+    with open(path, "r") as inf:
         return inf.read()
 
 
