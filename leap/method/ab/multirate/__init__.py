@@ -7,6 +7,7 @@ from __future__ import division
 __copyright__ = """
 Copyright (C) 2007 Andreas Kloeckner
 Copyright (C) 2014, 2015 Matt Wala
+Copyright (C) 2015 Cory Mikida
 """
 
 __license__ = """
@@ -118,6 +119,15 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                 var_names.append(var('<p>' + name + '_n_minus_' + str(past)))
             self.histories[component] = var_names
 
+        self.time_histories = {}
+
+        for component in HIST_NAMES:
+            name = component().__class__.__name__.lower()
+            time_var_names = [var('<p>' + 'time' + name + '_n')]
+            for past in range(1, self.orders[component]):
+                time_var_names.append(var('<p>' + 'time' + name + '_n_minus_' + str(past)))
+            self.time_histories[component] = time_var_names
+
         self.hist_is_fast = {
                 HIST_F2F: True,
                 HIST_S2F: self.method.s2f_hist_is_fast,
@@ -172,6 +182,34 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         return assign_before
 
+
+    def compute_time_history_assignments(self):
+        """
+        Compute how time history values should be assigned during RK initialization.
+        """
+
+        initialization_steps = self.max_order - 1
+        total_substeps = initialization_steps * self.substep_count
+
+        assign_before_time = [{} for step in range(total_substeps)]
+        for component in HIST_NAMES:
+            time_history = list(range(total_substeps + 1))
+            time_history.reverse()
+            if not self.hist_is_fast[component]:
+                time_history = time_history[::self.substep_count]
+            time_history = time_history[:self.orders[component]]
+            for index, entry in enumerate(time_history):
+                if index == 0:
+                    # We don't store the most recent entry, this is already
+                    # assumed to be initialized.
+                    continue
+                variable = self.time_histories[component][index]
+                assign_before_time[entry][variable] = component
+            assert len(self.time_histories[component]) == self.orders[component]
+
+        return assign_before_time
+
+
     def emit_initialization(self, cb):
         """Initialize method variables."""
         cb(self.step, 0)
@@ -179,6 +217,12 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         for hist_component, function in self.component_functions.items():
             assignee = self.current_rhss[hist_component]
             cb(assignee, function(t=self.t, s=self.slow, f=self.fast))
+
+        for hn in HIST_NAMES:
+            time_hist = self.time_histories[hn]
+            for i in range(len(time_hist)):
+                cb(time_hist[i], 0)
+                cb.fence()
 
     def emit_small_rk_step(self, cb, t, name_prefix):
         """Emit a single step of an RK method."""
@@ -240,8 +284,12 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         assert initialization_steps > 0
 
         assign_before = self.compute_history_assignments()
+        assign_before_time = self.compute_time_history_assignments()
 
         for substep_index in range(self.substep_count):
+
+            time = self.t + substep_index * self.small_dt
+
             # Add any assignments that need to be run ahead of this
             # substep.
             for step in range(initialization_steps):
@@ -252,8 +300,15 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
                     for name, component in assign_before[substep].items():
                         cb(name, self.current_rhss[component])
 
+            for step in range(initialization_steps):
+                substep = step * self.substep_count + substep_index
+                if not assign_before_time[substep]:
+                    continue
+                with cb.if_(self.step, "==", step):
+                    for name, component in assign_before_time[substep].items():
+                        cb(name, time)
+
             # Emit the RK substep body.
-            time = self.t + substep_index * self.small_dt
             name_prefix = 'substep' + str(substep_index)
             self.emit_small_rk_step(cb, time, name_prefix)
 
@@ -273,6 +328,7 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
         cb.yield_state(self.slow, "slow", self.t + self.dt, "final")
         cb.yield_state(self.fast, "fast", self.t + self.dt, "final")
         cb.fence()
+
         cb(self.t, self.t + self.dt)
 
     def generate(self):
@@ -299,7 +355,14 @@ class TwoRateAdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
         # Bootstrap state
         with CodeBuilder(label="bootstrap") as cb_bootstrap:
+
             self.emit_rk_startup(cb_bootstrap)
+
+            # Tack on the new time history point
+            for component in HIST_NAMES:
+                cb_bootstrap(self.time_histories[component][0], self.t + self.dt)
+                cb_bootstrap.fence()
+
             self.emit_epilogue(cb_bootstrap)
             with cb_bootstrap.if_(self.step, "==", bootstrap_steps):
                 cb_bootstrap.state_transition("primary")
@@ -363,25 +426,120 @@ class MRABCodeEmitter(MRABProcessor):
         from leap.method.ab.multirate.methods import CO_FAST
         from leap.method.ab.multirate.methods import \
             HIST_F2F, HIST_S2F, HIST_F2S, HIST_S2S
+        from pymbolic import var
 
         if insn.component == CO_FAST:
             self_hn, cross_hn = HIST_F2F, HIST_S2F
         else:
             self_hn, cross_hn = HIST_S2S, HIST_F2S
 
+        # Build levels
+
         start_time_level = self.eval_expr(insn.start)
         end_time_level = self.eval_expr(insn.end)
 
-        self_coefficients = self.stepper.get_coefficients(
-            self.stepper.hist_is_fast[self_hn],
-            self.hist_head_time_level[self_hn],
-            start_time_level, end_time_level,
-            self.stepper.orders[self_hn])
-        cross_coefficients = self.stepper.get_coefficients(
-            self.stepper.hist_is_fast[cross_hn],
-            self.hist_head_time_level[cross_hn],
-            start_time_level, end_time_level,
-            self.stepper.orders[cross_hn])
+        levels_self = self.stepper.time_histories[self_hn]
+        levels_cross = self.stepper.time_histories[cross_hn]
+
+        self.cb("n_cross",len(levels_cross))
+        self.cb("n_self",len(levels_self))
+
+        self.cb.fence()
+
+        if self.stepper.orders[self_hn] == 1:
+            time_index_self = 0
+        else:
+            time_index_self = 1
+
+        if self.stepper.orders[cross_hn] == 1:
+            time_index_cross = 0
+        else:
+            time_index_cross = 1
+
+        if self.stepper.hist_is_fast[self_hn]:
+            self.cb("start_time_self", self.stepper.time_histories[self_hn][0])
+            self.cb.fence()
+            self.cb("end_time_self", self.t_start + end_time_level*self.stepper.large_dt/self.substep_count)
+            self.cb.fence()
+        else:
+            self.cb("time_self_cond", self.stepper.time_histories[self_hn][0])
+            self.cb.fence()
+            self.cb("time_self_cond2", self.stepper.time_histories[HIST_F2F][0])
+            self.cb.fence()
+            with self.cb.if_("time_self_cond > time_self_cond2"):
+                self.cb("start_time_self", self.stepper.time_histories[self_hn][time_index_self])
+                self.cb.fence()
+                self.cb("end_time_self", self.stepper.time_histories[self_hn][time_index_self] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb.fence()
+            with self.cb.else_():
+                self.cb("start_time_self", self.stepper.time_histories[self_hn][0])
+                self.cb.fence()
+                self.cb("end_time_self", self.stepper.time_histories[self_hn][0] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb.fence()
+
+        if self.stepper.hist_is_fast[cross_hn]:
+            self.cb("start_time_cross", self.stepper.time_histories[cross_hn][0])
+            self.cb.fence()
+            self.cb("end_time_cross", self.t_start + end_time_level*self.stepper.large_dt/self.substep_count)
+            self.cb.fence()
+        else:
+            self.cb("time_cross_cond", self.stepper.time_histories[cross_hn][0])
+            self.cb.fence()
+            self.cb("time_cross_cond2", self.stepper.time_histories[HIST_F2F][0])
+            self.cb.fence()
+            with self.cb.if_("time_cross_cond > time_cross_cond2"):
+                self.cb("start_time_cross", self.stepper.time_histories[cross_hn][time_index_cross])
+                self.cb.fence()
+                self.cb("end_time_cross", self.stepper.time_histories[cross_hn][time_index_cross] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb.fence()
+            with self.cb.else_():
+                self.cb("start_time_cross", self.stepper.time_histories[cross_hn][0])
+                self.cb.fence()
+                self.cb("end_time_cross", self.stepper.time_histories[cross_hn][0] + end_time_level * self.stepper.large_dt/self.substep_count)
+                self.cb.fence()
+            if self.stepper.hist_is_fast[self_hn]:
+                self.cb("start_time_cross", "start_time_self")
+                self.cb.fence()
+                self.cb("end_time_cross", "end_time_self")
+                self.cb.fence()
+
+        self.cb.fence()
+        self.cb("levels_cross","`<builtin>array`(n_cross)")
+        self.cb("levels_self","`<builtin>array`(n_self)")
+        self.cb.fence()
+
+        for i in range(len(levels_self)):
+            self.cb("levels_self[{0}]".format(i), levels_self[i])
+            self.cb.fence()
+
+        for i in range(len(levels_cross)):
+            self.cb("levels_cross[{0}]".format(i), levels_cross[i])
+            self.cb.fence()
+
+        self.cb("point_eval_vec_cross", "`<builtin>array`(n_cross)")
+        self.cb("point_eval_vec_self", "`<builtin>array`(n_self)")
+
+        self.cb("vdm_transpose_cross", "`<builtin>array`(n_cross*n_cross)")
+        self.cb("vdm_transpose_self", "`<builtin>array`(n_self*n_self)")
+        self.cb.fence()
+
+        self.cb("point_eval_vec_cross[g]", "1 / (g + 1) * (end_time_cross ** (g + 1) - start_time_cross ** (g + 1)) ",
+                loops=[("g", 0, "n_cross")])
+        self.cb("point_eval_vec_self[g]", "1 / (g + 1) * (end_time_self ** (g + 1)- start_time_self ** (g + 1)) ",
+                loops=[("g", 0, "n_self")])
+        self.cb("vdm_transpose_cross[g*n_cross + h]", "levels_cross[g]**h",
+                loops=[("g", 0, "n_cross"), ("h", 0, "n_cross")])
+        self.cb("vdm_transpose_self[g*n_self + h]", "levels_self[g]**h",
+                loops=[("g", 0, "n_self"), ("h", 0, "n_self")])
+
+        self.cb.fence()
+
+        self.cb("new_cross_coeffs", "`<builtin>linear_solve`(vdm_transpose_cross, point_eval_vec_cross, n_cross, 1)")
+        self.cb("new_self_coeffs", "`<builtin>linear_solve`(vdm_transpose_self, point_eval_vec_self, n_self, 1)")
+
+        self.cb.fence()
+
+        # We can complete the integration by then performing the necessary linear combination, again using new built-ins
 
         if start_time_level == 0 or (insn.result_name not in self.context):
             my_y = self.last_y[insn.component]
@@ -390,20 +548,46 @@ class MRABCodeEmitter(MRABProcessor):
             my_y = self.context[insn.result_name]
             assert start_time_level == self.var_time_level[insn.result_name]
 
+        # Define the self and cross histories
+
         hists = self.stepper.histories
         self_history = hists[self_hn][:]
         cross_history = hists[cross_hn][:]
 
-        my_new_y = my_y + self.stepper.large_dt * (
-                linear_comb(self_coefficients, self_history)
-                + linear_comb(cross_coefficients, cross_history))
+        # Define a Python-side vector for the calculated coefficients (will be used with linear_comb)
+
+        new_self_coeffs_pyvar = var("newself")
+        new_cross_coeffs_pyvar = var("newcross")
+
+        self.cb.fence()
+
+        new_self_coeffs_py = [new_self_coeffs_pyvar[i] for i in range(len(levels_self))]
+        new_cross_coeffs_py = [new_cross_coeffs_pyvar[i] for i in range(len(levels_cross))]
+
+        # Use loops to assign each element of this vector to an element from our newly calculated coeff vector (Fortran-side)
+
+        self.cb("newself","`<builtin>array`(n_self)")
+        self.cb("newcross","`<builtin>array`(n_cross)")
+        self.cb.fence()
+
+        for i in range(len(levels_self)):
+            self.cb(new_self_coeffs_py[i], "new_self_coeffs[{0}]".format(i))
+            self.cb.fence()
+
+        for i in range(len(levels_cross)):
+            self.cb(new_cross_coeffs_py[i], "new_cross_coeffs[{0}]".format(i))
+            self.cb.fence()
 
         needs_fence = insn.result_name in self.name_to_variable
         new_y_var = self.get_variable(insn.result_name)
 
         if needs_fence:
             self.cb.fence()
-        self.cb(new_y_var, my_new_y)
+
+        # Perform the linear combination to obtain our new_y
+
+        self.cb(new_y_var, my_y + linear_comb(new_cross_coeffs_py, cross_history) + linear_comb(new_self_coeffs_py, self_history))
+        self.cb.fence()
 
         self.context[insn.result_name] = new_y_var
         self.var_time_level[insn.result_name] = end_time_level
@@ -426,6 +610,19 @@ class MRABCodeEmitter(MRABProcessor):
         for h, h_next in zip(reverse_hist, reverse_hist[1:]):
             self.cb.fence()
             self.cb(h, h_next)
+
+        time_hist = self.stepper.time_histories[insn.which]
+
+        reverse_time_hist = time_hist[::-1]
+
+        # Move time histories by one step forward
+        for th, th_next in zip(reverse_time_hist, reverse_time_hist[1:]):
+            self.cb.fence()
+            self.cb(th, th_next)
+
+        # Tack on the new time
+        self.cb.fence()
+        self.cb(time_hist[0], t)
 
         # Compute the new RHS
         self.cb.fence()
