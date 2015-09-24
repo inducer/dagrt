@@ -16,11 +16,6 @@ function pymod_location()
   echo $LOC
 }
 
-SIX_LOC=
-PYTOOLS_LOC=$(pymod_location pytools)
-PYMBOLIC_LOC=$(pymod_location pymbolic)
-LEAP_LOC=$(pymod_location leap)
-
 rm -f leap.pyz
 
 python $PYZZER_PATH -o leap.pyz \
