@@ -21,3 +21,24 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
+
+
+def run_script_from_commandline():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("script", metavar="SCRIPT.PY")
+    parser.add_argument("args", metavar="ARG", nargs='*')
+    args = parser.parse_args()
+
+    from os.path import abspath, dirname
+    scriptdir = dirname(abspath(args.script))
+
+    import sys
+    sys.argv[1:] = args.args
+    sys.path.append(scriptdir)
+
+    with open(args.script, "rt") as s:
+        script_contents = s.read()
+
+    namespace = {"__name__": "__main__"}
+    exec(compile(script_contents, args.script, 'exec'), namespace)

@@ -1,0 +1,37 @@
+#! /bin/bash
+
+set -e
+
+PYZZER_PATH=../env/bin/pyzzer.pyz
+
+function pymod_location()
+{
+  local LOC=$(python -c "import $1 as mod; print(mod.__file__)")
+  if [[ $LOC == *pyc ]]; then
+    LOC=${LOC%%.pyc}.py
+  fi
+  if [[ $LOC == */__init__.py ]]; then
+    LOC=${LOC%%/__init__.py}
+  fi
+  echo $LOC
+}
+
+SIX_LOC=
+PYTOOLS_LOC=$(pymod_location pytools)
+PYMBOLIC_LOC=$(pymod_location pymbolic)
+LEAP_LOC=$(pymod_location leap)
+
+rm -f leap.pyz
+
+python $PYZZER_PATH -o leap.pyz \
+  -m leap:run_script_from_commandline \
+  $(pymod_location six) \
+  $(pymod_location decorator) \
+  $(pymod_location pytools) \
+  $(pymod_location pymbolic) \
+  $(pymod_location mako) \
+  $(pymod_location leap) \
+  -r \
+  -x '\.sw[po]$' \
+  -x '\~$'
+
