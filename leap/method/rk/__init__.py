@@ -121,7 +121,9 @@ class EmbeddedRungeKuttaMethod(Method):
                 cb.fail_step()
 
         with cb.else_():
-            cb(high_order_estimate, self.limiter_func(high_order_estimate))
+            if self.limiter is not None:
+                cb(high_order_estimate, self.limiter(high_order_estimate))
+
             self.finish_nonadaptive(cb, high_order_estimate, high_order_rhs,
                                     low_order_estimate)
             cb.fence()
