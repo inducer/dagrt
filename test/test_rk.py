@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from __future__ import division, with_statement
+from __future__ import division, with_statement, absolute_import
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -27,7 +27,7 @@ THE SOFTWARE.
 import sys
 import pytest
 
-from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
+from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper, LSRK4TimeStepper
 import numpy as np
 
 import logging
@@ -47,6 +47,8 @@ from utils import (  # noqa
     (ODE23TimeStepper("y", use_high_order=True), 3),
     (ODE45TimeStepper("y", use_high_order=False), 4),
     (ODE45TimeStepper("y", use_high_order=True), 5),
+    (ODE45TimeStepper("y", use_high_order=True), 5),
+    (LSRK4TimeStepper("y"), 4),
     ])
 def test_rk_accuracy(python_method_impl, method, expected_order,
                      show_dag=False, plot_solution=False):

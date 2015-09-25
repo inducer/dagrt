@@ -27,6 +27,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import numpy as np
 from leap.method import Method, TimeStepUnderflow
 from leap.vm.language import CodeBuilder
 
@@ -153,11 +154,9 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         self.rhs_func = var("<func>" + component_id)
 
         if self.limiter_name is not None:
-            limiter = var("<func>" + self.limiter_name)
+            self.limiter = var("<func>" + self.limiter_name)
         else:
-            limiter = lambda x: x
-
-        self.limiter_func = limiter
+            self.limiter = None
 
     def generate(self):
         from leap.vm.language import TimeIntegratorCode
@@ -183,10 +182,13 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
                     cb(local_last_rhs, self.last_rhs)
                     this_rhs = local_last_rhs
                 else:
-                    stage_state = self.limiter_func(
+                    stage_state = (
                         self.state + sum(
                             self.dt * coeff * rhss[j]
                             for j, coeff in enumerate(coeffs)))
+
+                    if self.limiter is not None:
+                        stage_state = self.limiter({self.component_id: stage_state})
 
                     if stage_num == last_stage:
                         high_order_estimate = var("high_order_estimate")
@@ -238,10 +240,7 @@ class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
         cb(self.t, self.t + self.dt)
 
     def call_rhs(self, t, y):
-        from pymbolic.primitives import CallWithKwargs
-        return CallWithKwargs(function=self.rhs_func,
-                              parameters=(),
-                              kw_parameters={'t': t, self.component_id: y})
+        return self.rhs_func(t=t, **{self.component_id: y})
 
 # }}}
 
@@ -257,8 +256,6 @@ class ODE23TimeStepper(EmbeddedButcherTableauMethod):
     Runge-Kutta formulas", Applied Mathematics Letters 2 (4): 321-325,
     http://dx.doi.org/10.1016/0893-9659(89)90079-7
     """
-
-    dt_fudge_factor = 1
 
     butcher_tableau = [
             (0, []),
@@ -287,8 +284,6 @@ class ODE45TimeStepper(EmbeddedButcherTableauMethod):
     http://dx.doi.org/10.1016/0771-050X(80)90013-3.
     """
 
-    dt_fudge_factor = 1
-
     butcher_tableau = [
             (0, []),
             (1/5, [1/5]),
@@ -307,5 +302,106 @@ class ODE45TimeStepper(EmbeddedButcherTableauMethod):
 
 # }}}
 
+
+# {{{ Carpenter/Kennedy low-storage fourth-order Runge-Kutta
+
+class LSRK4TimeStepper(Method):
+    """A low storage fourth-order Runge-Kutta method
+
+    See JSH, TW: Nodal Discontinuous Galerkin Methods p.64
+    or
+    Carpenter, M.H., and Kennedy, C.A., Fourth-order-2N-storage
+    Runge-Kutta schemes, NASA Langley Tech Report TM 109112, 1994
+    """
+
+    _RK4A = [
+            0.0,
+            -567301805773 / 1357537059087,
+            -2404267990393 / 2016746695238,
+            -3550918686646 / 2091501179385,
+            -1275806237668 / 842570457699,
+            ]
+
+    _RK4B = [
+            1432997174477 / 9575080441755,
+            5161836677717 / 13612068292357,
+            1720146321549 / 2090206949498,
+            3134564353537 / 4481467310338,
+            2277821191437 / 14882151754819,
+            ]
+
+    _RK4C = [
+            0.0,
+            1432997174477/9575080441755,
+            2526269341429/6820363962896,
+            2006345519317/3224310063776,
+            2802321613138/2924317926251,
+            #1,
+            ]
+    coeffs = np.array([_RK4A, _RK4B, _RK4C]).T
+
+    adaptive = False
+
+    def __init__(self, component_id, limiter_name=None):
+        """
+        :arg component_id: an identifier to be used for the single state
+            component supported.
+        """
+
+        # Set up variables.
+        from pymbolic import var
+
+        self.component_id = component_id
+
+        if limiter_name is not None:
+            self.limiter = var("<func>" + self.limiter_name)
+        else:
+            self.limiter = None
+
+    def generate(self):
+        comp_id = self.component_id
+
+        from pymbolic import var
+        dt = var("<dt>")
+        t = var("<t>")
+        residual = var("<p>residual_" + comp_id)
+        state = var("<state>" + comp_id)
+        rhs_func = var("<func>" + comp_id)
+
+        with CodeBuilder("initialization") as cb:
+            cb(residual, 0)
+
+        cb_init = cb
+
+        # Primary.
+
+        rhs_val = var("rhs_val")
+
+        with CodeBuilder("primary") as cb:
+            for a, b, c in self.coeffs:
+                cb.fence()
+                cb(rhs_val, rhs_func(t=t + c*dt, **{comp_id: state}))
+                cb(residual, a*residual + dt*rhs_val)
+                new_state_expr = state + b * residual
+
+                if self.limiter is not None:
+                    new_state_expr = self.limiter({comp_id: new_state_expr})
+
+                cb.fence()
+                cb(state, new_state_expr)
+
+            cb.yield_state(state, comp_id, t + dt, 'final')
+            cb.fence()
+            cb(t, t + dt)
+
+        cb_primary = cb
+
+        from leap.vm.language import TimeIntegratorCode
+        return TimeIntegratorCode.create_with_init_and_step(
+            instructions=cb_init.instructions | cb_primary.instructions,
+            initialization_dep_on=cb_init.state_dependencies,
+            step_dep_on=cb_primary.state_dependencies)
+
+# }}}
 
 # vim: foldmethod=marker
