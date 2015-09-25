@@ -36,6 +36,8 @@ __doc__ = """
 .. autoclass:: ODE23TimeStepper
 
 .. autoclass:: ODE45TimeStepper
+
+.. autoclass:: LSRK4TimeStepper
 """
 
 
@@ -403,5 +405,6 @@ class LSRK4TimeStepper(Method):
             step_dep_on=cb_primary.state_dependencies)
 
 # }}}
+
 
 # vim: foldmethod=marker
