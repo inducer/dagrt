@@ -30,7 +30,7 @@ import pytest
 from leap.vm.language import YieldState
 from leap.vm.language import TimeIntegratorCode, CodeBuilder
 import leap.vm.codegen.fortran as f
-from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
+from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper, LSRK4TimeStepper
 
 from leap.method.ab.multirate.methods import methods as MRAB_METHODS  # noqa
 
@@ -112,6 +112,7 @@ def read_file(rel_path):
     (3, ODE23TimeStepper("y", use_high_order=True)),
     (4, ODE45TimeStepper("y", use_high_order=False)),
     (5, ODE45TimeStepper("y", use_high_order=True)),
+    (4, LSRK4TimeStepper("y")),
     ])
 def test_rk_codegen(min_order, stepper):
     """Test whether Fortran code generation for the Runge-Kutta
@@ -497,7 +498,6 @@ def test_singlerate_squarewave(min_order):
 @pytest.mark.parametrize("min_order", [2, 3, 4, 5])
 def test_multirate_squarewave(min_order, method_name):
     from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
-    from leap.method.ab.multirate.methods import methods
     from pytools import DictionaryWithDefault
 
     orders = DictionaryWithDefault(lambda x: min_order)
