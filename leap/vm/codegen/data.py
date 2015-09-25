@@ -128,12 +128,18 @@ class SymbolKindTable(object):
 
         if name in tbl:
             if tbl[name] != kind:
-                raise RuntimeError(
-                        "inconsistent 'kind' derived for '%s' in "
+                try:
+                    kind = unify(kind, tbl[name])
+                except:
+                    print(
+                        "trying to derive 'kind' for '%s' in "
                         "'%s': '%s' vs '%s'"
                         % (name, func_name,
                             repr(kind),
                             repr(tbl[name])))
+                else:
+                    tbl[name] = kind
+
         else:
             tbl[name] = kind
 
