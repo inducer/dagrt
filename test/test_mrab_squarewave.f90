@@ -35,8 +35,8 @@ program test_mrabmethod_squarewave
   initial_condition(1) = (exp(0d0))*cos(0d0) ! fast
   initial_condition(2) = (exp(0d0))*sin(0d0) ! slow
 
-  ntrips(1) = 100
-  ntrips(2) = 150
+  ntrips(1) = NUM_TRIPS_ONE
+  ntrips(2) = NUM_TRIPS_TWO
 
   do irun = 1,run_count
     dt_values(irun) = t_fin/ntrips(irun)
