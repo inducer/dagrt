@@ -53,7 +53,7 @@ class KapsProblem(object):
         return np.array([np.exp(-2 * t), np.exp(-t)])
 
 
-_atol = 1.0e-3
+_atol = 1.0e-5
 
 
 def solver(f, j, t, u_n, x, c):
@@ -96,24 +96,27 @@ def solver_hook(expression, solve_component, guess, template=None):
 
 def run():
     from functools import partial
-    from leap.method.rk.imex import KennedyCarpenterIMEXARK4
+    from leap.method.rk.imex import KennedyCarpenterIMEXARK4Method
     from leap.vm.codegen import PythonCodeGenerator
 
     # Construct the method generator.
-    mgen = KennedyCarpenterIMEXARK4("y", atol=_atol)
+    mgen = KennedyCarpenterIMEXARK4Method("y", atol=_atol)
 
     # Generate the code for the method.
+    code = mgen.generate()
+
     template = mgen.implicit_expression()[0]
     print("Expression for solver: " + str(template))
     sgen = partial(solver_hook, template=template)
-    code = mgen.generate(sgen)
+    from leap.vm.implicit import replace_AssignSolved
+    code = replace_AssignSolved(code, {"solve": sgen})
     IMEXIntegrator = PythonCodeGenerator("IMEXIntegrator").get_class(code)
 
     # Set up the problem and run the method.
     problem = KapsProblem(epsilon=0.001)
     integrator = IMEXIntegrator(function_map={
-        mgen.rhs_expl_func.name: problem.nonstiff,
-        mgen.rhs_impl_func.name: problem.stiff,
+        "<func>expl_y": problem.nonstiff,
+        "<func>impl_y": problem.stiff,
         "<func>solver": solver,
         "<func>j": problem.jacobian})
 
