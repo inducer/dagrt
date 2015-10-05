@@ -30,7 +30,7 @@ import pytest
 from leap.vm.language import YieldState
 from leap.vm.language import TimeIntegratorCode, CodeBuilder
 import leap.vm.codegen.fortran as f
-from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper, LSRK4TimeStepper
+from leap.method.rk import ODE23Method, ODE45Method, LSRK4Method
 
 from leap.method.ab.multirate.methods import methods as MRAB_METHODS  # noqa
 
@@ -108,11 +108,11 @@ def read_file(rel_path):
 # {{{ test rk methods
 
 @pytest.mark.parametrize(("min_order", "stepper"), [
-    (2, ODE23TimeStepper("y", use_high_order=False)),
-    (3, ODE23TimeStepper("y", use_high_order=True)),
-    (4, ODE45TimeStepper("y", use_high_order=False)),
-    (5, ODE45TimeStepper("y", use_high_order=True)),
-    (4, LSRK4TimeStepper("y")),
+    (2, ODE23Method("y", use_high_order=False)),
+    (3, ODE23Method("y", use_high_order=True)),
+    (4, ODE45Method("y", use_high_order=False)),
+    (5, ODE45Method("y", use_high_order=True)),
+    (4, LSRK4Method("y")),
     ])
 def test_rk_codegen(min_order, stepper):
     """Test whether Fortran code generation for the Runge-Kutta
@@ -166,7 +166,7 @@ def test_rk_codegen_fancy():
     component_id = 'y'
     rhs_function = '<func>y'
 
-    stepper = ODE23TimeStepper(component_id, use_high_order=True)
+    stepper = ODE23Method(component_id, use_high_order=True)
 
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs,
@@ -245,12 +245,12 @@ def test_rk_codegen_fancy():
 @pytest.mark.parametrize("min_order", [2, 3, 4, 5])
 @pytest.mark.parametrize("method_name", list(MRAB_METHODS.keys()))
 def test_multirate_codegen(min_order, method_name):
-    from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
+    from leap.method.ab.multirate import TwoRateAdamsBashforthMethod
     from pytools import DictionaryWithDefault
 
     orders = DictionaryWithDefault(lambda x: min_order)
 
-    stepper = TwoRateAdamsBashforthTimeStepper(
+    stepper = TwoRateAdamsBashforthMethod(
             MRAB_METHODS[method_name], orders, 4)
 
     code = stepper.generate()
@@ -318,16 +318,22 @@ def test_multirate_codegen(min_order, method_name):
     if min_order == 3:
         run_fortran([
             ("abmethod.f90", code_str),
-            ("test_mrab.f90", read_file("test_mrab.f90").replace(
-                "MIN_ORDER", str(min_order - 0.3)+"d0").replace("NUM_TRIPS_ONE", str(200)).replace("NUM_TRIPS_TWO", str(300))),
+            ("test_mrab.f90", (
+                read_file("test_mrab.f90")
+                .replace("MIN_ORDER", str(min_order - 0.3)+"d0")
+                .replace("NUM_TRIPS_ONE", str(200))
+                .replace("NUM_TRIPS_TWO", str(300)))),
             ],
             fortran_options=["-llapack", "-lblas"])
 
     else:
         run_fortran([
             ("abmethod.f90", code_str),
-            ("test_mrab.f90", read_file("test_mrab.f90").replace(
-                "MIN_ORDER", str(min_order - 0.3)+"d0").replace("NUM_TRIPS_ONE", str(100)).replace("NUM_TRIPS_TWO", str(150))),
+            ("test_mrab.f90", (
+                read_file("test_mrab.f90")
+                .replace("MIN_ORDER", str(min_order - 0.3)+"d0")
+                .replace("NUM_TRIPS_ONE", str(100))
+                .replace("NUM_TRIPS_TWO", str(150)))),
             ],
             fortran_options=["-llapack", "-lblas"])
 
@@ -340,7 +346,7 @@ def test_adaptive_rk_codegen():
     component_id = 'y'
     rhs_function = '<func>y'
 
-    stepper = ODE45TimeStepper(component_id, use_high_order=False, rtol=1e-6)
+    stepper = ODE45Method(component_id, use_high_order=False, rtol=1e-6)
 
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs)
@@ -378,7 +384,7 @@ def test_adaptive_rk_codegen_error():
     component_id = 'y'
     rhs_function = '<func>y'
 
-    stepper = ODE45TimeStepper(component_id, use_high_order=False, atol=1e-6)
+    stepper = ODE45Method(component_id, use_high_order=False, atol=1e-6)
 
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs)
@@ -461,12 +467,12 @@ def test_arrays_and_linalg():
 
 @pytest.mark.parametrize("min_order", [2, 3, 4, 5])
 def test_singlerate_squarewave(min_order):
-    from leap.method.ab import AdamsBashforthTimeStepper
+    from leap.method.ab import AdamsBashforthMethod
 
     component_id = 'y'
     rhs_function = '<func>y'
 
-    stepper = AdamsBashforthTimeStepper("y", min_order)
+    stepper = AdamsBashforthMethod("y", min_order)
 
     from leap.vm.function_registry import (
             base_function_registry, register_ode_rhs)
@@ -506,12 +512,12 @@ def test_singlerate_squarewave(min_order):
 @pytest.mark.parametrize("method_name", list(MRAB_METHODS.keys()))
 @pytest.mark.parametrize("min_order", [2, 3, 4, 5])
 def test_multirate_squarewave(min_order, method_name):
-    from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
+    from leap.method.ab.multirate import TwoRateAdamsBashforthMethod
     from pytools import DictionaryWithDefault
 
     orders = DictionaryWithDefault(lambda x: min_order)
 
-    stepper = TwoRateAdamsBashforthTimeStepper(MRAB_METHODS[method_name], orders, 4)
+    stepper = TwoRateAdamsBashforthMethod(MRAB_METHODS[method_name], orders, 4)
 
     code = stepper.generate()
 
@@ -571,37 +577,51 @@ def test_multirate_squarewave(min_order, method_name):
 
     code_str = codegen(code)
 
-    # Build in conditionals to alter the timestep based on order such that all tests pass
+    # Build in conditionals to alter the timestep based on order such that all
+    # tests pass
 
     if min_order == 3:
         run_fortran([
             ("abmethod.f90", code_str),
-            ("test_mrab_squarewave.f90", read_file("test_mrab_squarewave.f90").replace(
-                "MIN_ORDER", str(min_order - 0.3)+"d0").replace("NUM_TRIPS_ONE", str(200)).replace("NUM_TRIPS_TWO", str(300))),
+            ("test_mrab_squarewave.f90", (
+                read_file("test_mrab_squarewave.f90")
+                .replace("MIN_ORDER", str(min_order - 0.3)+"d0")
+                .replace("NUM_TRIPS_ONE", str(200))
+                .replace("NUM_TRIPS_TWO", str(300)))),
             ],
             fortran_options=["-llapack", "-lblas"])
     elif min_order == 5:
         if method_name == 'Sqrs':
-            # This is an especially problematic test in that it has errors that are too low to achieve order convergence
+            # This is an especially problematic test in that it has errors that
+            # are too low to achieve order convergence.
             run_fortran([
                 ("abmethod.f90", code_str),
-                ("test_mrab_squarewave.f90", read_file("test_mrab_squarewave.f90").replace(
-                    "MIN_ORDER", str(min_order - 0.3)+"d0").replace("NUM_TRIPS_ONE", str(5)).replace("NUM_TRIPS_TWO", str(10))),
+                ("test_mrab_squarewave.f90", (
+                    read_file("test_mrab_squarewave.f90")
+                    .replace("MIN_ORDER", str(min_order - 0.3)+"d0")
+                    .replace("NUM_TRIPS_ONE", str(5))
+                    .replace("NUM_TRIPS_TWO", str(10)))),
                 ],
                 fortran_options=["-llapack", "-lblas"])
 
         else:
             run_fortran([
                 ("abmethod.f90", code_str),
-                ("test_mrab_squarewave.f90", read_file("test_mrab_squarewave.f90").replace(
-                    "MIN_ORDER", str(min_order - 0.3)+"d0").replace("NUM_TRIPS_ONE", str(130)).replace("NUM_TRIPS_TWO", str(200))),
+                ("test_mrab_squarewave.f90", (
+                    read_file("test_mrab_squarewave.f90")
+                    .replace("MIN_ORDER", str(min_order - 0.3)+"d0")
+                    .replace("NUM_TRIPS_ONE", str(130))
+                    .replace("NUM_TRIPS_TWO", str(200)))),
                 ],
                 fortran_options=["-llapack", "-lblas"])
     else:
         run_fortran([
             ("abmethod.f90", code_str),
-            ("test_mrab_squarewave.f90", read_file("test_mrab_squarewave.f90").replace(
-                "MIN_ORDER", str(min_order - 0.3)+"d0").replace("NUM_TRIPS_ONE", str(100)).replace("NUM_TRIPS_TWO", str(150))),
+            ("test_mrab_squarewave.f90", (
+                read_file("test_mrab_squarewave.f90")
+                .replace("MIN_ORDER", str(min_order - 0.3)+"d0")
+                .replace("NUM_TRIPS_ONE", str(100))
+                .replace("NUM_TRIPS_TWO", str(150)))),
             ],
             fortran_options=["-llapack", "-lblas"])
 

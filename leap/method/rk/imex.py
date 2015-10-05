@@ -28,13 +28,13 @@ THE SOFTWARE.
 """
 
 
-from leap.method.rk import EmbeddedRungeKuttaMethod
-from leap.vm.expression import collapse_constants
 from pymbolic import var
-from pymbolic.primitives import CallWithKwargs
+from leap.method import TwoOrderAdaptiveMethod
+from leap.method.rk import ButcherTableauMethod
 
 
-class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
+class KennedyCarpenterIMEXRungeKuttaMethodBase(
+        TwoOrderAdaptiveMethod, ButcherTableauMethod):
     """
     Christopher A. Kennedy, Mark H. Carpenter. Additive Runge-Kutta
     schemes for convection-diffusion-reaction equations.
@@ -48,154 +48,83 @@ class KennedyCarpenterIMEXRungeKuttaBase(EmbeddedRungeKuttaMethod):
         <func>rhs_impl_ + component_id: The implicit right hand side function
     """
 
-    def __init__(self, component_id, **kwargs):
-        EmbeddedRungeKuttaMethod.__init__(self, **kwargs)
+    def __init__(self, component_id, use_high_order=True, limiter_name=None,
+            use_explicit=True, use_implicit=True,
+            atol=0, rtol=0, max_dt_growth=None, min_dt_shrinkage=None):
+        ButcherTableauMethod.__init__(
+                self,
+                component_id=component_id,
+                limiter_name=limiter_name)
 
-        self.dt = var('<dt>')
-        self.t = var('<t>')
-        self.state = var('<state>' + component_id)
-        self.component_id = component_id
+        TwoOrderAdaptiveMethod.__init__(
+                self,
+                atol=atol,
+                rtol=rtol,
+                max_dt_growth=max_dt_growth,
+                min_dt_shrinkage=min_dt_shrinkage)
 
-        # Saved implicit and explicit right hand sides
-        self.rhs_expl = var('<p>rhs_expl')
-        self.rhs_impl = var('<p>rhs_impl')
-
-        if self.limiter_name is not None:
-            limiter = var("<func>" + self.limiter_name)
-        else:
-            limiter = lambda x: x
-        self.limiter_func = limiter
-
-        # Implicit and explicit right hand side functions
-        self.rhs_expl_func = var('<func>expl_' + self.component_id)
-        self.rhs_impl_func = var('<func>impl_' + self.component_id)
-
-    def call_rhs(self, t, y, rhs):
-        return CallWithKwargs(rhs, parameters=(),
-                              kw_parameters={"t": t, self.component_id: y})
-
-    def finish_nonadaptive(self, cb, high_order_estimate, high_order_implicit_rhs,
-                           low_order_estimate):
-        cb.fence()
-        next_state = high_order_estimate if self.use_high_order \
-                                         else low_order_estimate
-        cb(self.state, next_state)
-        cb(self.rhs_expl, self.call_rhs(self.t + self.dt, self.state,
-                                        self.rhs_expl_func))
-        if self.use_high_order:
-            cb(self.rhs_impl, high_order_implicit_rhs)
-        else:
-            cb(self.rhs_impl, self.call_rhs(self.t + self.dt, self.state,
-                                            self.rhs_impl_func))
-        cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
-        cb.fence()
-        cb(self.t, self.t + self.dt)
-
-    def emit_primary(self, cb):
-        """Add code to drive the primary state."""
-
-        explicit_rhss = []
-        implicit_rhss = []
-
-        # Stage loop
-        for c, coeffs_expl, coeffs_impl in \
-                zip(self.c, self.a_explicit, self.a_implicit):
-
-            if len(coeffs_expl) == 0:
-                assert c == 0
-                assert len(coeffs_impl) == 0
-                this_rhs_expl = self.rhs_expl
-                this_rhs_impl = self.rhs_impl
-            else:
-                assert len(coeffs_expl) == len(explicit_rhss)
-                assert len(coeffs_impl) == len(implicit_rhss)
-
-                sub_y_args = [(self.dt * coeff, erhs)
-                    for coeff, erhs in zip(
-                        coeffs_expl + coeffs_impl,
-                        explicit_rhss + implicit_rhss)
-                    if coeff]
-
-                sub_y = sum(arg[0] * arg[1] for arg in sub_y_args)
-
-                # Compute the next implicit right hand side for the stage value.
-                # TODO: Compute a guess parameter using stage value predictors.
-                this_rhs_impl = cb.fresh_var('rhs_impl')
-                solve_component = cb.fresh_var('rhs_impl*')
-                solve_expression = collapse_constants(
-                    solve_component - self.call_rhs(
-                        self.t + c * self.dt,
-                        self.state + sub_y + self.gamma * self.dt * solve_component,
-                        self.rhs_impl_func),
-                    [solve_component, self.state], cb.assign, cb.fresh_var)
-                cb.assign_solved_1(this_rhs_impl, solve_component,
-                                   solve_expression, implicit_rhss[-1], 0)
-
-                # Compute the next explicit right hand side for the stage value.
-                this_rhs_expl = cb.fresh_var('rhs_expl')
-                cb.assign(this_rhs_expl, self.call_rhs(
-                          self.t + c * self.dt,
-                          self.state + sub_y + self.gamma * self.dt * this_rhs_impl,
-                          self.rhs_expl_func))
-
-            explicit_rhss.append(this_rhs_expl)
-            implicit_rhss.append(this_rhs_impl)
-
-        # Compute solution estimates.
-        high_order_estimate = cb.fresh_var('high_order_estimate')
-        low_order_estimate = cb.fresh_var('low_order_estimate')
-
-        def combine(coeffs):
-            assert (len(coeffs) == len(explicit_rhss) == len(implicit_rhss))
-            args = [(1, self.state)] + [
-                    (self.dt * coeff, erhs)
-                    for coeff, erhs in zip(coeffs + coeffs,
-                        explicit_rhss + implicit_rhss)
-                    if coeff]
-            return sum(arg[0] * arg[1] for arg in args)
-
-        cb(high_order_estimate, combine(self.high_order_coeffs))
-        cb(low_order_estimate, combine(self.low_order_coeffs))
-
-        high_order_implicit_rhs = implicit_rhss[-1]
-
-        if not self.adaptive:
-            self.finish_nonadaptive(cb, high_order_estimate,
-                                    high_order_implicit_rhs, low_order_estimate)
-        else:
-            self.finish_adaptive(cb, high_order_estimate,
-                                 high_order_implicit_rhs, low_order_estimate)
+        self.use_high_order = use_high_order
+        self.use_explicit = use_explicit
+        self.use_implicit = use_implicit
 
     def implicit_expression(self, expression_tag=None):
         from leap.vm.expression import parse
-        return (parse("`solve_component` - `{rhs_impl}`(t=t, {component_id}="
-                      "`{state}` + sub_y + coeff * `solve_component`)".format(
-                          component_id=self.component_id,
-                          rhs_impl=self.rhs_impl_func.name,
-                          state=self.state.name)), "solve_component")
+        return (parse("`solve_component` - `<func>impl_{component_id}`("
+            "t=t, {component_id}="
+            "`{state}` + sub_y + coeff * `solve_component`)".format(
+                component_id=self.component_id,
+                state=self.state.name)), "solve_component")
 
-    def generate(self, solver_hook):
-        from leap.vm.language import CodeBuilder, TimeIntegratorCode
+    def generate(self):
+        if self.use_high_order:
+            estimate_names = ("high_order", "low_order")
+        else:
+            estimate_names = ("low_order", "high_order")
 
-        with CodeBuilder(label="initialization") as cb_init:
-            cb_init.assign(self.rhs_expl, self.call_rhs(
-                    self.t, self.state, self.rhs_expl_func))
-            cb_init.assign(self.rhs_impl, self.call_rhs(
-                    self.t, self.state, self.rhs_impl_func))
+        set_names = []
+        if self.use_implicit:
+            set_names.append("implicit")
+        if self.use_explicit:
+            set_names.append("explicit")
 
-        with CodeBuilder(label="primary") as cb_primary:
-            self.emit_primary(cb_primary)
+        return self.generate_butcher(
+                stage_coeff_set_names=set_names,
+                stage_coeff_sets={
+                    "explicit": self.a_explicit,
+                    "implicit": self.a_implicit,
+                    },
+                rhs_funcs={
+                    "implicit": var("<func>impl_"+self.component_id),
+                    "explicit": var("<func>expl_"+self.component_id),
+                    },
+                estimate_coeff_set_names=estimate_names,
+                estimate_coeff_sets={
+                    "high_order": self.high_order_coeffs,
+                    "low_order": self.low_order_coeffs
+                    })
 
-        from leap.vm.implicit import replace_AssignSolved
-        code = TimeIntegratorCode.create_with_init_and_step(
-            instructions=cb_init.instructions | cb_primary.instructions,
-            initialization_dep_on=cb_init.state_dependencies,
-            step_dep_on=cb_primary.state_dependencies)
+    def finish(self, cb, estimate_coeff_set_names, estimate_coeff_sets):
+        if not self.adaptive:
+            super(KennedyCarpenterIMEXRungeKuttaMethodBase, self).finish(
+                    cb, estimate_coeff_set_names, estimate_coeff_sets)
+        else:
+            high_est = estimate_coeff_sets[
+                    estimate_coeff_set_names.index("high_order")]
+            low_est = estimate_coeff_sets[
+                    estimate_coeff_set_names.index("low_order")]
+            self.finish_adaptive(cb, high_est, low_est)
 
-        return replace_AssignSolved(code, solver_hook)
+    def finish_nonadaptive(self, cb, high_order_estimate, low_order_estimate):
+        if self.use_high_order:
+            est = high_order_estimate
+        else:
+            est = low_order_estimate
+
+        cb(self.state, est)
+        cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
 
 
-class KennedyCarpenterIMEXARK4(KennedyCarpenterIMEXRungeKuttaBase):
+class KennedyCarpenterIMEXARK4Method(KennedyCarpenterIMEXRungeKuttaMethodBase):
     gamma = 1./4.
 
     c = [0, 1/2, 83/250, 31/50, 17/20, 1]
@@ -238,13 +167,15 @@ class KennedyCarpenterIMEXARK4(KennedyCarpenterIMEXRungeKuttaBase):
 
     # ARK4(3)6L[2]SA-ESDIRK (implicit)
     a_implicit = [[],
-            [1/4],
-            [8611/62500, -1743/31250],
-            [5012029/34652500, -654441/2922500, 174375/388108],
+            [1/4, gamma],
+            [8611/62500, -1743/31250, gamma],
+            [5012029/34652500, -654441/2922500, 174375/388108, gamma],
             [15267082809/155376265600, -71443401/120774400,
-                730878875/902184768, 2285395/8070912],
+                730878875/902184768, 2285395/8070912, gamma],
             [82889/524892, 0, 15625/83664, 69875/102672,
-                -2260/8211]]
+                -2260/8211, gamma]]
+
+    recycle_last_stage = True
 
     assert (len(a_explicit) == len(a_implicit)
             == len(low_order_coeffs)

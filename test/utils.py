@@ -94,7 +94,7 @@ class DefaultProblem(Problem):
         return np.array([v, -u / t ** 2], dtype=np.float64)
 
 
-_default_dts = 2 ** -np.array(range(4, 7), dtype=np.float64)
+_default_dts = 0.5*2 ** -np.array(range(4, 7), dtype=np.float64)
 
 
 def check_simple_convergence(method, method_impl, expected_order,
@@ -102,6 +102,7 @@ def check_simple_convergence(method, method_impl, expected_order,
                              show_dag=False, plot_solution=False):
     component_id = method.component_id
     code = method.generate()
+    print(code)
 
     if show_dag:
         from leap.vm.language import show_dependency_graph
@@ -115,7 +116,10 @@ def check_simple_convergence(method, method_impl, expected_order,
         y = problem.initial()
         final_t = problem.t_end
 
-        interp = method_impl(code, function_map={"<func>" + component_id: problem})
+        interp = method_impl(code, function_map={
+            "<func>" + component_id: problem,  # for most methods
+            "<func>expl_" + component_id: problem,  # for IMEX
+            })
         interp.set_up(t_start=t, dt_start=dt, context={component_id: y})
 
         times = []

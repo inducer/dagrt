@@ -27,7 +27,7 @@ THE SOFTWARE.
 import sys
 import pytest
 
-from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper
+from leap.method.rk import ODE23Method, ODE45Method
 import numpy as np
 import numpy.linalg as la
 
@@ -36,13 +36,13 @@ logger = logging.getLogger(__name__)
 
 
 # Run example with
-# python test_step_matrix.py "test_step_matrix(ODE23TimeStepper())"
+# python test_step_matrix.py "test_step_matrix(ODE23Method())"
 
 @pytest.mark.parametrize("method", [
-    ODE23TimeStepper("y", use_high_order=False),
-    ODE23TimeStepper("y", use_high_order=True),
-    ODE45TimeStepper("y", use_high_order=False),
-    ODE45TimeStepper("y", use_high_order=True),
+    ODE23Method("y", use_high_order=False),
+    ODE23Method("y", use_high_order=True),
+    ODE45Method("y", use_high_order=False),
+    ODE45Method("y", use_high_order=True),
     ])
 def test_step_matrix(method, show_matrix=True, show_dag=False):
     component_id = 'y'

@@ -28,16 +28,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import numpy
+import numpy  # noqa
 from leap.method import Method
 
 
 __doc__ = """
-.. autoclass:: AdamsBashforthTimeStepper
+.. autoclass:: AdamsBashforthMethod
 """
 
 
-class AdamsBashforthTimeStepperBase(Method):
+class AdamsBashforthMethodBase(Method):
 
     @staticmethod
     def get_rk_tableau_and_coeffs(order):
@@ -82,7 +82,7 @@ class AdamsBashforthTimeStepperBase(Method):
         return (butcher_tableau, coeffs)
 
 
-class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
+class AdamsBashforthMethod(AdamsBashforthMethodBase):
     """
     User-supplied context:
         <state> + component_id: The value that is integrated
@@ -90,7 +90,7 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
     """
 
     def __init__(self, component_id, order):
-        super(AdamsBashforthTimeStepper, self).__init__()
+        super(AdamsBashforthMethod, self).__init__()
         self.order = order
 
         from pymbolic import var
@@ -143,13 +143,15 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
             cb_primary("vdm_transpose", "`<builtin>array`(n*n)")
             cb_primary.fence()
 
-            cb_primary("point_eval_vec[g]", "1 / (g + 1) * (end_time ** (g + 1)- start_time ** (g + 1)) ",
+            cb_primary("point_eval_vec[g]",
+                    "1 / (g + 1) * (end_time ** (g + 1)- start_time ** (g + 1)) ",
                     loops=[("g", 0, "n")])
             cb_primary("vdm_transpose[g*n + h]", "time_history[g]**h",
                     loops=[("g", 0, "n"), ("h", 0, "n")])
 
             cb_primary.fence()
-            cb_primary("new_coeffs", "`<builtin>linear_solve`(vdm_transpose, point_eval_vec, n, 1)")
+            cb_primary("new_coeffs",
+                    "`<builtin>linear_solve`(vdm_transpose, point_eval_vec, n, 1)")
 
             # Define a Python-side vector for the calculated coefficients
 
@@ -158,7 +160,8 @@ class AdamsBashforthTimeStepper(AdamsBashforthTimeStepperBase):
 
             new_coeffs_py = [new_coeffs_pyvar[i] for i in range(len(time_history))]
 
-            # Use a loop to assign each element of this vector to an element from our newly calculated coeff vector (Fortran-side)
+            # Use a loop to assign each element of this vector to an element
+            # from our newly calculated coeff vector (Fortran-side)
 
             cb_primary("new", "`<builtin>array`(n)")
             cb_primary.fence()

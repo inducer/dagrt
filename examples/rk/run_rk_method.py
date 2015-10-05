@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from leap.method.rk import ODE23TimeStepper
+from leap.method.rk import ODE23Method
 import numpy as np
 
 import logging
@@ -30,7 +30,7 @@ import logging
 
 def main(show_dag=False, plot_solution=False):
     component_id = "y"
-    method = ODE23TimeStepper(component_id, use_high_order=True)
+    method = ODE23Method(component_id, use_high_order=True)
     expected_order = 3
 
     # Use "DEBUG" to trace execution

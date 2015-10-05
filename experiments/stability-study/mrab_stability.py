@@ -271,8 +271,8 @@ class MethodFactory(FactoryWithParameters):
 
     def __call__(self, dt):
         from hedge.timestep.multirate_ab import \
-                TwoRateAdamsBashforthTimeStepper
-        return TwoRateAdamsBashforthTimeStepper(
+                TwoRateAdamsBashforthMethod
+        return TwoRateAdamsBashforthMethod(
                 method=self.method,
                 large_dt=dt,
                 substep_count=self.substep_count,
@@ -420,8 +420,8 @@ class SRABMethodFactory(FactoryWithParameters):
     __slots__ = ["method", "substep_count", "meth_order"]
 
     def __call__(self):
-        from hedge.timestep.ab import AdamsBashforthTimeStepper
-        return AdamsBashforthTimeStepper(order=self.meth_order,
+        from hedge.timestep.ab import AdamsBashforthMethod
+        return AdamsBashforthMethod(order=self.meth_order,
                 dtype=numpy.complex128)
 
 
@@ -461,9 +461,9 @@ def generate_srab_jobs():
 
 def test():
     from hedge.timestep.multirate_ab import \
-            TwoRateAdamsBashforthTimeStepper
+            TwoRateAdamsBashforthMethod
     from pymbolic import var
-    stepper = TwoRateAdamsBashforthTimeStepper(
+    stepper = TwoRateAdamsBashforthMethod(
             method="Fqsr",
             large_dt=var("dt"),
             substep_count=2,

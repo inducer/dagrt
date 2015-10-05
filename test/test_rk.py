@@ -27,7 +27,11 @@ THE SOFTWARE.
 import sys
 import pytest
 
-from leap.method.rk import ODE23TimeStepper, ODE45TimeStepper, LSRK4TimeStepper
+from leap.method.rk import (
+        ODE23Method, ODE45Method,
+        MidpointMethod, HeunsMethod, RK4Method,
+        LSRK4Method,)
+from leap.method.rk.imex import KennedyCarpenterIMEXARK4Method
 import numpy as np
 
 import logging
@@ -40,15 +44,19 @@ from utils import (  # noqa
 
 # {{{ non-adaptive test
 
-# test using 'python test_rk.py test_rk_accuracy(pmi_int, ODE23TimeStepper(use_high_order=False), 2)'  # noqa
+# test using
+# python test_rk.py 'test_rk_accuracy(pmi_int, ODE23Method("y", use_high_order=False), 2)'  # noqa
 
 @pytest.mark.parametrize(("method", "expected_order"), [
-    (ODE23TimeStepper("y", use_high_order=False), 2),
-    (ODE23TimeStepper("y", use_high_order=True), 3),
-    (ODE45TimeStepper("y", use_high_order=False), 4),
-    (ODE45TimeStepper("y", use_high_order=True), 5),
-    (ODE45TimeStepper("y", use_high_order=True), 5),
-    (LSRK4TimeStepper("y"), 4),
+    (ODE23Method("y", use_high_order=False), 2),
+    (ODE23Method("y", use_high_order=True), 3),
+    (ODE45Method("y", use_high_order=False), 4),
+    (ODE45Method("y", use_high_order=True), 5),
+    (MidpointMethod("y"), 2),
+    (HeunsMethod("y"), 2),
+    (RK4Method("y"), 4),
+    (LSRK4Method("y"), 4),
+    (KennedyCarpenterIMEXARK4Method("y", use_implicit=False), 4),
     ])
 def test_rk_accuracy(python_method_impl, method, expected_order,
                      show_dag=False, plot_solution=False):
@@ -63,8 +71,8 @@ def test_rk_accuracy(python_method_impl, method, expected_order,
 # {{{ adaptive test
 
 @pytest.mark.parametrize("method", [
-    ODE23TimeStepper("y", rtol=1e-6),
-    ODE45TimeStepper("y", rtol=1e-6),
+    ODE23Method("y", rtol=1e-6),
+    ODE45Method("y", rtol=1e-6),
     ])
 def test_adaptive_timestep(python_method_impl, method, show_dag=False,
                            plot=False):

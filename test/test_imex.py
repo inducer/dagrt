@@ -28,7 +28,7 @@ import numpy as np
 import pytest
 import sys
 
-from leap.method.rk.imex import KennedyCarpenterIMEXARK4
+from leap.method.rk.imex import KennedyCarpenterIMEXARK4Method
 from stiff_test_systems import KapsProblem
 from leap.vm.implicit import ScipySolverGenerator
 
@@ -41,16 +41,18 @@ _component_id = "y"
 
 
 @pytest.mark.parametrize("problem, method, expected_order", [
-    [KapsProblem(epsilon=0.9), KennedyCarpenterIMEXARK4(_component_id,
+    [KapsProblem(epsilon=0.9), KennedyCarpenterIMEXARK4Method(_component_id,
                                                         use_high_order=False), 3],
-    [KapsProblem(epsilon=0.9), KennedyCarpenterIMEXARK4(_component_id), 4],
+    [KapsProblem(epsilon=0.9), KennedyCarpenterIMEXARK4Method(_component_id), 4],
     ])
 def test_convergence(python_method_impl, problem, method, expected_order):
     pytest.importorskip("scipy")
 
+    code = method.generate()
+
     sgen = ScipySolverGenerator(*method.implicit_expression())
-    solver_func = sgen.get_compiled_solver()
-    code = method.generate(sgen)
+    from leap.vm.implicit import replace_AssignSolved
+    code = replace_AssignSolved(code, {"solve": sgen})
 
     from pytools.convergence import EOCRecorder
     eocrec = EOCRecorder()
@@ -63,9 +65,9 @@ def test_convergence(python_method_impl, problem, method, expected_order):
         t_end = problem.t_end
 
         interp = python_method_impl(code, function_map={
-            method.rhs_expl_func.name: problem.nonstiff,
-            method.rhs_impl_func.name: problem.stiff,
-            sgen.solver_func.name: solver_func
+            "<func>expl_y": problem.nonstiff,
+            "<func>impl_y": problem.stiff,
+            sgen.solver_func.name: sgen.get_compiled_solver(),
         })
 
         interp.set_up(t_start=t_start, dt_start=dt, context={_component_id: y_0})
@@ -98,7 +100,7 @@ def test_convergence(python_method_impl, problem, method, expected_order):
 
 
 @pytest.mark.parametrize("problem, method", [
-    [KapsProblem(epsilon=0.001), KennedyCarpenterIMEXARK4],
+    [KapsProblem(epsilon=0.001), KennedyCarpenterIMEXARK4Method],
     ])
 def test_adaptive(python_method_impl, problem, method):
     pytest.importorskip("scipy")
@@ -115,12 +117,16 @@ def test_adaptive(python_method_impl, problem, method):
     # Test that tightening the tolerance will decrease the overall error.
     for atol in tols:
         generator = method(_component_id, atol=atol)
+        code = generator.generate()
+        print(code)
+
         sgen = ScipySolverGenerator(*generator.implicit_expression())
-        code = generator.generate(sgen)
+        from leap.vm.implicit import replace_AssignSolved
+        code = replace_AssignSolved(code, {"solve": sgen})
 
         interp = python_method_impl(code, function_map={
-            generator.rhs_expl_func.name: problem.nonstiff,
-            generator.rhs_impl_func.name: problem.stiff,
+            "<func>expl_y": problem.nonstiff,
+            "<func>impl_y": problem.stiff,
             sgen.solver_func.name: sgen.get_compiled_solver()
         })
         interp.set_up(t_start=t_start, dt_start=dt,

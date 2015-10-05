@@ -53,10 +53,10 @@ class MultirateTimestepperAccuracyChecker(object):
 
     @memoize_method
     def get_code(self):
-        from leap.method.ab.multirate import TwoRateAdamsBashforthTimeStepper
+        from leap.method.ab.multirate import TwoRateAdamsBashforthMethod
         from pytools import DictionaryWithDefault
         order = DictionaryWithDefault(lambda x: self.order)
-        stepper = TwoRateAdamsBashforthTimeStepper(self.method, order,
+        stepper = TwoRateAdamsBashforthMethod(self.method, order,
                                                        self.step_ratio)
         return stepper.generate()
 

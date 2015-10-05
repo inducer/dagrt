@@ -28,230 +28,425 @@ THE SOFTWARE.
 """
 
 import numpy as np
-from leap.method import Method, TimeStepUnderflow
-from leap.vm.language import CodeBuilder
+from leap.method import Method, TwoOrderAdaptiveMethod
+from leap.vm.language import CodeBuilder, TimeIntegratorCode
+
+from pymbolic import var
 
 
 __doc__ = """
-.. autoclass:: ODE23TimeStepper
+.. autoclass:: ODE23Method
 
-.. autoclass:: ODE45TimeStepper
+.. autoclass:: ODE45Method
 
-.. autoclass:: LSRK4TimeStepper
+.. autoclass:: MidpointMethod
+.. autoclass:: HeunsMethod
+.. autoclass:: RK4Method
+
+.. autoclass:: LSRK4Method
 """
 
 
-def verify_first_same_as_last_condition(times, last_stage_coefficients,
-                                        output_stage_coefficients):
-    if not times or not last_stage_coefficients \
-            or not output_stage_coefficients:
-        return False
-    if times[0] != 0:
-        return False
+# {{{ utilities
 
-    def truncate_final_zeros(array):
-        index = len(array) - 1
-        while array[index] == 0 and index >= 0:
-            index -= 1
-        return array[:index + 1]
+def _truncate_final_zeros(array):
+    if not array:
+        return array
 
-    if truncate_final_zeros(last_stage_coefficients) != \
-           truncate_final_zeros(output_stage_coefficients):
-        return False
-    return True
+    index = len(array) - 1
+    while array[index] == 0 and index >= 0:
+        index -= 1
+    return array[:index + 1]
 
 
-# {{{ Embedded Runge-Kutta schemes base class
-
-class EmbeddedRungeKuttaMethod(Method):
-
-    def __init__(self, use_high_order=True,
-            atol=0, rtol=0, max_dt_growth=5, min_dt_shrinkage=0.1,
-            limiter_name=None):
-
-        self.limiter_name = limiter_name
-
-        self.use_high_order = use_high_order
-
-        self.adaptive = bool(atol or rtol)
-        self.atol = atol
-        self.rtol = rtol
-
-        self.max_dt_growth = max_dt_growth
-        self.min_dt_shrinkage = min_dt_shrinkage
-
-    def finish_adaptive(self, cb, high_order_estimate, high_order_rhs,
-                        low_order_estimate):
-        from pymbolic import var
-        from pymbolic.primitives import Comparison, LogicalOr, Max, Min
-        from leap.vm.expression import IfThenElse
-
-        norm_start_state = var('norm_start_state')
-        norm_end_state = var('norm_end_state')
-        rel_error_raw = var('rel_error_raw')
-        rel_error = var('rel_error')
-
-        cb.fence()
-
-        norm = lambda expr: var('<builtin>norm_2')(expr)
-        cb(norm_start_state, norm(self.state))
-        cb(norm_end_state, norm(low_order_estimate))
-        cb(rel_error_raw, norm((high_order_estimate - low_order_estimate) /
-                               (var('<builtin>len')(self.state) ** 0.5 *
-                                (self.atol + self.rtol *
-                                 Max((norm_start_state, norm_end_state))
-                                 ))))
-
-        cb(rel_error, IfThenElse(Comparison(rel_error_raw, "==", 0),
-                                 1.0e-14, rel_error_raw))
-
-        with cb.if_(LogicalOr((Comparison(rel_error, ">", 1),
-                               var('<builtin>isnan')(rel_error)))):
-
-            with cb.if_(var('<builtin>isnan')(rel_error)):
-                cb(self.dt, self.min_dt_shrinkage * self.dt)
-            with cb.else_():
-                cb(self.dt, Max((0.9 * self.dt *
-                                 rel_error ** (-1 / self.low_order),
-                                 self.min_dt_shrinkage * self.dt)))
-
-            with cb.if_(self.t + self.dt, '==', self.t):
-                cb.raise_(TimeStepUnderflow)
-            with cb.else_():
-                cb.fail_step()
-
-        with cb.else_():
-            if self.limiter is not None:
-                cb(high_order_estimate, self.limiter(high_order_estimate))
-
-            self.finish_nonadaptive(cb, high_order_estimate, high_order_rhs,
-                                    low_order_estimate)
-            cb.fence()
-            cb(self.dt,
-               Min((0.9 * self.dt * rel_error ** (-1 / self.high_order),
-                    self.max_dt_growth * self.dt)))
+def _is_first_stage_same_as_last_stage(c, coeff_set):
+    return (
+            c
+            and c[0] == 0
+            and c[-1] == 1
+            and not _truncate_final_zeros(coeff_set[0]))
 
 
-class EmbeddedButcherTableauMethod(EmbeddedRungeKuttaMethod):
-    """
-    User-supplied context:
-        <state> + component_id: The value that is integrated
-        <func> + component_id: The right hand side function
-    """
+def _is_last_stage_same_as_output(c, coeff_sets, output_stage_coefficients):
+    return (
+            c
 
-    def __init__(self, component_id, *args, **kwargs):
-        """
-        :arg component_id: an identifier to be used for the single state
-            component supported.
-        """
-        EmbeddedRungeKuttaMethod.__init__(self, *args, **kwargs)
+            and all(
+                coeff_set[-1]
+                for coeff_set in coeff_sets)
 
-        # Set up variables.
-        from pymbolic import var
+            and output_stage_coefficients
+
+            and all(
+                _truncate_final_zeros(coeff_set[-1])
+                ==
+                _truncate_final_zeros(output_stage_coefficients)
+                for coeff_set in coeff_sets))
+
+# }}}
+
+
+# {{{ fully general butcher tableau to code
+
+class ButcherTableauMethod(Method):
+    """Explicit and implicit Runge-Kutta methods."""
+
+    def __init__(self, component_id, limiter_name=None):
 
         self.component_id = component_id
 
-        self.dt = var("<dt>")
-        self.t = var("<t>")
-        self.last_rhs = var("<p>last_rhs_" + component_id)
-        self.state = var("<state>" + component_id)
-        self.rhs_func = var("<func>" + component_id)
+        self.dt = var('<dt>')
+        self.t = var('<t>')
+        self.state = var('<state>' + component_id)
+
+        self.limiter_name = limiter_name
 
         if self.limiter_name is not None:
             self.limiter = var("<func>" + self.limiter_name)
         else:
             self.limiter = None
 
-    def generate(self):
-        from leap.vm.language import TimeIntegratorCode
+    def generate_butcher(self, stage_coeff_set_names, stage_coeff_sets, rhs_funcs,
+            estimate_coeff_set_names, estimate_coeff_sets):
+        """
+        :arg stage_coeff_set_names: a list of names/string identifiers
+            for stage coefficient sets
+        :arg stage_coeff_sets: a mapping from set names to stage coefficients
+        :arg rhs_funcs: a mapping from set names to right-hand-side
+            functions
+        :arg estimate_coeffs_set_names: a list of names/string identifiers
+            for estimate coefficient sets
+        :arg estimate_coeffs_sets: a mapping from estimate coefficient set
+            names to cofficients.
+        """
+
         from pymbolic import var
+        comp = self.component_id
 
-        # Initialization.
+        dt = self.dt
+        t = self.t
+        state = self.state
 
-        with CodeBuilder("initialization") as cb:
-            cb(self.last_rhs, self.call_rhs(self.t, self.state))
+        nstages = len(self.c)
+
+        # {{{ check coefficients for plausibility
+
+        for name in stage_coeff_set_names:
+            for istage in range(nstages):
+                coeff_sum = sum(stage_coeff_sets[name][istage])
+                assert abs(coeff_sum - self.c[istage]) < 1e-12, (
+                        name, istage, coeff_sum, self.c[istage])
+        # }}}
+
+        # {{{ initialization
+
+        last_rhss = {}
+
+        with CodeBuilder(label="initialization") as cb:
+            for name in stage_coeff_set_names:
+                if (self.recycle_last_stage
+                        and _is_first_stage_same_as_last_stage(
+                        self.c, stage_coeff_sets[name])):
+                    last_rhss[name] = var("<p>last_rhs_" + name)
+                    cb(last_rhss[name], rhs_funcs[name](t=t, **{comp: state}))
 
         cb_init = cb
 
-        # Primary.
+        # }}}
 
-        with CodeBuilder("primary") as cb:
-            local_last_rhs = var('last_rhs_' + self.component_id)
-            rhss = []
-            # {{{ stage loop
-            last_stage = len(self.butcher_tableau) - 1
-            for stage_num, (c, coeffs) in enumerate(self.butcher_tableau):
-                if len(coeffs) == 0:
-                    assert c == 0
-                    cb(local_last_rhs, self.last_rhs)
-                    this_rhs = local_last_rhs
+        stage_rhs_vars = {}
+        rhs_var_to_unknown = {}
+        for name in stage_coeff_set_names:
+            stage_rhs_vars[name] = [
+                    cb.fresh_var('rhs_%s_s%d' % (name, i)) for i in range(nstages)]
+
+            # These are rhss if they are not yet known and pending an implicit solve.
+            for i, rhsvar in enumerate(stage_rhs_vars[name]):
+                unkvar = cb.fresh_var('unk_%s_s%d' % (name, i))
+                rhs_var_to_unknown[rhsvar] = unkvar
+
+        knowns = set()
+
+        # {{{ stage loop
+
+        with CodeBuilder(label="primary") as cb:
+            equations = []
+            unknowns = set()
+
+            def make_known(v):
+                unknowns.discard(v)
+                knowns.add(v)
+
+            for istage in range(nstages):
+                for name in stage_coeff_set_names:
+                    c = self.c[istage]
+                    my_rhs = stage_rhs_vars[name][istage]
+
+                    if (
+                            self.recycle_last_stage
+                            and istage == 0
+                            and _is_first_stage_same_as_last_stage(
+                                self.c, stage_coeff_sets[name])):
+                        cb(my_rhs, last_rhss[name])
+                        make_known(my_rhs)
+
+                    else:
+                        is_implicit = False
+
+                        state_increment = 0
+                        for src_name in stage_coeff_set_names:
+                            coeffs = stage_coeff_sets[name][istage]
+                            for src_istage, coeff in enumerate(coeffs):
+                                rhsval = stage_rhs_vars[src_name][src_istage]
+                                if rhsval not in knowns:
+                                    unknowns.add(rhsval)
+                                    is_implicit = True
+
+                                state_increment += dt * coeff * rhsval
+
+                        state_est = state + state_increment
+                        rhs_expr = rhs_funcs[name](t=t + c*dt, **{comp: state_est})
+
+                        if is_implicit:
+                            from leap.vm.expression import collapse_constants
+                            solve_expression = collapse_constants(
+                                    my_rhs - rhs_expr,
+                                    list(unknowns) + [self.state],
+                                    cb.assign, cb.fresh_var)
+                            equations.append(solve_expression)
+
+                        else:
+                            if self.limiter is not None:
+                                rhs_expr = self.limiter(rhs_expr)
+                            cb(my_rhs, rhs_expr)
+                            make_known(my_rhs)
+
+                    # {{{ emit solve if possible
+
+                    if unknowns and len(unknowns) == len(equations):
+                        # got a square system, let's solve
+                        if self.limiter is not None:
+                            temp_vars = [
+                                    cb.fresh_var(unk.name + "_pre_lim")
+                                    for unk in unknowns]
+
+                            assignees = [tv.name for tv in temp_vars]
+                        else:
+                            assignees = [unk.name for unk in unknowns]
+
+                        from leap.vm.expression import substitute
+                        subst_dict = dict(
+                                (rhs_var.name, rhs_var_to_unknown[rhs_var].name)
+                                for rhs_var in unknowns)
+
+                        cb.assign_solved(
+                                assignees=assignees,
+                                solve_components=[
+                                    rhs_var_to_unknown[unk].name
+                                    for unk in unknowns],
+                                expressions=[
+                                    substitute(eq, subst_dict)
+                                    for eq in equations],
+
+                                # TODO: Could supply a starting guess
+                                other_params={
+                                    "guess": state},
+                                solver_id="solve")
+
+                        if self.limiter is not None:
+                            for unk, tv in zip(unknowns, temp_vars):
+                                cb(unk, tv)
+
+                        del equations[:]
+                        knowns.update(unknowns)
+                        unknowns.clear()
+
+                    # }}}
+
+            # Compute solution estimates.
+            estimate_vars = [
+                    cb.fresh_var("est_"+name)
+                    for name in estimate_coeff_set_names]
+
+            for iest, name in enumerate(estimate_coeff_set_names):
+                out_coeffs = estimate_coeff_sets[name]
+
+                if _is_last_stage_same_as_output(self.c,
+                        stage_coeff_sets, out_coeffs):
+                    cb(
+                            estimate_vars,
+                            stage_rhs_vars[stage_coeff_set_names[-1]][-1])
+
                 else:
-                    stage_state = (
-                        self.state + sum(
-                            self.dt * coeff * rhss[j]
-                            for j, coeff in enumerate(coeffs)))
+                    state_increment = 0
+                    for src_name in stage_coeff_set_names:
+                        state_increment += sum(
+                                    coeff * stage_rhs_vars[src_name][src_istage]
+                                    for src_istage, coeff in enumerate(out_coeffs))
 
-                    if self.limiter is not None:
-                        stage_state = self.limiter({self.component_id: stage_state})
+                    cb(
+                            estimate_vars[iest],
+                            state + dt*state_increment)
 
-                    if stage_num == last_stage:
-                        high_order_estimate = var("high_order_estimate")
-                        cb(high_order_estimate, stage_state)
+            cb.fence()
 
-                    this_rhs = var("rhs_" + str(stage_num))
-                    cb(this_rhs, self.call_rhs(self.t + c * self.dt,
-                                               high_order_estimate
-                                                   if stage_num == last_stage
-                                                   else stage_state))
-                rhss.append(this_rhs)
-            # }}}
+            self.finish(cb, estimate_coeff_set_names, estimate_vars)
 
-            low_order_estimate = var('low_order_estimate')
-            cb(low_order_estimate, self.state +
-               sum(self.dt * coeff * rhss[j] for j, coeff in
-                   enumerate(self.low_order_coeffs)))
+            # These updates have to happen *after* finish because before we
+            # don't yet know whether finish will accept the new state.
 
-            if not self.adaptive:
-                self.finish_nonadaptive(cb, high_order_estimate, rhss[-1],
-                                        low_order_estimate)
-            else:
-                self.finish_adaptive(cb, high_order_estimate, rhss[-1],
-                                     low_order_estimate)
+            for name in stage_coeff_set_names:
+                if (
+                        self.recycle_last_stage
+                        and _is_first_stage_same_as_last_stage(
+                            self.c, stage_coeff_sets[name])):
+                    cb(last_rhss[name], stage_rhs_vars[name][-1])
+
+            cb.fence()
+            cb(self.t, self.t + self.dt)
 
         cb_primary = cb
+
+        # }}}
 
         return TimeIntegratorCode.create_with_init_and_step(
             instructions=cb_init.instructions | cb_primary.instructions,
             initialization_dep_on=cb_init.state_dependencies,
             step_dep_on=cb_primary.state_dependencies)
 
-    def finish_nonadaptive(self, cb, high_order_estimate, high_order_rhs,
-                           low_order_estimate):
-        cb.fence()
-        if not self.use_high_order:
-            cb(self.last_rhs,
-               self.call_rhs(self.t + self.dt, low_order_estimate))
-            cb(self.state, low_order_estimate)
-        else:
-            times, coeffs = tuple(zip(*self.butcher_tableau))
-            assert verify_first_same_as_last_condition(
-                    times, coeffs[-1], self.high_order_coeffs)
-            cb(self.last_rhs, high_order_rhs)
-            cb(self.state, high_order_estimate)
-
+    def finish(self, cb, estimate_names, estimate_vars):
+        cb(self.state, estimate_vars[0])
         cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
-        cb.fence()
-        cb(self.t, self.t + self.dt)
 
-    def call_rhs(self, t, y):
-        return self.rhs_func(t=t, **{self.component_id: y})
+# }}}
+
+
+# {{{ simple butcher tableau methods
+
+class SimpleButcherTableauMethod(ButcherTableauMethod):
+    def generate(self):
+        return self.generate_butcher(
+                stage_coeff_set_names=("explicit",),
+                stage_coeff_sets={
+                    "explicit": self.a_explicit},
+                rhs_funcs={"explicit": var("<func>"+self.component_id)},
+                estimate_coeff_set_names=("main",),
+                estimate_coeff_sets={
+                    "main": self.output_coeffs,
+                    })
+
+
+class MidpointMethod(SimpleButcherTableauMethod):
+    c = [0, 1/2]
+
+    a_explicit = (
+            (),
+            (1/2,),
+            )
+
+    output_coeffs = (0, 1)
+
+    recycle_last_stage = False
+
+
+class HeunsMethod(SimpleButcherTableauMethod):
+    c = [0, 1]
+
+    a_explicit = (
+            (),
+            (1,),
+            )
+
+    output_coeffs = (1/2, 1/2)
+
+    recycle_last_stage = False
+
+
+class RK4Method(SimpleButcherTableauMethod):
+    c = (0, 1/2, 1/2, 1)
+
+    a_explicit = (
+            (),
+            (1/2,),
+            (0, 1/2,),
+            (0, 0, 1,),
+            )
+
+    output_coeffs = (1/6, 1/3, 1/3, 1/6)
+
+    recycle_last_stage = False
+
+# }}}
+
+
+# {{{ Embedded Runge-Kutta schemes base class
+
+class EmbeddedButcherTableauMethod(ButcherTableauMethod, TwoOrderAdaptiveMethod):
+    """
+    User-supplied context:
+        <state> + component_id: The value that is integrated
+        <func> + component_id: The right hand side function
+    """
+
+    def __init__(self, component_id, use_high_order=True, limiter_name=None,
+            atol=0, rtol=0, max_dt_growth=None, min_dt_shrinkage=None):
+        ButcherTableauMethod.__init__(
+                self,
+                component_id=component_id,
+                limiter_name=limiter_name)
+
+        TwoOrderAdaptiveMethod.__init__(
+                self,
+                atol=atol,
+                rtol=rtol,
+                max_dt_growth=max_dt_growth,
+                min_dt_shrinkage=min_dt_shrinkage)
+
+        self.use_high_order = use_high_order
+
+    def generate(self):
+        if self.use_high_order:
+            estimate_names = ("high_order", "low_order")
+        else:
+            estimate_names = ("low_order", "high_order")
+
+        return self.generate_butcher(
+                stage_coeff_set_names=("explicit",),
+                stage_coeff_sets={
+                    "explicit": self.a_explicit},
+                rhs_funcs={"explicit": var("<func>"+self.component_id)},
+                estimate_coeff_set_names=estimate_names,
+                estimate_coeff_sets={
+                    "high_order": self.high_order_coeffs,
+                    "low_order": self.low_order_coeffs
+                    })
+
+    def finish(self, cb, estimate_coeff_set_names, estimate_coeff_sets):
+        if not self.adaptive:
+            super(EmbeddedButcherTableauMethod, self).finish(
+                    cb, estimate_coeff_set_names, estimate_coeff_sets)
+        else:
+            high_est = estimate_coeff_sets[
+                    estimate_coeff_set_names.index("high_order")]
+            low_est = estimate_coeff_sets[
+                    estimate_coeff_set_names.index("low_order")]
+            self.finish_adaptive(cb, high_est, low_est)
+
+    def finish_nonadaptive(self, cb, high_order_estimate, low_order_estimate):
+        if self.use_high_order:
+            est = high_order_estimate
+        else:
+            est = low_order_estimate
+
+        cb(self.state, est)
+        cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
 
 # }}}
 
 
 # {{{ Bogacki-Shampine second/third-order Runge-Kutta
 
-class ODE23TimeStepper(EmbeddedButcherTableauMethod):
+class ODE23Method(EmbeddedButcherTableauMethod):
     """Bogacki-Shampine second/third-order Runge-Kutta.
 
     (same as Matlab's ode23)
@@ -261,11 +456,13 @@ class ODE23TimeStepper(EmbeddedButcherTableauMethod):
     http://dx.doi.org/10.1016/0893-9659(89)90079-7
     """
 
-    butcher_tableau = [
-            (0, []),
-            (1/2, [1/2]),
-            (3/4, [0, 3/4]),
-            (1, [2/9, 1/3, 4/9])
+    c = [0, 1/2, 3/4, 1]
+
+    a_explicit = [
+            [],
+            [1/2],
+            [0, 3/4],
+            [2/9, 1/3, 4/9],
             ]
 
     low_order = 2
@@ -273,12 +470,14 @@ class ODE23TimeStepper(EmbeddedButcherTableauMethod):
     high_order = 3
     high_order_coeffs = [2/9, 1/3, 4/9, 0]
 
+    recycle_last_stage = True
+
 # }}}
 
 
 # {{{ Dormand-Prince fourth/fifth-order Runge-Kutta
 
-class ODE45TimeStepper(EmbeddedButcherTableauMethod):
+class ODE45Method(EmbeddedButcherTableauMethod):
     """Dormand-Prince fourth/fifth-order Runge-Kutta.
 
     (same as Matlab's ode45)
@@ -288,14 +487,15 @@ class ODE45TimeStepper(EmbeddedButcherTableauMethod):
     http://dx.doi.org/10.1016/0771-050X(80)90013-3.
     """
 
-    butcher_tableau = [
-            (0, []),
-            (1/5, [1/5]),
-            (3/10, [3/40, 9/40]),
-            (4/5, [44/45, -56/15, 32/9]),
-            (8/9, [19372/6561, -25360/2187, 64448/6561, -212/729]),
-            (1, [9017/3168, -355/33, 46732/5247, 49/176, -5103/18656]),
-            (1, [35/384, 0, 500/1113, 125/192, -2187/6784, 11/84])
+    c = [0, 1/5, 3/10, 4/5, 8/9, 1, 1]
+    a_explicit = [
+            [],
+            [1/5],
+            [3/40, 9/40],
+            [44/45, -56/15, 32/9],
+            [19372/6561, -25360/2187, 64448/6561, -212/729],
+            [9017/3168, -355/33, 46732/5247, 49/176, -5103/18656],
+            [35/384, 0, 500/1113, 125/192, -2187/6784, 11/84]
             ]
 
     low_order = 4
@@ -304,12 +504,14 @@ class ODE45TimeStepper(EmbeddedButcherTableauMethod):
     high_order = 5
     high_order_coeffs = [35/384, 0, 500/1113, 125/192, -2187/6784, 11/84, 0]
 
+    recycle_last_stage = True
+
 # }}}
 
 
 # {{{ Carpenter/Kennedy low-storage fourth-order Runge-Kutta
 
-class LSRK4TimeStepper(Method):
+class LSRK4Method(Method):
     """A low storage fourth-order Runge-Kutta method
 
     See JSH, TW: Nodal Discontinuous Galerkin Methods p.64
@@ -389,7 +591,7 @@ class LSRK4TimeStepper(Method):
                 new_state_expr = state + b * residual
 
                 if self.limiter is not None:
-                    new_state_expr = self.limiter({comp_id: new_state_expr})
+                    new_state_expr = self.limiter(**{comp_id: new_state_expr})
 
                 cb.fence()
                 cb(state, new_state_expr)

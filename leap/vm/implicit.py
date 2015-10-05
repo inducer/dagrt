@@ -1,3 +1,5 @@
+from __future__ import division
+
 """Implicit solver utilities"""
 
 __copyright__ = """
@@ -87,7 +89,10 @@ class ScipySolverGenerator(object):
 
         # Find global arguments.
         from leap.vm.utils import is_state_variable
-        is_global = lambda var: is_state_variable(var) or var.startswith("<func>")
+
+        def is_global(var):
+            return is_state_variable(var) or var.startswith("<func>")
+
         self.global_args = tuple(var for var in sorted(variables) if is_global(var))
 
         # Find free arguments.
@@ -224,7 +229,7 @@ class ScipySolverGenerator(object):
         return exec_in_new_namespace(code)[name]
 
 
-def replace_AssignSolved(dag, *solver_hooks):
+def replace_AssignSolved(dag, solver_hooks):
     """
     :arg dag: The :class:`TimeIntegratorCode` instance
     :arg solver_hooks: A map from solver names to expression generators

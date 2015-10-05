@@ -313,8 +313,12 @@ class _RenameVariableMapper(IdentityMapper):
         self.rename_func = rename_func
 
     def map_variable(self, expr):
-        from pymbolic import var
-        return var(self.rename_func(expr.name))
+        renamed = self.rename_func(expr.name)
+        if renamed is None:
+            return expr
+        else:
+            from pymbolic import var
+            return var(renamed)
 
 
 def substitute(expr, substitution_dict):
@@ -323,7 +327,7 @@ def substitute(expr, substitution_dict):
     """
     renamer = _RenameVariableMapper(lambda s: substitution_dict[s]
                                     if s in substitution_dict
-                                    else s)
+                                    else None)
     return renamer(expr)
 
 

@@ -255,7 +255,10 @@ class AssignSolved(AssignmentBase):
         #  2. values in other_params
         #  3. condition
         from itertools import chain
-        flatten = lambda iter_arg: chain(*list(iter_arg))
+
+        def flatten(iter_arg):
+            return chain(*list(iter_arg))
+
         variables = frozenset()
         variables |= set(flatten(get_variables(expr) for expr in self.expressions))
         variables -= set(self.solve_variables)
@@ -583,7 +586,10 @@ class TimeIntegratorCode(RecordWithoutPickling):
             for dep_id in insn.depends_on:
                 print_insn(self.id_to_insn[dep_id])
 
-            lines.append("    {%s} %s" % (insn.id, insn))
+            lines.append(
+                    "    {%s} %s" % (
+                        insn.id,
+                        str(insn).replace("\n", "\n        ")))
 
         for state_name, state in six.iteritems(self.states):
             printed_insn_ids = set()
