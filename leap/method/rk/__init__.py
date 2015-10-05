@@ -144,7 +144,8 @@ class ButcherTableauMethod(Method):
 
         with CodeBuilder(label="initialization") as cb:
             for name in stage_coeff_set_names:
-                if (self.recycle_last_stage
+                if (
+                        name in self.recycle_last_stage_coeff_set_names
                         and _is_first_stage_same_as_last_stage(
                         self.c, stage_coeff_sets[name])):
                     last_rhss[name] = var("<p>last_rhs_" + name)
@@ -183,7 +184,7 @@ class ButcherTableauMethod(Method):
                     my_rhs = stage_rhs_vars[name][istage]
 
                     if (
-                            self.recycle_last_stage
+                            name in self.recycle_last_stage_coeff_set_names
                             and istage == 0
                             and _is_first_stage_same_as_last_stage(
                                 self.c, stage_coeff_sets[name])):
@@ -195,7 +196,7 @@ class ButcherTableauMethod(Method):
 
                         state_increment = 0
                         for src_name in stage_coeff_set_names:
-                            coeffs = stage_coeff_sets[name][istage]
+                            coeffs = stage_coeff_sets[src_name][istage]
                             for src_istage, coeff in enumerate(coeffs):
                                 rhsval = stage_rhs_vars[src_name][src_istage]
                                 if rhsval not in knowns:
@@ -297,7 +298,7 @@ class ButcherTableauMethod(Method):
 
             for name in stage_coeff_set_names:
                 if (
-                        self.recycle_last_stage
+                        name in self.recycle_last_stage_coeff_set_names
                         and _is_first_stage_same_as_last_stage(
                             self.c, stage_coeff_sets[name])):
                     cb(last_rhss[name], stage_rhs_vars[name][-1])
@@ -346,7 +347,7 @@ class MidpointMethod(SimpleButcherTableauMethod):
 
     output_coeffs = (0, 1)
 
-    recycle_last_stage = False
+    recycle_last_stage_coeff_set_names = ()
 
 
 class HeunsMethod(SimpleButcherTableauMethod):
@@ -359,7 +360,7 @@ class HeunsMethod(SimpleButcherTableauMethod):
 
     output_coeffs = (1/2, 1/2)
 
-    recycle_last_stage = False
+    recycle_last_stage_coeff_set_names = ()
 
 
 class RK4Method(SimpleButcherTableauMethod):
@@ -374,7 +375,7 @@ class RK4Method(SimpleButcherTableauMethod):
 
     output_coeffs = (1/6, 1/3, 1/3, 1/6)
 
-    recycle_last_stage = False
+    recycle_last_stage_coeff_set_names = ()
 
 # }}}
 
@@ -470,7 +471,7 @@ class ODE23Method(EmbeddedButcherTableauMethod):
     high_order = 3
     high_order_coeffs = [2/9, 1/3, 4/9, 0]
 
-    recycle_last_stage = True
+    recycle_last_stage_coeff_set_names = ("explicit",)
 
 # }}}
 
@@ -504,7 +505,7 @@ class ODE45Method(EmbeddedButcherTableauMethod):
     high_order = 5
     high_order_coeffs = [35/384, 0, 500/1113, 125/192, -2187/6784, 11/84, 0]
 
-    recycle_last_stage = True
+    recycle_last_stage_coeff_set_names = ("explicit",)
 
 # }}}
 

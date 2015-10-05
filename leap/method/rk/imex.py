@@ -175,7 +175,7 @@ class KennedyCarpenterIMEXARK4Method(KennedyCarpenterIMEXRungeKuttaMethodBase):
             [82889/524892, 0, 15625/83664, 69875/102672,
                 -2260/8211, gamma]]
 
-    recycle_last_stage = True
+    recycle_last_stage_coeff_set_names = ("implicit",)
 
     assert (len(a_explicit) == len(a_implicit)
             == len(low_order_coeffs)
