@@ -103,14 +103,14 @@ class KennedyCarpenterIMEXRungeKuttaMethodBase(
                     "low_order": self.low_order_coeffs
                     })
 
-    def finish(self, cb, estimate_coeff_set_names, estimate_coeff_sets):
+    def finish(self, cb, estimate_coeff_set_names, estimate_vars):
         if not self.adaptive:
             super(KennedyCarpenterIMEXRungeKuttaMethodBase, self).finish(
-                    cb, estimate_coeff_set_names, estimate_coeff_sets)
+                    cb, estimate_coeff_set_names, estimate_vars)
         else:
-            high_est = estimate_coeff_sets[
+            high_est = estimate_vars[
                     estimate_coeff_set_names.index("high_order")]
-            low_est = estimate_coeff_sets[
+            low_est = estimate_vars[
                     estimate_coeff_set_names.index("low_order")]
             self.finish_adaptive(cb, high_est, low_est)
 
