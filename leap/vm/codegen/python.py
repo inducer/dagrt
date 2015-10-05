@@ -59,8 +59,12 @@ class StateComputed(namedtuple("StateComputed",
 
 class StepCompleted(
         namedtuple("StepCompleted",
-            ["t", "current_state", "next_state"])):
+            ["dt", "t", "current_state", "next_state"])):
     """
+    .. attribute:: dt
+
+        Size of next time step.
+
     .. attribute:: t
 
         Approximate integrator time at end of step.
@@ -368,7 +372,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
             with Indentation(emit):
                 emit('self.next_state = evt.next_state')
 
-            emit('yield self.StepCompleted(t=self.t, '
+            emit('yield self.StepCompleted(dt=self.dt, t=self.t, '
                 'current_state=cur_state, next_state=self.next_state)')
 
             emit('n_steps += 1')

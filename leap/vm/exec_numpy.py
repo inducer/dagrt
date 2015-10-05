@@ -67,8 +67,12 @@ class NumpyInterpreter(object):
 
     class StepCompleted(
             namedtuple("StepCompleted",
-                ["t", "current_state", "next_state"])):
+                ["dt", "t", "current_state", "next_state"])):
         """
+        .. attribute:: dt
+
+            Size of next time step.
+
         .. attribute:: t
 
             Approximate integrator time at end of step.
@@ -202,6 +206,7 @@ class NumpyInterpreter(object):
                 self.next_state = evt.next_state
 
             yield self.StepCompleted(
+                    dt=self.context["<dt>"],
                     t=self.context["<t>"],
                     current_state=cur_state,
                     next_state=self.next_state)
