@@ -122,6 +122,8 @@ class KennedyCarpenterIMEXRungeKuttaMethodBase(
 
         cb(self.state, est)
         cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
+        cb.fence()
+        cb(self.t, self.t + self.dt)
 
 
 class KennedyCarpenterIMEXARK4Method(KennedyCarpenterIMEXRungeKuttaMethodBase):

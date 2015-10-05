@@ -94,7 +94,7 @@ class DefaultProblem(Problem):
         return np.array([v, -u / t ** 2], dtype=np.float64)
 
 
-_default_dts = 0.5*2 ** -np.array(range(4, 7), dtype=np.float64)
+_default_dts = 2 ** -np.array(range(4, 7), dtype=np.float64)
 
 
 def check_simple_convergence(method, method_impl, expected_order,

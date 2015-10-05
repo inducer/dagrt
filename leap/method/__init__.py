@@ -111,6 +111,7 @@ class TwoOrderAdaptiveMethod(Method):
             if self.limiter is not None:
                 cb(high_order_estimate, self.limiter(high_order_estimate))
 
+            # This updates <t>: <dt> should not be set before this is called.
             self.finish_nonadaptive(cb, high_order_estimate, low_order_estimate)
 
             cb.fence()

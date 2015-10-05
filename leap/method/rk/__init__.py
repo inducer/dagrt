@@ -291,11 +291,11 @@ class ButcherTableauMethod(Method):
 
             cb.fence()
 
+            # This updates <t>.
             self.finish(cb, estimate_coeff_set_names, estimate_vars)
 
             # These updates have to happen *after* finish because before we
             # don't yet know whether finish will accept the new state.
-
             for name in stage_coeff_set_names:
                 if (
                         name in self.recycle_last_stage_coeff_set_names
@@ -304,7 +304,6 @@ class ButcherTableauMethod(Method):
                     cb(last_rhss[name], stage_rhs_vars[name][-1])
 
             cb.fence()
-            cb(self.t, self.t + self.dt)
 
         cb_primary = cb
 
@@ -318,6 +317,8 @@ class ButcherTableauMethod(Method):
     def finish(self, cb, estimate_names, estimate_vars):
         cb(self.state, estimate_vars[0])
         cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
+        cb.fence()
+        cb(self.t, self.t + self.dt)
 
 # }}}
 
@@ -441,6 +442,8 @@ class EmbeddedButcherTableauMethod(ButcherTableauMethod, TwoOrderAdaptiveMethod)
 
         cb(self.state, est)
         cb.yield_state(self.state, self.component_id, self.t + self.dt, 'final')
+        cb.fence()
+        cb(self.t, self.t + self.dt)
 
 # }}}
 

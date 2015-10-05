@@ -118,7 +118,6 @@ def test_adaptive(python_method_impl, problem, method):
     for atol in tols:
         generator = method(_component_id, atol=atol)
         code = generator.generate()
-        print(code)
 
         sgen = ScipySolverGenerator(*generator.implicit_expression())
         from leap.vm.implicit import replace_AssignSolved
