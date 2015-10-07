@@ -50,7 +50,8 @@ class KennedyCarpenterIMEXRungeKuttaMethodBase(
 
     def __init__(self, component_id, use_high_order=True, limiter_name=None,
             use_explicit=True, use_implicit=True,
-            atol=0, rtol=0, max_dt_growth=None, min_dt_shrinkage=None):
+            atol=0, rtol=0, max_dt_growth=None, min_dt_shrinkage=None,
+            implicit_rhs_name=None, explicit_rhs_name=None):
         ButcherTableauMethod.__init__(
                 self,
                 component_id=component_id,
@@ -63,16 +64,25 @@ class KennedyCarpenterIMEXRungeKuttaMethodBase(
                 max_dt_growth=max_dt_growth,
                 min_dt_shrinkage=min_dt_shrinkage)
 
+        if explicit_rhs_name is None:
+            explicit_rhs_name = "expl_" + component_id
+        if implicit_rhs_name is None:
+            implicit_rhs_name = "impl_" + component_id
+
+        self.explicit_rhs_name = explicit_rhs_name
+        self.implicit_rhs_name = implicit_rhs_name
+
         self.use_high_order = use_high_order
         self.use_explicit = use_explicit
         self.use_implicit = use_implicit
 
     def implicit_expression(self, expression_tag=None):
         from leap.vm.expression import parse
-        return (parse("`solve_component` - `<func>impl_{component_id}`("
+        return (parse("`solve_component` - `<func>{implicit_rhs_name}`("
             "t=t, {component_id}="
             "`{state}` + sub_y + coeff * `solve_component`)".format(
                 component_id=self.component_id,
+                implicit_rhs_name=self.implicit_rhs_name,
                 state=self.state.name)), "solve_component")
 
     def generate(self):
@@ -94,8 +104,8 @@ class KennedyCarpenterIMEXRungeKuttaMethodBase(
                     "implicit": self.a_implicit,
                     },
                 rhs_funcs={
-                    "implicit": var("<func>impl_"+self.component_id),
-                    "explicit": var("<func>expl_"+self.component_id),
+                    "implicit": var("<func>"+self.implicit_rhs_name),
+                    "explicit": var("<func>"+self.explicit_rhs_name),
                     },
                 estimate_coeff_set_names=estimate_names,
                 estimate_coeff_sets={

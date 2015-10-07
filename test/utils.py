@@ -117,8 +117,7 @@ def check_simple_convergence(method, method_impl, expected_order,
         final_t = problem.t_end
 
         interp = method_impl(code, function_map={
-            "<func>" + component_id: problem,  # for most methods
-            "<func>expl_" + component_id: problem,  # for IMEX
+            "<func>" + component_id: problem,
             })
         interp.set_up(t_start=t, dt_start=dt, context={component_id: y})
 

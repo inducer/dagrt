@@ -56,7 +56,8 @@ from utils import (  # noqa
     (HeunsMethod("y"), 2),
     (RK4Method("y"), 4),
     (LSRK4Method("y"), 4),
-    (KennedyCarpenterIMEXARK4Method("y", use_implicit=False), 4),
+    (KennedyCarpenterIMEXARK4Method("y", use_implicit=False,
+        explicit_rhs_name="y"), 4),
     ])
 def test_rk_accuracy(python_method_impl, method, expected_order,
                      show_dag=False, plot_solution=False):
@@ -73,6 +74,8 @@ def test_rk_accuracy(python_method_impl, method, expected_order,
 @pytest.mark.parametrize("method", [
     ODE23Method("y", rtol=1e-6),
     ODE45Method("y", rtol=1e-6),
+    KennedyCarpenterIMEXARK4Method("y", rtol=1e-6, use_implicit=False,
+        explicit_rhs_name="y"),
     ])
 def test_adaptive_timestep(python_method_impl, method, show_dag=False,
                            plot=False):
