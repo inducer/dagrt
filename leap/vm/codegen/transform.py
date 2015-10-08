@@ -48,7 +48,9 @@ def eliminate_self_dependencies(dag):
         from leap.vm.language import AssignExpression
         from pymbolic import var
         for var_name in read_and_written:
-            tmp_var_name = var_name_gen("temp_" + var_name)
+            tmp_var_name = var_name_gen(
+                    "temp_"
+                    + var_name.replace("<", "_").replace(">", "_"))
             substs.append((var_name, var(tmp_var_name)))
 
             tmp_insn_id = insn_id_gen("temp")
