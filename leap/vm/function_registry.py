@@ -449,7 +449,7 @@ class _ODERightHandSide(Function):
                 self.arg_names[1:], arg_kinds[1:], self.input_component_ids):
             if arg_kind_passed is None and not check:
                 pass
-            elif not (isinstance(arg_kind_passed, ODEComponent)
+            elif check and not (isinstance(arg_kind_passed, ODEComponent)
                     and arg_kind_passed.component_id == input_component_id):
                 raise TypeError("argument '%s' of '%s' is not an ODE component "
                         "with component ID '%s'"
