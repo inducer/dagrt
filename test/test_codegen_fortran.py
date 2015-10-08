@@ -87,7 +87,7 @@ def run_fortran(sources, fortran_options=[]):
         if stdout_data:
             print("Fortran code said this on stdout: -----------------------------",
                     file=sys.stderr)
-            print(stdout_data, file=sys.stderr)
+            print(stdout_data.decode(), file=sys.stderr)
             print("---------------------------------------------------------------",
                     file=sys.stderr)
 
