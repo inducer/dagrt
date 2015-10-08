@@ -119,6 +119,13 @@ class SymbolKindTable(object):
                 "<dt>": Scalar(is_real_valued=True),
                 }
         self.per_function_table = {}
+        self._changed = False
+
+    def reset_change_flag(self):
+        self._changed = False
+
+    def is_changed(self):
+        return self._changed
 
     def set(self, func_name, name, kind):
         if is_state_variable(name):
@@ -138,7 +145,9 @@ class SymbolKindTable(object):
                             repr(kind),
                             repr(tbl[name])))
                 else:
-                    tbl[name] = kind
+                    if tbl[name] != kind:
+                        self._changed = True
+                        tbl[name] = kind
 
         else:
             tbl[name] = kind
@@ -380,13 +389,6 @@ class SymbolKindFinder(object):
 
         from .ast_ import get_instructions_in_ast
 
-        insn_queue = []
-        for name, func in zip(names, functions):
-            insn_queue.extend((name, insn) for insn in get_instructions_in_ast(func))
-
-        insn_queue_push_buffer = []
-        made_progress = False
-
         def make_kim(func_name, check):
             return KindInferenceMapper(
                     result.global_table,
@@ -394,63 +396,78 @@ class SymbolKindFinder(object):
                     self.function_registry,
                     check=False)
 
-        while insn_queue or insn_queue_push_buffer:
-            if not insn_queue:
-                if not made_progress:
-                    print("Left-over instructions in kind inference:")
-                    for func_name, insn in insn_queue_push_buffer:
-                        print("[%s] %s" % (func_name, insn))
+        while True:
+            insn_queue = []
+            for name, func in zip(names, functions):
+                insn_queue.extend(
+                        (name, insn)
+                        for insn in get_instructions_in_ast(func))
 
-                        kim = make_kim(func_name, check=False)
+            insn_queue_push_buffer = []
+            made_progress = False
 
-                        try:
-                            if isinstance(insn, lang.AssignExpression):
-                                kim(insn.expression)
+            result.reset_change_flag()
 
-                            elif isinstance(insn, lang.AssignmentBase):
-                                raise TODO()
+            while insn_queue or insn_queue_push_buffer:
+                if not insn_queue:
+                    if not made_progress:
+                        print("Left-over instructions in kind inference:")
+                        for func_name, insn in insn_queue_push_buffer:
+                            print("[%s] %s" % (func_name, insn))
 
+                            kim = make_kim(func_name, check=False)
+
+                            try:
+                                if isinstance(insn, lang.AssignExpression):
+                                    kim(insn.expression)
+
+                                elif isinstance(insn, lang.AssignmentBase):
+                                    raise TODO()
+
+                                else:
+                                    pass
+                            except UnableToInferKind as e:
+                                print("  -> %s" % str(e))
                             else:
-                                pass
-                        except UnableToInferKind as e:
-                            print("  -> %s" % str(e))
-                        else:
-                            # We aren't supposed to get here. Kind inference
-                            # didn't succeed earlier. Since we made no progress,
-                            # it shouldn't succeed now.
-                            assert False
+                                # We aren't supposed to get here. Kind inference
+                                # didn't succeed earlier. Since we made no progress,
+                                # it shouldn't succeed now.
+                                assert False
 
-                    raise RuntimeError("failed to infer kinds")
+                        raise RuntimeError("failed to infer kinds")
 
-                insn_queue = insn_queue_push_buffer
-                insn_queue_push_buffer = []
-                made_progress = False
+                    insn_queue = insn_queue_push_buffer
+                    insn_queue_push_buffer = []
+                    made_progress = False
 
-            func_name, insn = insn_queue.pop()
+                func_name, insn = insn_queue.pop()
 
-            if isinstance(insn, lang.AssignExpression):
-                kim = make_kim(func_name, check=False)
+                if isinstance(insn, lang.AssignExpression):
+                    kim = make_kim(func_name, check=False)
 
-                for ident, _, _ in insn.loops:
-                    result.set(func_name, ident, kind=Integer())
+                    for ident, _, _ in insn.loops:
+                        result.set(func_name, ident, kind=Integer())
 
-                if insn.assignee_subscript:
-                    continue
+                    if insn.assignee_subscript:
+                        continue
 
-                try:
-                    kind = kim(insn.expression)
-                except UnableToInferKind:
-                    insn_queue_push_buffer.append((func_name, insn))
+                    try:
+                        kind = kim(insn.expression)
+                    except UnableToInferKind:
+                        insn_queue_push_buffer.append((func_name, insn))
+                    else:
+                        made_progress = True
+                        result.set(func_name, insn.assignee, kind=kind)
+
+                elif isinstance(insn, lang.AssignmentBase):
+                    raise TODO()
+
                 else:
-                    made_progress = True
-                    result.set(func_name, insn.assignee, kind=kind)
+                    # We only care about assignments.
+                    pass
 
-            elif isinstance(insn, lang.AssignmentBase):
-                raise TODO()
-
-            else:
-                # We only care about assignments.
-                pass
+            if not result.is_changed():
+                break
 
         # {{{ check consistency of obtained kinds
 
