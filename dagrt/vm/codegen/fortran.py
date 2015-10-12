@@ -224,7 +224,7 @@ class CallCode(object):
             code_generator.declaration_emitter(decl_without_name + " :: " + new_name)
             return new_name
 
-        import leap.vm.codegen.data as kinds
+        import dagrt.vm.codegen.data as kinds
 
         template_names = dict(
                 result=result,
@@ -789,7 +789,7 @@ class CodeGenerator(StructuredCodeGenerator):
         dag = isolate_function_calls(dag)
         dag = expand_IfThenElse(dag)
 
-        # from leap.vm.language import show_dependency_graph
+        # from dagrt.vm.language import show_dependency_graph
         # show_dependency_graph(dag)
 
         # {{{ produce function name / function AST pairs

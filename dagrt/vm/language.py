@@ -81,7 +81,7 @@ following special variable names are supported:
 The latter two serve to separate the name space used by the method from that
 under the control of the user.
 
-See :module:`leap.vm.function_registry` for interpretation of function names.
+See :module:`dagrt.vm.function_registry` for interpretation of function names.
 The function namespace and the variable namespace are distinct. No user-defined
 identifiers should start with `leap_`.
 

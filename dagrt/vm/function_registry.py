@@ -54,12 +54,12 @@ class Function(RecordWithoutPickling):
                 **kwargs)
 
     def get_result_kind(self, arg_kinds, check):
-        """Return the :class:`leap.vm.codegen.data.SymbolKind` this function
+        """Return the :class:`dagrt.vm.codegen.data.SymbolKind` this function
         returns if arguments of the kinds *arg_kinds* are supplied.
 
         :arg arg_kinds: a dictionary mapping numbers (for positional arguments)
             or identifiers (for keyword arguments) to
-            :class:`leap.vm.codegen.data.SymbolKind` instances indicating the
+            :class:`dagrt.vm.codegen.data.SymbolKind` instances indicating the
             types of the arguments being passed to the function.
             Some elements of *arg_kinds* may be None if their kinds
             have yet not been determined.
@@ -386,7 +386,7 @@ def _make_bfr():
             _PythonBuiltinFunctionCodeGenerator(
                 func, py_pattern))
 
-    import leap.vm.codegen.fortran as f
+    import dagrt.vm.codegen.fortran as f
 
     bfr = bfr.register_codegen(_Norm2.identifier, "fortran",
             f.codegen_builtin_norm_2)

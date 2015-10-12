@@ -42,7 +42,7 @@ class TransitionEvent(Exception):
 
 class NumpyInterpreter(object):
     """A :mod:`numpy`-targeting interpreter for the time integration language
-    defined in :mod:`leap.vm.language`.
+    defined in :mod:`dagrt.vm.language`.
 
     .. attribute:: next_state
 
@@ -91,7 +91,7 @@ class NumpyInterpreter(object):
 
     def __init__(self, code, function_map):
         """
-        :arg code: an instance of :class:`leap.vm.TimeIntegratorCode`
+        :arg code: an instance of :class:`dagrt.vm.TimeIntegratorCode`
         :arg function_map: a mapping from function identifiers to functions
         """
         self.code = code

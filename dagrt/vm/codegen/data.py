@@ -29,7 +29,7 @@ THE SOFTWARE.
 
 from dagrt.vm.utils import TODO
 
-import leap.vm.language as lang
+import dagrt.vm.language as lang
 from dagrt.vm.utils import is_state_variable
 from pytools import RecordWithoutPickling
 from pymbolic.mapper import Mapper
@@ -237,7 +237,7 @@ class KindInferenceMapper(Mapper):
 
     .. attribute:: local_table
 
-        The :class:`SymbolKindTable` for the :class:`leap.vm.ir.Function`
+        The :class:`SymbolKindTable` for the :class:`dagrt.vm.ir.Function`
         currently being processed.
     """
 
