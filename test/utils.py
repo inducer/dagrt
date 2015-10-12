@@ -30,12 +30,12 @@ import numpy as np
 # {{{ things to pass for python_method_impl
 
 def python_method_impl_interpreter(code, **kwargs):
-    from leap.vm.exec_numpy import NumpyInterpreter
+    from dagrt.vm.exec_numpy import NumpyInterpreter
     return NumpyInterpreter(code, **kwargs)
 
 
 def python_method_impl_codegen(code, **kwargs):
-    from leap.vm.codegen import PythonCodeGenerator
+    from dagrt.vm.codegen import PythonCodeGenerator
     codegen = PythonCodeGenerator(class_name='Method')
     return codegen.get_class(code)(**kwargs)
 
@@ -105,7 +105,7 @@ def check_simple_convergence(method, method_impl, expected_order,
     print(code)
 
     if show_dag:
-        from leap.vm.language import show_dependency_graph
+        from dagrt.vm.language import show_dependency_graph
         show_dependency_graph(code)
 
     from pytools.convergence import EOCRecorder

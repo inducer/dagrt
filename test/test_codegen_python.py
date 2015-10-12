@@ -30,9 +30,9 @@ import pytest
 import numpy.linalg as la
 import numpy as np
 
-from leap.vm.language import AssignExpression, YieldState, FailStep, Raise, Nop
-from leap.vm.language import CodeBuilder, TimeIntegratorCode
-from leap.vm.codegen import PythonCodeGenerator
+from dagrt.vm.language import AssignExpression, YieldState, FailStep, Raise, Nop
+from dagrt.vm.language import CodeBuilder, TimeIntegratorCode
+from dagrt.vm.codegen import PythonCodeGenerator
 from pymbolic import var
 
 from utils import (  # noqa
@@ -141,7 +141,7 @@ def test_basic_assign_rhs_codegen():
 def test_basic_raise_codegen():
     """Test code generation of the Raise instruction."""
     cbuild = RawCodeBuilder()
-    from leap.method import TimeStepUnderflow
+    class TimeStepUnderflow(RuntimeError): pass
     cbuild.add_and_get_ids(Raise(TimeStepUnderflow, "underflow", id="raise"))
     cbuild.commit()
     code = TimeIntegratorCode.create_with_init_and_step(
@@ -263,7 +263,7 @@ def test_function_name_distinctness():
 
 
 def test_state_transitions(python_method_impl):
-    from leap.vm.language import CodeBuilder, TimeIntegratorState
+    from dagrt.vm.language import CodeBuilder, TimeIntegratorState
 
     with CodeBuilder(label="state_1") as builder_1:
         builder_1(var("<state>x"), 1)
@@ -288,7 +288,7 @@ def test_state_transitions(python_method_impl):
 
 
 def get_IfThenElse_test_code_and_expected_result():
-    from leap.vm.expression import IfThenElse
+    from dagrt.vm.expression import IfThenElse
 
     with CodeBuilder(label="primary") as cb:
         cb(var("c1"), IfThenElse(True, 0, 1))
@@ -320,7 +320,7 @@ def test_IfThenElse(python_method_impl):
 def test_IfThenElse_expansion(python_method_impl):
     from utils import execute_and_return_single_result
     code, expected_result = get_IfThenElse_test_code_and_expected_result()
-    from leap.vm.codegen.transform import expand_IfThenElse
+    from dagrt.vm.codegen.transform import expand_IfThenElse
     code = expand_IfThenElse(code)
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == expected_result

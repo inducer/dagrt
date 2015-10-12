@@ -26,9 +26,9 @@ THE SOFTWARE.
 
 import sys
 
-from leap.vm.language import AssignExpression, YieldState
-from leap.vm.language import TimeIntegratorCode
-from leap.vm.codegen import PythonCodeGenerator, CodeGenerationError
+from dagrt.vm.language import AssignExpression, YieldState
+from dagrt.vm.language import TimeIntegratorCode
+from dagrt.vm.codegen import PythonCodeGenerator, CodeGenerationError
 
 from pymbolic import var
 
@@ -88,7 +88,7 @@ def test_missing_dependency_detection():
 
 def test_missing_state_detection():
     """Check that the code generator detects there is a missing state."""
-    from leap.vm.language import CodeBuilder
+    from dagrt.vm.language import CodeBuilder
 
     with CodeBuilder(label="state_1") as cb:
         cb.state_transition("state_2")
@@ -96,7 +96,7 @@ def test_missing_state_detection():
     code = TimeIntegratorCode.create_with_steady_state(
         dep_on=cb.state_dependencies, instructions=cb.instructions)
 
-    from leap.vm.codegen.analysis import verify_code
+    from dagrt.vm.codegen.analysis import verify_code
     try:
         verify_code(code)
     except CodeGenerationError:
@@ -107,7 +107,7 @@ def test_missing_state_detection():
 
 def test_python_line_wrapping():
     """Check that the line wrapper breaks a line up correctly."""
-    from leap.vm.codegen.python import wrap_line
+    from dagrt.vm.codegen.python import wrap_line
     line = "x += str('' + x + y + zzzzzzzzz)"
     result = wrap_line(line, level=1, width=14, indentation='    ')
     assert result == ['x +=     \\', "    str(''\\", '    + x +\\',
@@ -116,7 +116,7 @@ def test_python_line_wrapping():
 
 def test_line_wrapping_line_with_string():
     """Check that the line wrapper doesn't break up strings."""
-    from leap.vm.codegen.fortran import wrap_line
+    from dagrt.vm.codegen.fortran import wrap_line
     line = "write(*,*) 'failed to allocate leap_state%leap_refcnt_p_last_rhs_y'"
     result = wrap_line(line, width=60)
     assert result == \
@@ -125,7 +125,7 @@ def test_line_wrapping_line_with_string():
 
 
 def test_KeyToUniqueNameMap():
-    from leap.vm.codegen.utils import KeyToUniqueNameMap
+    from dagrt.vm.codegen.utils import KeyToUniqueNameMap
 
     map_prefilled = KeyToUniqueNameMap(start={'a': 'b'})
     assert map_prefilled.get_or_make_name_for_key('a') == 'b'

@@ -25,11 +25,11 @@ THE SOFTWARE.
 """
 
 import sys
-from leap.vm.language import (CodeBuilder, TimeIntegratorCode)
+from dagrt.vm.language import (CodeBuilder, TimeIntegratorCode)
 from pymbolic import var
 
-from leap.vm.exec_numpy import NumpyInterpreter  # noqa
-from leap.vm.codegen import PythonCodeGenerator  # noqa
+from dagrt.vm.exec_numpy import NumpyInterpreter  # noqa
+from dagrt.vm.codegen import PythonCodeGenerator  # noqa
 
 from utils import (  # noqa
         python_method_impl_interpreter as pmi_int,

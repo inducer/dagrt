@@ -27,10 +27,10 @@ import sys
 
 from pymbolic.primitives import LogicalNot
 
-from leap.vm.codegen.ast_ import (IfThen, IfThenElse, Block, InstructionWrapper,
+from dagrt.vm.codegen.ast_ import (IfThen, IfThenElse, Block, InstructionWrapper,
                                   match_ast, declare, create_ast_from_state,
                                   simplify_ast)
-from leap.vm.language import Nop, TimeIntegratorCode
+from dagrt.vm.language import Nop, TimeIntegratorCode
 
 
 def test_create_ast():
@@ -111,7 +111,7 @@ def test_simplify():
         IfThenElse(p, 0, Block(1, 2))
 
     # Check that simplification respects redefinitions.
-    from leap.vm.language import AssignExpression
+    from dagrt.vm.language import AssignExpression
     redef = InstructionWrapper(AssignExpression("p", (), 10))
     input_same_as_output = lambda f, x: f(x) == x
     assert input_same_as_output(simplify_ast, Block(IfThen(p, redef), IfThen(p, 0)))

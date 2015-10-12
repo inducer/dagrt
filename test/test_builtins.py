@@ -28,8 +28,8 @@ import numpy as np
 import pytest
 import sys
 
-from leap.vm.language import AssignExpression, YieldState
-from leap.vm.language import TimeIntegratorCode
+from dagrt.vm.language import AssignExpression, YieldState
+from dagrt.vm.language import TimeIntegratorCode
 from pymbolic import var
 
 from utils import execute_and_return_single_result, RawCodeBuilder
