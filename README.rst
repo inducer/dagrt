@@ -9,5 +9,4 @@ operator fusion and versatile code generation.
 
 Resources:
 
-* `wiki home page <http://wiki.tiker.net/Leap>`_
 * `source code via git <https://github.com/inducer/dagrt>`_

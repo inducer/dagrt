@@ -31,6 +31,9 @@ def main():
               'Programming Language :: Python :: 3.4',
               'Topic :: Scientific/Engineering',
               'Topic :: Scientific/Engineering :: Mathematics',
+              'Topic :: Scientific/Engineering :: Information Analysis',
+              'Topic :: Scientific/Engineering :: Mathematics',
+              'Topic :: Scientific/Engineering :: Visualization',
               'Topic :: Software Development :: Libraries',
               'Topic :: Utilities',
               ],
@@ -41,6 +44,7 @@ def main():
               "pytools>=2014.1",
               "pymbolic>=2014.1",
               "pytest>=2.3",
+              "mako",
               "six",
               ],
           )
