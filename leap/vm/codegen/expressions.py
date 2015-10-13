@@ -23,7 +23,7 @@ THE SOFTWARE.
 """
 
 from pymbolic.mapper.stringifier import (
-        StringifyMapper, PREC_NONE, PREC_CALL)
+        StringifyMapper, PREC_NONE, PREC_CALL, PREC_PRODUCT)
 import numpy as np
 
 
@@ -94,6 +94,14 @@ class FortranExpressionMapper(StringifyMapper):
                     self.rec(expr.aggregate, PREC_CALL),
                     index_str),
                 enclosing_prec, PREC_CALL)
+
+    def map_product(self, expr, enclosing_prec, *args, **kwargs):
+        # This differs from the superclass only by adding spaces
+        # around the operator, which provide an opportunity for
+        # line breaking.
+        return self.parenthesize_if_needed(
+                self.join_rec(" * ", expr.children, PREC_PRODUCT, *args, **kwargs),
+                enclosing_prec, PREC_PRODUCT)
 
     def map_logical_not(self, expr, enclosing_prec):
         from pymbolic.mapper.stringifier import PREC_UNARY
