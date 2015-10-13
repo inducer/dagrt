@@ -1,4 +1,13 @@
 #! /usr/bin/env python
+import sys
+
+from pymbolic.primitives import LogicalNot
+
+from dagrt.codegen.ast import (IfThen, IfThenElse, Block, InstructionWrapper,
+                                 match_ast, declare, create_ast_from_state,
+                                 simplify_ast)
+from dagrt.language import Nop, TimeIntegratorCode
+
 
 __copyright__ = "Copyright (C) 2015 Matt Wala"
 
@@ -23,14 +32,8 @@ THE SOFTWARE.
 """
 
 
-import sys
 
-from pymbolic.primitives import LogicalNot
 
-from dagrt.vm.codegen.ast import (IfThen, IfThenElse, Block, InstructionWrapper,
-                                 match_ast, declare, create_ast_from_state,
-                                 simplify_ast)
-from dagrt.vm.language import Nop, TimeIntegratorCode
 
 
 def test_create_ast():
@@ -111,7 +114,7 @@ def test_simplify():
         IfThenElse(p, 0, Block(1, 2))
 
     # Check that simplification respects redefinitions.
-    from dagrt.vm.language import AssignExpression
+    from dagrt.language import AssignExpression
     redef = InstructionWrapper(AssignExpression("p", (), 10))
     input_same_as_output = lambda f, x: f(x) == x
     assert input_same_as_output(simplify_ast, Block(IfThen(p, redef), IfThen(p, 0)))

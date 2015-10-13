@@ -1,6 +1,15 @@
 #! /usr/bin/env python
-
 from __future__ import division, with_statement, print_function
+
+import sys
+import pytest
+
+from dagrt.language import YieldState
+from dagrt.language import TimeIntegratorCode, CodeBuilder
+import dagrt.codegen.fortran as f
+
+from utils import RawCodeBuilder
+
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
 
@@ -24,14 +33,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import sys
-import pytest
 
-from dagrt.vm.language import YieldState
-from dagrt.vm.language import TimeIntegratorCode, CodeBuilder
-import dagrt.vm.codegen.fortran as f
 
-from utils import RawCodeBuilder
 
 
 skip = pytest.mark.skipif(True, reason="not fully implemented")

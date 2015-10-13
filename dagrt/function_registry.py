@@ -1,5 +1,9 @@
 from __future__ import division, with_statement
 
+from pytools import RecordWithoutPickling
+from dagrt.codegen.data import (
+        ODEComponent, Integer, Boolean, Scalar, Array, UnableToInferKind)
+
 __copyright__ = """
 Copyright (C) 2013 Andreas Kloeckner
 Copyright (C) 2014 Matt Wala
@@ -25,9 +29,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools import RecordWithoutPickling
-from dagrt.vm.codegen.data import (
-        ODEComponent, Integer, Boolean, Scalar, Array, UnableToInferKind)
 
 NoneType = type(None)
 
@@ -63,7 +64,7 @@ class Function(RecordWithoutPickling):
                 **kwargs)
 
     def get_result_kinds(self, arg_kinds, check):
-        """Return a tuple of the :class:`dagrt.vm.codegen.data.SymbolKind`
+        """Return a tuple of the :class:`dagrt.codegen.data.SymbolKind`
         instances for the values this function returns if arguments of the
         kinds *arg_kinds* are supplied.
 
@@ -72,7 +73,7 @@ class Function(RecordWithoutPickling):
 
         :arg arg_kinds: a dictionary mapping numbers (for positional arguments)
             or identifiers (for keyword arguments) to
-            :class:`dagrt.vm.codegen.data.SymbolKind` instances indicating the
+            :class:`dagrt.codegen.data.SymbolKind` instances indicating the
             types of the arguments being passed to the function.
             Some elements of *arg_kinds* may be None if their kinds
             have yet not been determined.
@@ -102,7 +103,7 @@ class Function(RecordWithoutPickling):
                     % (self.identifier, language))
 
     def resolve_args(self, arg_dict):
-        from dagrt.vm.utils import resolve_args
+        from dagrt.utils import resolve_args
         return resolve_args(self.arg_names, self.default_dict, arg_dict)
 
 
@@ -407,7 +408,7 @@ def _make_bfr():
             _PythonBuiltinFunctionCodeGenerator(
                 func, py_pattern))
 
-    import dagrt.vm.codegen.fortran as f
+    import dagrt.codegen.fortran as f
 
     bfr = bfr.register_codegen(_Norm2.identifier, "fortran",
             f.codegen_builtin_norm_2)

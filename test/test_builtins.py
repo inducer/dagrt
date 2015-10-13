@@ -1,6 +1,16 @@
 #! /usr/bin/env python
-
 from __future__ import division, with_statement
+
+import numpy as np
+import pytest
+import sys
+
+from dagrt.language import AssignExpression, YieldState
+from dagrt.language import TimeIntegratorCode
+from pymbolic import var
+
+from utils import execute_and_return_single_result, RawCodeBuilder
+
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
@@ -24,15 +34,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import numpy as np
-import pytest
-import sys
 
-from dagrt.vm.language import AssignExpression, YieldState
-from dagrt.vm.language import TimeIntegratorCode
-from pymbolic import var
 
-from utils import execute_and_return_single_result, RawCodeBuilder
 
 
 @pytest.mark.parametrize(('obj, len_'), [(np.ones(0), 0),

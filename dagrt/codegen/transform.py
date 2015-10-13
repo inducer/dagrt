@@ -1,6 +1,9 @@
 """Some generic DAG transformation passes"""
-
 from __future__ import division
+
+import six
+from pymbolic.mapper import IdentityMapper
+
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -24,8 +27,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import six
-from pymbolic.mapper import IdentityMapper
 
 
 # {{{ eliminate self dependencies
@@ -45,7 +46,7 @@ def eliminate_self_dependencies(dag):
         substs = []
         tmp_insn_ids = []
 
-        from dagrt.vm.language import AssignExpression
+        from dagrt.language import AssignExpression
         from pymbolic import var
         for var_name in read_and_written:
             tmp_var_name = var_name_gen(
@@ -101,7 +102,7 @@ class FunctionArgumentIsolator(IdentityMapper):
         rec_result = self.rec(
                 expr, base_condition, base_deps, sub_extra_deps)
 
-        from dagrt.vm.language import AssignExpression
+        from dagrt.language import AssignExpression
         new_insn = AssignExpression(
                 tmp_var_name, (), rec_result,
                 condition=base_condition,
@@ -193,7 +194,7 @@ class FunctionCallIsolator(IdentityMapper):
             for par_name, par in rec_result.kw_parameters.items():
                 kw_parameters[par_name] = par
 
-        from dagrt.vm.language import AssignFunctionCall
+        from dagrt.language import AssignFunctionCall
         new_insn = AssignFunctionCall(
                 assignees=(tmp_var_name,),
                 function_id=rec_result.function.name,
@@ -239,7 +240,7 @@ def isolate_function_calls(dag):
     for insn in dag.instructions:
         new_deps = []
 
-        from dagrt.vm.language import AssignExpression
+        from dagrt.language import AssignExpression
         if isinstance(insn, AssignExpression):
             new_instructions.append(
                     insn
@@ -300,7 +301,7 @@ class IfThenElseExpander(IdentityMapper):
         rec_else = self.rec(expr.else_, else_condition,
                             base_deps | frozenset([if_insn_id]), sub_else_deps)
 
-        from dagrt.vm.language import AssignExpression
+        from dagrt.language import AssignExpression
 
         self.new_instructions.extend([
             AssignExpression(

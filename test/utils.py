@@ -1,6 +1,8 @@
 """Various usefulness"""
-
 from __future__ import division, with_statement
+
+import numpy as np
+
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
 
@@ -24,18 +26,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import numpy as np
 
 
 # {{{ things to pass for python_method_impl
 
 def python_method_impl_interpreter(code, **kwargs):
-    from dagrt.vm.exec_numpy import NumpyInterpreter
+    from dagrt.exec_numpy import NumpyInterpreter
     return NumpyInterpreter(code, **kwargs)
 
 
 def python_method_impl_codegen(code, **kwargs):
-    from dagrt.vm.codegen import PythonCodeGenerator
+    from dagrt.codegen import PythonCodeGenerator
     codegen = PythonCodeGenerator(class_name='Method')
     return codegen.get_class(code)(**kwargs)
 
@@ -105,7 +106,7 @@ def check_simple_convergence(method, method_impl, expected_order,
     print(code)
 
     if show_dag:
-        from dagrt.vm.language import show_dependency_graph
+        from dagrt.language import show_dependency_graph
         show_dependency_graph(code)
 
     from pytools.convergence import EOCRecorder

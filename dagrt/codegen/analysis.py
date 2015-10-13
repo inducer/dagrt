@@ -1,4 +1,7 @@
 """Analysis passes"""
+from pymbolic.mapper import Collector
+from dagrt.language import Instruction, YieldState, StateTransition
+
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
@@ -22,8 +25,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pymbolic.mapper import Collector
-from dagrt.vm.language import Instruction, YieldState, StateTransition
 
 
 # {{{ verifier

@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-
 from __future__ import division, with_statement
 
 __copyright__ = "Copyright (C) 2014, 2015 Matt Wala"
@@ -32,7 +31,7 @@ def test_collapse_constants():
     t = var("t")
     dt = var("dt")
     expr = y - f(t + dt, y)
-    from dagrt.vm.expression import collapse_constants
+    from dagrt.expression import collapse_constants
 
     def new_var_func():
         return var("var")
@@ -55,7 +54,7 @@ def test_match():
     lhs = y - h * f(t, y)
     rhs = - hh * f(tt, y) + y
 
-    from dagrt.vm.expression import match
+    from dagrt.expression import match
     subst = match(lhs, rhs, ["t", "h"])
     assert len(subst) == 2
     assert subst["h"] == hh
@@ -64,7 +63,7 @@ def test_match():
 
 def test_parse():
     from pymbolic import var
-    from dagrt.vm.expression import parse
+    from dagrt.expression import parse
     assert parse("1 + `<dt>`") == 1 + var("<dt>")
 
 
@@ -72,7 +71,7 @@ def test_get_variables():
     from pymbolic import var
     f = var('f')
     x = var('x')
-    from dagrt.vm.utils import get_variables
+    from dagrt.utils import get_variables
     assert get_variables(f(x)) == frozenset(['x'])
     assert get_variables(f(t=x)) == frozenset(['x'])
 
@@ -81,7 +80,7 @@ def test_get_variables_with_function_symbols():
     from pymbolic import var
     f = var('f')
     x = var('x')
-    from dagrt.vm.utils import get_variables
+    from dagrt.utils import get_variables
     assert get_variables(f(x), include_function_symbols=True) == \
         frozenset(['f', 'x'])
 

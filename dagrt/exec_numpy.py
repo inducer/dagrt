@@ -1,5 +1,11 @@
 from __future__ import division
 
+from collections import namedtuple
+import numpy as np
+from dagrt.expression import EvaluationMapper
+import six
+
+
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
 __license__ = """
@@ -22,10 +28,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from collections import namedtuple
-import numpy as np
-from dagrt.vm.expression import EvaluationMapper
-import six
 
 
 class FailStepException(Exception):
@@ -42,7 +44,7 @@ class TransitionEvent(Exception):
 
 class NumpyInterpreter(object):
     """A :mod:`numpy`-targeting interpreter for the time integration language
-    defined in :mod:`dagrt.vm.language`.
+    defined in :mod:`dagrt.language`.
 
     .. attribute:: next_state
 
@@ -91,11 +93,11 @@ class NumpyInterpreter(object):
 
     def __init__(self, code, function_map):
         """
-        :arg code: an instance of :class:`dagrt.vm.TimeIntegratorCode`
+        :arg code: an instance of :class:`dagrt.TimeIntegratorCode`
         :arg function_map: a mapping from function identifiers to functions
         """
         self.code = code
-        from dagrt.vm.language import ExecutionController
+        from dagrt.language import ExecutionController
         self.exec_controller = ExecutionController(code)
         self.context = {}
         self.next_state = self.code.initial_state
@@ -341,7 +343,7 @@ class StepMatrixFinder(object):
             variables = self._get_state_variables()
         self.variables = variables
 
-        from dagrt.vm.language import ExecutionController
+        from dagrt.language import ExecutionController
         self.exec_controller = ExecutionController(code)
         self.context = {}
 

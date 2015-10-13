@@ -1,6 +1,13 @@
 """Mini-type inference for leap methods"""
-
 from __future__ import division, with_statement, print_function
+
+from dagrt.utils import TODO
+
+import dagrt.language as lang
+from dagrt.utils import is_state_variable
+from pytools import RecordWithoutPickling
+from pymbolic.mapper import Mapper
+
 
 __copyright__ = """
 Copyright (C) 2013 Andreas Kloeckner
@@ -27,12 +34,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from dagrt.vm.utils import TODO
 
-import dagrt.vm.language as lang
-from dagrt.vm.utils import is_state_variable
-from pytools import RecordWithoutPickling
-from pymbolic.mapper import Mapper
 
 
 def _get_arg_dict_from_call_insn(insn):
@@ -247,7 +249,7 @@ class KindInferenceMapper(Mapper):
 
     .. attribute:: local_table
 
-        The :class:`SymbolKindTable` for the :class:`dagrt.vm.ir.Function`
+        The :class:`SymbolKindTable` for the :class:`dagrt.ir.Function`
         currently being processed.
     """
 

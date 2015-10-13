@@ -1,6 +1,22 @@
 """Fortran code generator"""
-
 from __future__ import division
+
+import sys
+from functools import partial
+import re  # noqa
+import six
+
+from .expressions import FortranExpressionMapper
+from .codegen_base import StructuredCodeGenerator
+from dagrt.utils import is_state_variable
+from pytools.py_codegen import (
+        # It's the same code. So sue me.
+        PythonCodeGenerator as FortranEmitterBase)
+from pymbolic.primitives import (Call, CallWithKwargs, Variable,
+        Subscript, Lookup)
+from pymbolic.mapper import IdentityMapper
+from .utils import wrap_line_base, KeyToUniqueNameMap
+
 
 __copyright__ = "Copyright (C) 2014 Matt Wala, Andreas Kloeckner"
 
@@ -24,21 +40,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import sys
-from functools import partial
-import re  # noqa
-import six
 
-from .expressions import FortranExpressionMapper
-from .codegen_base import StructuredCodeGenerator
-from dagrt.vm.utils import is_state_variable
-from pytools.py_codegen import (
-        # It's the same code. So sue me.
-        PythonCodeGenerator as FortranEmitterBase)
-from pymbolic.primitives import (Call, CallWithKwargs, Variable,
-        Subscript, Lookup)
-from pymbolic.mapper import IdentityMapper
-from .utils import wrap_line_base, KeyToUniqueNameMap
 
 
 def pad_fortran(line, width):
@@ -213,7 +215,7 @@ class CallCode(object):
 
     def __call__(self, results, function, arg_strings_dict, arg_kinds_dict,
             code_generator):
-        from dagrt.vm.codegen.utils import (
+        from dagrt.codegen.utils import (
                 remove_common_indentation,
                 remove_redundant_blank_lines)
 
@@ -228,7 +230,7 @@ class CallCode(object):
             code_generator.declaration_emitter(decl_without_name + " :: " + new_name)
             return new_name
 
-        import dagrt.vm.codegen.data as kinds
+        import dagrt.codegen.data as kinds
 
         template_names = dict(
                 real_scalar_kind=code_generator.real_scalar_kind,
@@ -282,7 +284,7 @@ class ODEComponentReferenceTransformer(IdentityMapper):
             raise TypeError("unsupported object")
 
     def map_variable(self, expr):
-        from dagrt.vm.codegen.data import ODEComponent
+        from dagrt.codegen.data import ODEComponent
         if isinstance(self.find_sym_kind(expr), ODEComponent):
             return self.transform(expr)
         else:
@@ -713,7 +715,7 @@ class CodeGenerator(StructuredCodeGenerator):
             string in Python. Leading indentation is removed.
         """
         if function_registry is None:
-            from dagrt.vm.function_registry import base_function_registry
+            from dagrt.function_registry import base_function_registry
             function_registry = base_function_registry
 
         self.module_name = module_name
@@ -722,7 +724,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.trace = trace
 
-        from dagrt.vm.codegen.utils import remove_common_indentation
+        from dagrt.codegen.utils import remove_common_indentation
         self.module_preamble = remove_common_indentation(module_preamble)
 
         self.real_scalar_kind = real_scalar_kind
@@ -736,7 +738,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.extra_arguments = extra_arguments
         if extra_argument_decl is not None:
-            from dagrt.vm.codegen.utils import remove_common_indentation
+            from dagrt.codegen.utils import remove_common_indentation
             extra_argument_decl = remove_common_indentation(
                 extra_argument_decl)
         self.extra_argument_decl = extra_argument_decl
@@ -796,7 +798,7 @@ class CodeGenerator(StructuredCodeGenerator):
         dag = isolate_function_calls(dag)
         dag = expand_IfThenElse(dag)
 
-        # from dagrt.vm.language import show_dependency_graph
+        # from dagrt.language import show_dependency_graph
         # show_dependency_graph(dag)
 
         # {{{ produce function name / function AST pairs
@@ -813,7 +815,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # }}}
 
-        from dagrt.vm.codegen.data import SymbolKindFinder
+        from dagrt.codegen.data import SymbolKindFinder
 
         self.sym_kind_table = SymbolKindFinder(self.function_registry)(
             [fd.name for fd in fdescrs],
@@ -826,7 +828,7 @@ class CodeGenerator(StructuredCodeGenerator):
             raise RuntimeError("ODE components with undeclared types: %r"
                     % (component_ids - set(self.ode_component_type_map)))
 
-        from dagrt.vm.codegen.data import Scalar, ODEComponent
+        from dagrt.codegen.data import Scalar, ODEComponent
         for comp_id in component_ids:
             self.sym_kind_table.set(
                     None, "<ret_time_id>"+comp_id, Scalar(is_real_valued=True))
@@ -932,11 +934,11 @@ class CodeGenerator(StructuredCodeGenerator):
         if emit is None:
             emit = self.emit
 
-        from dagrt.vm.codegen.data import Boolean, Scalar, Array, Integer
+        from dagrt.codegen.data import Boolean, Scalar, Array, Integer
 
         type_specifiers = other_specifiers
 
-        from dagrt.vm.codegen.data import ODEComponent
+        from dagrt.codegen.data import ODEComponent
         if isinstance(sym_kind, Boolean):
             type_name = 'logical'
 
@@ -985,7 +987,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 id=fortran_name))
 
     def emit_variable_init(self, name, sym_kind):
-        from dagrt.vm.codegen.data import ODEComponent
+        from dagrt.codegen.data import ODEComponent
         if isinstance(sym_kind, ODEComponent):
             comp_type = self.get_ode_component_type(sym_kind.component_id)
             InitializationEmitter(self)(comp_type, self.name_manager[name], {})
@@ -994,7 +996,7 @@ class CodeGenerator(StructuredCodeGenerator):
         fortran_name = self.name_manager[name]
         refcnt_name = self.name_manager.name_refcount(name)
 
-        from dagrt.vm.codegen.data import ODEComponent
+        from dagrt.codegen.data import ODEComponent
         if not isinstance(sym_kind, ODEComponent):
             return
 
@@ -1020,7 +1022,7 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_refcounted_allocation(self, sym, sym_kind):
         fortran_name = self.name_manager[sym]
 
-        from dagrt.vm.codegen.data import ODEComponent
+        from dagrt.codegen.data import ODEComponent
         if not isinstance(sym_kind, ODEComponent):
             return
 
@@ -1047,7 +1049,7 @@ class CodeGenerator(StructuredCodeGenerator):
         fortran_name = self.name_manager[sym]
         refcnt_name = self.name_manager.name_refcount(sym)
 
-        from dagrt.vm.codegen.data import ODEComponent
+        from dagrt.codegen.data import ODEComponent
         assert isinstance(sym_kind, ODEComponent)
 
         with FortranIfEmitter(
@@ -1110,7 +1112,7 @@ class CodeGenerator(StructuredCodeGenerator):
                         subscript_str=subscript_str,
                         expr=str(expr)[:50]))
 
-            from dagrt.vm.codegen.data import ODEComponent
+            from dagrt.codegen.data import ODEComponent
             if not isinstance(sym_kind, ODEComponent):
                 self.emit(
                         "{name}{subscript_str} = {expr}"
@@ -1200,7 +1202,7 @@ class CodeGenerator(StructuredCodeGenerator):
             # All our scalars are floating-point numbers for now,
             # so initializing them all to NaN is fine.
 
-            from dagrt.vm.codegen.data import Scalar
+            from dagrt.codegen.data import Scalar
             if sym.startswith("<ret") and isinstance(sym_kind, Scalar):
                 self.emit('{fortran_name} = leap_nan'.format(
                     fortran_name=tgt_fortran_name))
@@ -1219,7 +1221,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     self.emitter, 'present(%s)' % fortran_name, self):
                 self.emit_refcounted_allocation(sym, sym_kind)
 
-                from dagrt.vm.codegen.data import ODEComponent
+                from dagrt.codegen.data import ODEComponent
                 if not isinstance(sym_kind, ODEComponent):
                     self.emit(
                             "{lhs} = {rhs}"
@@ -1250,7 +1252,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.current_function = state_id
 
-        from dagrt.vm.codegen.data import ODEComponent
+        from dagrt.codegen.data import ODEComponent
 
         for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
             self.emit_variable_deinit(sym, sym_kind)
@@ -1408,7 +1410,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emitter.emit_else()
 
     def emit_assign_expr(self, assignee_sym, assignee_subscript, expr):
-        from dagrt.vm.codegen.data import ODEComponent, Array
+        from dagrt.codegen.data import ODEComponent, Array
 
         assignee_fortran_name = self.name_manager[assignee_sym]
 
@@ -1500,7 +1502,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         from pymbolic.mapper.dependency import DependencyMapper
         from pymbolic import var
-        from dagrt.vm.codegen.data import ODEComponent
+        from dagrt.codegen.data import ODEComponent
 
         for assignee_sym in inst.assignees:
             sym_kind = self.sym_kind_table.get(
@@ -1548,7 +1550,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 (),
                 inst.time)
 
-        from dagrt.vm.language import AssignFunctionCall
+        from dagrt.language import AssignFunctionCall
         from pymbolic import var
 
         if self.call_before_state_update:
@@ -1613,7 +1615,7 @@ def codegen_builtin_norm_2(results, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
     result, = results
 
-    from dagrt.vm.codegen.data import Scalar, ODEComponent, Array
+    from dagrt.codegen.data import Scalar, ODEComponent, Array
     x_kind = arg_kinds_dict[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
@@ -1657,7 +1659,7 @@ def codegen_builtin_len(results, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
     result, = results
 
-    from dagrt.vm.codegen.data import Scalar, Array, ODEComponent
+    from dagrt.codegen.data import Scalar, Array, ODEComponent
     x_kind = arg_kinds_dict[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
@@ -1694,7 +1696,7 @@ def codegen_builtin_isnan(results, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
     result, = results
 
-    from dagrt.vm.codegen.data import Scalar, ODEComponent
+    from dagrt.codegen.data import Scalar, ODEComponent
     x_kind = arg_kinds_dict[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:

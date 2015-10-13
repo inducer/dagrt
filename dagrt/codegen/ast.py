@@ -1,4 +1,10 @@
 """Abstract syntax"""
+from pymbolic.mapper import Collector, IdentityMapper
+from pymbolic.mapper.dependency import DependencyMapper
+from pymbolic.mapper.unifier import UnidirectionalUnifier
+from pymbolic.primitives import Expression, LogicalNot
+from dagrt.language import Nop
+
 
 __copyright__ = "Copyright (C) 2015 Matt Wala"
 
@@ -22,11 +28,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pymbolic.mapper import Collector, IdentityMapper
-from pymbolic.mapper.dependency import DependencyMapper
-from pymbolic.mapper.unifier import UnidirectionalUnifier
-from pymbolic.primitives import Expression, LogicalNot
-from dagrt.vm.language import Nop
 
 
 class IfThen(Expression):
@@ -194,7 +195,7 @@ def redefines(ast, expression):
     in the AST fragment `ast`.
     """
 
-    from dagrt.vm.utils import get_variables
+    from dagrt.utils import get_variables
     variables = get_variables(expression)
     # TODO: Cache results / copy caches over when copying AST fragments
     redefined_variables = _ASTDefinedVariablesCollector()(ast)

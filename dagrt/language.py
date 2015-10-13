@@ -1,5 +1,13 @@
 from __future__ import division, with_statement
 
+from pytools import RecordWithoutPickling, memoize_method
+from dagrt.utils import get_variables
+from contextlib import contextmanager
+
+import logging
+import six
+import six.moves
+
 __copyright__ = """
 Copyright (C) 2013 Andreas Kloeckner
 Copyright (C) 2014 Matt Wala
@@ -25,13 +33,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools import RecordWithoutPickling, memoize_method
-from dagrt.vm.utils import get_variables
-from contextlib import contextmanager
 
-import logging
-import six
-import six.moves
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +83,7 @@ following special variable names are supported:
 The latter two serve to separate the name space used by the method from that
 under the control of the user.
 
-See :module:`dagrt.vm.function_registry` for interpretation of function names.
+See :module:`dagrt.function_registry` for interpretation of function names.
 The function namespace and the variable namespace are distinct. No user-defined
 identifiers should start with `leap_`.
 
@@ -860,7 +862,7 @@ class CodeBuilder(object):
         if len(condition_arg) == 1:
             condition = condition_arg[0]
 
-            from dagrt.vm.expression import parse
+            from dagrt.expression import parse
 
             if isinstance(condition, str):
                 condition = parse(condition)
@@ -927,7 +929,7 @@ class CodeBuilder(object):
         assignee unless *expression* is a function call.
         """
 
-        from dagrt.vm.expression import parse
+        from dagrt.expression import parse
 
         def _parse_if_necessary(s):
             if isinstance(s, str):
@@ -1083,7 +1085,7 @@ class CodeBuilder(object):
     def yield_state(self, expression, component_id, time, time_id):
         """Yield a value."""
 
-        from dagrt.vm.expression import parse
+        from dagrt.expression import parse
 
         if isinstance(expression, str):
             expression = parse(expression)

@@ -1,6 +1,19 @@
 #! /usr/bin/env python
-
 from __future__ import division, with_statement
+
+import sys
+from dagrt.language import (CodeBuilder, TimeIntegratorCode)
+from pymbolic import var
+
+from dagrt.exec_numpy import NumpyInterpreter  # noqa
+from dagrt.codegen import PythonCodeGenerator  # noqa
+
+from utils import (  # noqa
+        python_method_impl_interpreter as pmi_int,
+        python_method_impl_codegen as pmi_cg)
+
+from utils import execute_and_return_single_result
+
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
@@ -24,18 +37,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import sys
-from dagrt.vm.language import (CodeBuilder, TimeIntegratorCode)
-from pymbolic import var
 
-from dagrt.vm.exec_numpy import NumpyInterpreter  # noqa
-from dagrt.vm.codegen import PythonCodeGenerator  # noqa
 
-from utils import (  # noqa
-        python_method_impl_interpreter as pmi_int,
-        python_method_impl_codegen as pmi_cg)
 
-from utils import execute_and_return_single_result
 
 
 def test_CodeBuilder_yield(python_method_impl):

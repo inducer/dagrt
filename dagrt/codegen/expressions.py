@@ -1,4 +1,8 @@
 """Code generation of expressions"""
+from pymbolic.mapper.stringifier import (
+        StringifyMapper, PREC_NONE, PREC_CALL, PREC_PRODUCT)
+import numpy as np
+
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
@@ -22,9 +26,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pymbolic.mapper.stringifier import (
-        StringifyMapper, PREC_NONE, PREC_CALL, PREC_PRODUCT)
-import numpy as np
 
 
 # {{{ fortran
@@ -178,7 +179,7 @@ class PythonExpressionMapper(StringifyMapper):
         for name, arg in kwargs.items():
             arg_strs_dict[name] = self.rec(arg, PREC_NONE)
 
-        from dagrt.vm.function_registry import FunctionNotFound
+        from dagrt.function_registry import FunctionNotFound
         try:
             codegen = self._function_registry.get_codegen(
                     symbol.name, "python")
@@ -209,7 +210,7 @@ class PythonExpressionMapper(StringifyMapper):
                 expr.kw_parameters)
 
     def map_if(self, expr, enclosing_prec):
-        from dagrt.vm.expression import PREC_IFTHENELSE
+        from dagrt.expression import PREC_IFTHENELSE
         return self.parenthesize_if_needed(
             "{then} if {cond} else {else_}".format(
                 then=self.rec(expr.then, PREC_IFTHENELSE),

@@ -1,4 +1,16 @@
 """Python code generator"""
+from .expressions import PythonExpressionMapper
+from .codegen_base import StructuredCodeGenerator
+from .utils import (wrap_line_base, exec_in_new_namespace,
+                    KeyToUniqueNameMap)
+from pytools.py_codegen import (
+        PythonCodeGenerator as PythonEmitter,
+        PythonFunctionGenerator as PythonFunctionEmitter,
+        Indentation)
+from dagrt.utils import is_state_variable
+from functools import partial
+import six
+
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
@@ -22,18 +34,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from .expressions import PythonExpressionMapper
-from .codegen_base import StructuredCodeGenerator
-from .utils import (wrap_line_base, exec_in_new_namespace,
-                    KeyToUniqueNameMap)
 # from .ir import YieldStateInst
-from pytools.py_codegen import (
-        PythonCodeGenerator as PythonEmitter,
-        PythonFunctionGenerator as PythonFunctionEmitter,
-        Indentation)
-from dagrt.vm.utils import is_state_variable
-from functools import partial
-import six
 
 
 def pad_python(line, width):
@@ -233,7 +234,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
 
     def __init__(self, class_name, function_registry=None):
         if function_registry is None:
-            from dagrt.vm.function_registry import base_function_registry
+            from dagrt.function_registry import base_function_registry
             function_registry = base_function_registry
 
         self._class_name = class_name
@@ -262,7 +263,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
 
     def _pre_lower(self, ast):
         self._has_yield_inst = False
-        from dagrt.vm.language import YieldState
+        from dagrt.language import YieldState
         from .ast import get_instructions_in_ast
         for inst in get_instructions_in_ast(ast):
             if isinstance(inst, YieldState):

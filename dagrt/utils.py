@@ -1,6 +1,5 @@
 """Various useful functions for working with the timestepper description
 language."""
-
 from __future__ import division, with_statement
 
 __copyright__ = """
@@ -31,7 +30,7 @@ THE SOFTWARE.
 
 def get_variables(expr, include_function_symbols=False):
     """Returns the set of names of variables used in the expression."""
-    from dagrt.vm.expression import ExtendedDependencyMapper
+    from dagrt.expression import ExtendedDependencyMapper
     args = {"include_subscripts": False,
             "include_lookups": False,
             "include_calls": "descend_args"
