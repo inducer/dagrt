@@ -11,7 +11,7 @@ program test_rkmethod
   type(leap_state_type), pointer :: leap_state_ptr
 
   real*8 t_fin
-  integer ntrips, igrid, idof
+  integer ntrips
   parameter (t_fin=1d0, ntrips=20)
 
   ! start code ----------------------------------------------------------------
