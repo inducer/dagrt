@@ -776,6 +776,23 @@ class ExecutionController(object):
 # {{{ code building utility
 
 class CodeBuilder(object):
+    """
+    .. automethod:: fence
+    .. automethod:: if_
+    .. automethod:: else_
+    .. automethod:: __call__
+    .. automethod:: fresh_var_name
+    .. automethod:: fresh_var
+    .. automethod:: assign_solved
+    .. automethod:: assign_solved_1
+    .. automethod:: assign_call
+    .. automethod:: yield_state
+    .. automethod:: fail_step
+    .. automethod:: raise_
+    .. automethod:: state_transition
+    .. automethod:: __enter__
+
+    """
 
     class Context(RecordWithoutPickling):
         """
