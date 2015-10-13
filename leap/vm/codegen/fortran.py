@@ -68,16 +68,20 @@ class FortranNameManager(object):
         """Return the identifier for a global variable."""
         return self.global_map.get_or_make_name_for_key(var)
 
-    def name_local(self, var):
+    def name_local(self, var, prefix=None):
         """Return the identifier for a local variable."""
-        return self.local_map.get_or_make_name_for_key(var)
+        if prefix is None:
+            if not var.startswith("leap_"):
+                prefix = "lploc_"
+
+        return self.local_map.get_or_make_name_for_key(var, prefix=prefix)
 
     def name_function(self, var):
         """Return the identifier for a function."""
         return self.function_map.get_or_make_name_for_key(var)
 
     def make_unique_fortran_name(self, prefix):
-        return self.local_map.get_mapped_identifier_without_key(prefix)
+        return self.local_map.get_mapped_identifier_without_key("lpfor_"+prefix)
 
     def is_known_fortran_name(self, name):
         return self.name_generator.is_name_conflicting(name)
@@ -91,14 +95,14 @@ class FortranNameManager(object):
         else:
             return self.name_local(name)
 
-    def name_refcount(self, name):
-        """Provide an interface to the expression mapper to look up
-        the name of a local or global variable.
-        """
+    def name_refcount(self, name, qualified_with_state=True):
         if is_state_variable(name):
-            return 'leap_state%leap_refcnt_'+self.name_global(name)
+            if qualified_with_state:
+                return 'leap_state%leap_refcnt_'+self.name_global(name)
+            else:
+                return 'leap_refcnt_'+self.name_global(name)
         else:
-            return "leap_refcnt_"+self.name_local(name)
+            return self.name_local("leap_refcnt_"+name)
 
 # }}}
 
@@ -388,7 +392,7 @@ class ArrayType(TypeBase):
         elif index_vars is None:
             def get_index_var():
                 ArrayType.INDEX_VAR_COUNTER += 1
-                return "leap_i%d" % ArrayType.INDEX_VAR_COUNTER
+                return "i%d" % ArrayType.INDEX_VAR_COUNTER
 
             index_vars = tuple(get_index_var() for d in dimension)
 
@@ -491,7 +495,7 @@ class _ArrayLoopManager(object):
         index_expr_map = index_expr_map.copy()
 
         f_index_names = [
-            code_generator.name_manager.make_unique_fortran_name("leap_"+iname)
+            code_generator.name_manager.make_unique_fortran_name(iname)
             for iname in atype.index_vars]
 
         self.emitters = []
@@ -510,8 +514,6 @@ class _ArrayLoopManager(object):
             em.__enter__()
 
         index_expr_map.update(zip(atype.index_vars, f_index_names))
-
-        code_generator.declaration_emitter('')
 
         from pymbolic import var
 
@@ -906,6 +908,7 @@ class CodeGenerator(StructuredCodeGenerator):
             for identifier, sym_kind in six.iteritems(
                     self.sym_kind_table.global_table):
                 self.emit_variable_decl(
+                        identifier,
                         self.name_manager.name_global(identifier),
                         sym_kind=sym_kind)
 
@@ -924,7 +927,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         return comp_type
 
-    def emit_variable_decl(self, fortran_name, sym_kind,
+    def emit_variable_decl(self, sym, fortran_name, sym_kind,
             is_argument=False, other_specifiers=(), emit=None):
         if emit is None:
             emit = self.emit
@@ -964,8 +967,9 @@ class CodeGenerator(StructuredCodeGenerator):
 
             if not is_argument:
                 emit(
-                        'integer, pointer :: leap_refcnt_{id}'.format(
-                            id=fortran_name))
+                        'integer, pointer ::  {refcnt_name}'.format(
+                            refcnt_name=self.name_manager.name_refcount(
+                                sym, qualified_with_state=False)))
 
         else:
             raise ValueError("unknown variable kind: %s" % type(sym_kind).__name__)
@@ -1163,6 +1167,7 @@ class CodeGenerator(StructuredCodeGenerator):
             fortran_name = self.name_manager.name_global(sym)
 
             self.emit_variable_decl(
+                    sym,
                     fortran_name, sym_kind, is_argument=True,
                     other_specifiers=("optional",))
         self.emit('')
@@ -1363,7 +1368,8 @@ class CodeGenerator(StructuredCodeGenerator):
         if state_id is not None:
             sym_table = self.sym_kind_table.per_function_table.get(state_id, {})
             for identifier, sym_kind in six.iteritems(sym_table):
-                self.emit_variable_decl(self.name_manager[identifier], sym_kind)
+                self.emit_variable_decl(
+                        identifier, self.name_manager[identifier], sym_kind)
 
             if sym_table:
                 self.emit('')
@@ -1444,7 +1450,7 @@ class CodeGenerator(StructuredCodeGenerator):
         for ident, start, stop in inst.loops:
             em = FortranDoEmitter(
                     self.emitter,
-                    ident,
+                    self.name_manager[ident],
                     "int(%s), int(%s)" % (self.expr(start), self.expr(stop-1)),
                     code_generator=self)
             em.__enter__()
@@ -1734,7 +1740,10 @@ UTIL_MACROS = """
     <%def name="check_matrix(mat_array, cols_var, rows_var, func_name)" >
         if (int(${cols_var}).ne.${cols_var}) then
             write(leap_stderr,*) &
-                'argument ${cols_var} to ${func_name} is not an integer'
+                'argument ' // &
+                '${cols_var} ' // &
+                'to ${func_name}' // &
+                'is not an integer'
             stop
         endif
 
@@ -1742,8 +1751,11 @@ UTIL_MACROS = """
 
         if (${rows_var} * int(${cols_var}) .ne. size(${mat_array})) then
             write(leap_stderr,*) &
-                'size of argument ${mat_array} to ${func_name} ' // &
-                'not divisible by ${cols_var}'
+                'size of argument ' // &
+                '${mat_array}' // &
+                'to ${func_name} ' // &
+                'not divisible by ' // &
+                '${cols_var}'
             stop
         endif
     </%def>
@@ -1857,7 +1869,7 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
 
         if (${info}.ne.0) then
             write(leap_stderr,*) &
-                'gesv on ${a} failed with info=', info
+                'gesv on ${a} failed with info=', ${info}
             stop
         endif
 
