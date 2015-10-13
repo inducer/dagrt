@@ -121,11 +121,11 @@ def test_python_line_wrapping():
 def test_line_wrapping_line_with_string():
     """Check that the line wrapper doesn't break up strings."""
     from dagrt.codegen.fortran import wrap_line
-    line = "write(*,*) 'failed to allocate leap_state%leap_refcnt_p_last_rhs_y'"
+    line = "write(*,*) 'failed to allocate dagrt_state%leap_refcnt_p_last_rhs_y'"
     result = wrap_line(line, width=60)
     assert result == \
         ["write(*,*)                                                 &",
-         "    'failed to allocate leap_state%leap_refcnt_p_last_rhs_y'"]
+         "    'failed to allocate dagrt_state%leap_refcnt_p_last_rhs_y'"]
 
 
 def test_KeyToUniqueNameMap():
