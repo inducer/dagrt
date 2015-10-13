@@ -526,6 +526,15 @@ class SymbolKindFinder(object):
                             _get_arg_dict_from_call_insn(insn),
                             single_return_only=False)
 
+                    func = self.function_registry[insn.function_id]
+                    if len(func.result_names) != len(insn.assignees):
+                        raise ValueError("number of function return values "
+                                "for '%s' (%d) "
+                                "and number of assigned variables (%d) "
+                                "do not match"
+                                % (insn.function_id,
+                                    len(func.result_names), len(insn.assignees)))
+
                 elif isinstance(insn, lang.AssignmentBase):
                     raise TODO()
 
