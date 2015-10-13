@@ -185,6 +185,7 @@ class FunctionRegistry(RecordWithoutPickling):
 class _NormBase(Function):
     """``norm(x)`` returns the *ord*-norm of *x*."""
 
+    result_names = ("result",)
     identifier = "<builtin>norm"
     arg_names = ("x",)
     default_dict = {}
