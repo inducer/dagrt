@@ -414,7 +414,7 @@ class AssignFunctionCall(AssignmentBase):
 
         return result
 
-    def _as_expression(self):
+    def as_expression(self):
         from pymbolic.primitives import CallWithKwargs, Variable
         return CallWithKwargs(
                 Variable(self.function_id),
@@ -423,7 +423,7 @@ class AssignFunctionCall(AssignmentBase):
 
     def map_expressions(self, mapper):
         from pymbolic.primitives import CallWithKwargs
-        mapped_expr = mapper(self._as_expression())
+        mapped_expr = mapper(self.as_expression())
         assert isinstance(mapped_expr, CallWithKwargs)
         return self.copy(
                 condition=mapper(self.condition),

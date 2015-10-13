@@ -1461,7 +1461,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_trace("func call {results} = {expr}..."
                 .format(
                     results=", ".join(inst.assignees),
-                    expr=str(inst._as_expression())[:50]))
+                    expr=str(inst.as_expression())[:50]))
 
         function = self.function_registry[inst.function_id]
         codegen = function.get_codegen(self.language)
@@ -1503,7 +1503,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 self.emit_allocation_check(assignee_sym, sym_kind)
 
             assert var(assignee_sym) not in DependencyMapper()(
-                    inst._as_expression())
+                    inst.as_expression())
 
         assignee_fortran_names = tuple(
                 self.name_manager[assignee_sym] for a in inst.assignees)

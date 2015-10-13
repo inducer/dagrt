@@ -400,6 +400,17 @@ class StepMatrixFinder(object):
     def exec_AssignExpression(self, insn):
         self.context[insn.assignee] = self.eval_mapper(insn.expression)
 
+    def exec_AssignFunctionCall(self, insn):
+        results = self.eval_mapper(insn.as_expression())
+
+        if len(insn.assignees) == 1:
+            results = (results,)
+
+        assert len(results) == len(insn.assignees)
+
+        for assignee, res in zip(insn.assignees, results):
+            self.context[assignee] = res
+
     def exec_Nop(self, insn):
         pass
 
