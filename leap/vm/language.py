@@ -96,6 +96,8 @@ Assignment Instructions
 
 .. autoclass:: AssignExpression
 
+.. autoclass:: AssignFunctionCall
+
 State Instructions
 ^^^^^^^^^^^^^^^^^^
 
@@ -172,7 +174,7 @@ class Instruction(RecordWithoutPickling):
         """Returns a :class:`frozenset` of variables being read by this
         instruction.
         """
-        raise NotImplementedError()
+        return get_variables(self.condition)
 
     def map_expressions(self, mapper):
         """Returns a new copy of *self* with all expressions
@@ -259,12 +261,11 @@ class AssignSolved(AssignmentBase):
         def flatten(iter_arg):
             return chain(*list(iter_arg))
 
-        variables = frozenset()
+        variables = super(AssignSolved, self).get_read_variables()
         variables |= set(flatten(get_variables(expr) for expr in self.expressions))
         variables -= set(self.solve_variables)
         variables |= set(flatten(get_variables(expr) for expr
                                  in self.other_params.values()))
-        variables |= get_variables(self.condition)
         return variables
 
     def __str__(self):
@@ -319,8 +320,8 @@ class AssignExpression(AssignmentBase):
         return frozenset([self.assignee])
 
     def get_read_variables(self):
+        result = super(AssignExpression, self).get_read_variables()
         result = (get_variables(self.expression)
-                | get_variables(self.condition)
                 | get_variables(self.assignee_subscript))
 
         for ident, start, end in self.loops:
@@ -356,6 +357,95 @@ class AssignExpression(AssignmentBase):
 
     exec_method = "exec_AssignExpression"
 
+
+class AssignFunctionCall(AssignmentBase):
+    """This instruction encodes function calls. It should be noted
+    that function calls can *also* be encoded as expressions
+    involving calls, however the existence of this separate instruction
+    is justified by two facts:
+
+    *   Some backends (such as Fortran) choose to separate out function calls
+        into individual instructions. This instruction provides a
+        natural way to encode them.
+
+        See :class:`leam.vm.codegen.transform.FunctionCallIsolator` for
+        a transform that accomplishes this.
+
+    *   Calling functions with multiple return values is not supported
+        as part of leap's language.
+
+    .. attribute:: assignees
+
+        A tuple of variables to be passed assigned results from
+        calling :attr:`function_id`.
+
+    .. attribute:: function_id
+    .. attribute:: parameters
+
+        A list of expressions to be passed as positional arguments.
+
+    .. attribute:: kw_parameters
+
+        A dictionary mapping names to expressions to be passed as keyword
+        arguments.
+    """
+
+    def __init__(self, assignees, function_id, parameters, kw_parameters=None,
+            **kwargs):
+        if kw_parameters is None:
+            kw_parameters = {}
+
+        super(AssignFunctionCall, self).__init__(
+                assignees=assignees,
+                function_id=function_id,
+                parameters=parameters,
+                kw_parameters=kw_parameters,
+                **kwargs)
+
+    def get_assignees(self):
+        return frozenset(self.assignees)
+
+    def get_read_variables(self):
+        result = super(AssignFunctionCall, self).get_read_variables()
+        for par in self.parameters:
+            result |= get_variables(par)
+        for par in self.kw_parameters.values():
+            result |= get_variables(par)
+
+        return result
+
+    def _as_expression(self):
+        from pymbolic.primitives import CallWithKwargs, Variable
+        return CallWithKwargs(
+                Variable(self.function_id),
+                parameters=self.parameters,
+                kw_parameters=self.kw_parameters)
+
+    def map_expressions(self, mapper):
+        from pymbolic.primitives import CallWithKwargs
+        mapped_expr = mapper(self._as_expression())
+        assert isinstance(mapped_expr, CallWithKwargs)
+        return self.copy(
+                condition=mapper(self.condition),
+                function_id=mapped_expr.function.name,
+                parameters=mapped_expr.parameters,
+                kw_parameters=mapped_expr.kw_parameters)
+
+    def __str__(self):
+        pars = list(str(p) for p in self.parameters) + [
+                "%s=%s" % (name, value)
+                for name, value in self.kw_parameters.items()]
+
+        result = "{assignees} <- {func_id}({pars}){cond}".format(
+            assignees=", ".join(self.assignees),
+            func_id=self.function_id,
+            pars=", ".join(pars),
+            cond=self._condition_printing_suffix())
+
+        return result
+
+    exec_method = "exec_AssignFunctionCall"
+
 # }}}
 
 
@@ -375,7 +465,10 @@ class YieldState(Instruction):
         return frozenset()
 
     def get_read_variables(self):
-        return get_variables(self.expression) | get_variables(self.time)
+        return (
+                super(YieldState, self).get_read_variables()
+                | get_variables(self.expression)
+                | get_variables(self.time))
 
     def map_expressions(self, mapper):
         return self.copy(
@@ -412,9 +505,6 @@ class Raise(Instruction):
     def get_assignees(self):
         return frozenset()
 
-    def get_read_variables(self):
-        return get_variables(self.condition)
-
     def map_expressions(self, mapper):
         return self.copy(condition=mapper(self.condition))
 
@@ -442,9 +532,6 @@ class StateTransition(Instruction):
     def get_assignees(self):
         return frozenset()
 
-    def get_read_variables(self):
-        return get_variables(self.condition)
-
     def map_expressions(self, mapper):
         return self.copy(condition=mapper(self.condition))
 
@@ -461,9 +548,6 @@ class FailStep(Instruction):
 
     def get_assignees(self):
         return frozenset()
-
-    def get_read_variables(self):
-        return get_variables(self.condition)
 
     def map_expressions(self, mapper):
         return self.copy(condition=mapper(self.condition))
@@ -818,48 +902,88 @@ class CodeBuilder(object):
         self._instruction_count += 1
         return self.label + "_" + str(self._instruction_count)
 
-    def __call__(self, assignee, expression, loops=[]):
+    def __call__(self, assignees, expression, loops=[]):
         """Generate code for an assignment.
 
-        *assignee* may be a variable or a subscript (if referring to an
-        array)
+        *assignees* may be a variable, a subscript (if referring to an
+        array), or a tuple of variables. There must be exactly one
+        assignee unless *expression* is a function call.
         """
 
         from leap.vm.expression import parse
 
-        if isinstance(assignee, str):
-            assignee = parse(assignee)
+        def _parse_if_necessary(s):
+            if isinstance(s, str):
+                return parse(s)
+            else:
+                return s
 
-        if isinstance(expression, str):
-            expression = parse(expression)
+        assignees = _parse_if_necessary(assignees)
+        if isinstance(assignees, tuple):
+            assignees = tuple(
+                    _parse_if_necessary(s)
+                    for s in assignees)
+        else:
+            assignees = (assignees,)
+
+        expression = _parse_if_necessary(expression)
 
         new_loops = []
         for ident, start, stop in loops:
-            if isinstance(start, str):
-                start = parse(start)
-            if isinstance(stop, str):
-                stop = parse(stop)
+            start = _parse_if_necessary(start)
+            stop = _parse_if_necessary(stop)
             new_loops.append((ident, start, stop))
 
-        from pymbolic.primitives import Variable, Subscript
-        if isinstance(assignee, Variable):
-            aname = assignee.name
-            asub = ()
-        elif isinstance(assignee, Subscript):
-            aname = assignee.aggregate.name
-            asub = assignee.index
-            if not isinstance(asub, tuple):
-                asub = (asub,)
-        else:
-            raise ValueError("asignee (left-hand side) must be either a variable "
-                    "or a subscribted variable, not '%s'"
-                    % type(assignee))
+        from pymbolic.primitives import Call, CallWithKwargs, Variable
 
-        self._add_inst_to_context(AssignExpression(
-                assignee=aname,
-                assignee_subscript=asub,
-                expression=expression,
-                loops=new_loops))
+        if isinstance(expression, (Call, CallWithKwargs)):
+            assignee_names = []
+            for a in assignees:
+                if not isinstance(a, Variable):
+                    raise ValueError("all assignees (left-hand sides)"
+                            "must be plain variables--'%s' is not" % a)
+
+                assignee_names.append(a.name)
+
+            if isinstance(expression, CallWithKwargs):
+                kw_parameters = expression.kw_parameters
+            else:
+                kw_parameters = {}
+
+            self._add_inst_to_context(AssignFunctionCall(
+                    assignees=assignee_names,
+                    function_id=expression.function.name,
+                    parameters=expression.parameters,
+                    kw_parameters=kw_parameters))
+
+        else:
+            if len(assignees) != 1:
+                raise ValueError(
+                        "exactly one assignee (left-hand side) expected--"
+                        "%d found" % len(assignees))
+            assignee, = assignees
+
+            from pymbolic.primitives import Variable, Subscript
+            if isinstance(assignee, Variable):
+                aname = assignee.name
+                asub = ()
+
+            elif isinstance(assignee, Subscript):
+                aname = assignee.aggregate.name
+                asub = assignee.index
+                if not isinstance(asub, tuple):
+                    asub = (asub,)
+
+            else:
+                raise ValueError("assignee (left-hand side) must be either a "
+                        "variable or a subscribted variable, not '%s'"
+                        % type(assignee))
+
+            self._add_inst_to_context(AssignExpression(
+                    assignee=aname,
+                    assignee_subscript=asub,
+                    expression=expression,
+                    loops=new_loops))
 
     assign = __call__
 

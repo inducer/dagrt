@@ -470,6 +470,25 @@ class PythonCodeGenerator(StructuredCodeGenerator):
             managed_ident = self._name_manager[ident]
             emitter("del {name}".format(name=managed_ident))
 
+    def emit_inst_AssignFunctionCall(self, inst):
+        if len(inst.assignees) == 0:
+            assign_code = ""
+        else:
+            assign_code = (
+                    ", ".join(self._name_manager[n] for n in inst.assignees)
+                    +
+                    " = ")
+
+        from pymbolic import var
+        self._emit(
+                '{assign_code}{expr}'
+                .format(
+                    assign_code=assign_code,
+                    expr=self._expr_mapper.map_generic_call(
+                        var(inst.function_id),
+                        inst.parameters,
+                        inst.kw_parameters)))
+
     def emit_inst_YieldState(self, inst):
         self._emit('yield self.StateComputed(t={t}, time_id={time_id}, '
                    'component_id={component_id}, '

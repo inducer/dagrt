@@ -180,9 +180,35 @@ class FunctionCallIsolator(IdentityMapper):
         rec_result = super_method(
                 expr, base_deps, sub_extra_deps)
 
-        from leap.vm.language import AssignExpression
-        new_insn = AssignExpression(
-                tmp_var_name, (), rec_result, id=tmp_insn_id,
+        from pymbolic.primitives import Call, CallWithKwargs, Variable
+        assert isinstance(rec_result, (Call, CallWithKwargs))
+
+        parameters = []
+        kw_parameters = {}
+
+        for par in rec_result.parameters:
+            if not isinstance(par, Variable):
+                raise RuntimeError("Function argument in %s is not a plain "
+                        "variable--you may need to use FunctionArgumentIsolator "
+                        "before calling FunctionCallIsolator")
+
+            parameters.append(par.name)
+
+        for par_name, par in rec_result.kw_parameters.items():
+            if not isinstance(par, Variable):
+                raise RuntimeError("Function argument in %s is not a plain "
+                        "variable--you may need to use FunctionArgumentIsolator "
+                        "before calling FunctionCallIsolator")
+
+                kw_parameters[par_name] = par
+
+        from leap.vm.language import AssignFunctionCall
+        new_insn = AssignFunctionCall(
+                assignees=(tmp_var_name,),
+                function_name=rec_result.function.name,
+                parameters=tuple(parameters),
+                kw_parameters=kw_parameters,
+                id=tmp_insn_id,
                 condition=base_condition,
                 depends_on=base_deps | frozenset(sub_extra_deps))
 
@@ -219,21 +245,19 @@ def isolate_function_calls(dag):
             insn_id_gen=insn_id_gen,
             var_name_gen=var_name_gen)
 
-    from pymbolic.primitives import Call, CallWithKwargs
     for insn in dag.instructions:
         new_deps = []
 
         from leap.vm.language import AssignExpression
-        if (isinstance(insn, AssignExpression)
-                and isinstance(insn.expression, (Call, CallWithKwargs))):
-            new_instructions.append(insn)
-        else:
+        if isinstance(insn, AssignExpression):
             new_instructions.append(
                     insn
                     .map_expressions(
                         lambda expr: fci(
                             expr, insn.condition, insn.depends_on, new_deps))
                     .copy(depends_on=insn.depends_on | frozenset(new_deps)))
+        else:
+            new_instructions.append(insn)
 
     return dag.copy(instructions=new_instructions)
 

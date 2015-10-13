@@ -286,6 +286,26 @@ class NumpyInterpreter(object):
             for ident, _, _ in insn.loops:
                 del self.context[ident]
 
+    def exec_AssignFunctionCall(self, insn):
+        parameters = [
+                self.eval_mapper(expr)
+                for expr in insn.parameters]
+        kw_parameters = dict(
+                (name, self.eval_mapper(expr))
+                for name, expr in insn.kw_parameters.items())
+
+        func = self.eval_mapper.functions[insn.function_id]
+
+        results = func(*parameters, **kw_parameters)
+
+        if len(insn.assignees) == 1:
+            results = (results,)
+
+        assert len(results) == len(insn.assignees)
+
+        for assignee, res in zip(insn.assignees, results):
+            self.context[assignee] = res
+
     def exec_Raise(self, insn):
         raise insn.error_condition(insn.error_message)
 

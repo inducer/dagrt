@@ -35,6 +35,16 @@ from pytools import RecordWithoutPickling
 from pymbolic.mapper import Mapper
 
 
+def _get_arg_dict_from_call_insn(insn):
+    arg_dict = {}
+    for i, arg_val in enumerate(insn.parameters):
+        arg_dict[i] = arg_val
+    for arg_name, arg_val in insn.kw_parameters.items():
+        arg_dict[arg_name] = arg_val
+
+    return arg_dict
+
+
 # {{{ symbol information
 
 class SymbolKind(RecordWithoutPickling):
@@ -312,7 +322,7 @@ class KindInferenceMapper(Mapper):
                     "is meaningless"
                     % type(self.rec(expr.exponent)).__name__)
 
-    def map_generic_call(self, function_id, arg_dict):
+    def map_generic_call(self, function_id, arg_dict, single_return_only=True):
         func = self.function_registry[function_id]
         arg_kinds = {}
         for key, val in arg_dict.items():
@@ -321,8 +331,18 @@ class KindInferenceMapper(Mapper):
             except UnableToInferKind:
                 arg_kinds[key] = None
 
-        z = func.get_result_kind(arg_kinds, self.check)
-        return z
+        z = func.get_result_kinds(arg_kinds, self.check)
+
+        if single_return_only:
+            if len(z) != 1:
+                raise RuntimeError("Function '%s' is being used in an "
+                        "expression context where it must return exactly "
+                        "one value. It returned %d instead."
+                        % (function_id, len(z)))
+            return z[0]
+
+        else:
+            return z
 
     def map_call(self, expr):
         return self.map_generic_call(expr.function.name,
@@ -410,6 +430,8 @@ class SymbolKindFinder(object):
 
             while insn_queue or insn_queue_push_buffer:
                 if not insn_queue:
+                    # {{{ provide a usable error message if no progress
+
                     if not made_progress:
                         print("Left-over instructions in kind inference:")
                         for func_name, insn in insn_queue_push_buffer:
@@ -420,6 +442,11 @@ class SymbolKindFinder(object):
                             try:
                                 if isinstance(insn, lang.AssignExpression):
                                     kim(insn.expression)
+
+                                elif isinstance(insn, lang.AssignFunctionCall):
+                                    kim.map_generic_call(insn.function_id,
+                                            _get_arg_dict_from_call_insn(insn),
+                                            single_return_only=False)
 
                                 elif isinstance(insn, lang.AssignmentBase):
                                     raise TODO()
@@ -435,6 +462,8 @@ class SymbolKindFinder(object):
                                 assert False
 
                         raise RuntimeError("failed to infer kinds")
+
+                    # }}}
 
                     insn_queue = insn_queue_push_buffer
                     insn_queue_push_buffer = []
@@ -459,6 +488,20 @@ class SymbolKindFinder(object):
                         made_progress = True
                         result.set(func_name, insn.assignee, kind=kind)
 
+                elif isinstance(insn, lang.AssignFunctionCall):
+                    kim = make_kim(func_name, check=False)
+
+                    try:
+                        kinds = kim.map_generic_call(insn.function_id,
+                                _get_arg_dict_from_call_insn(insn),
+                                single_return_only=False)
+                    except UnableToInferKind:
+                        insn_queue_push_buffer.append((func_name, insn))
+                    else:
+                        made_progress = True
+                        for assignee, kind in zip(insn.assignees, kinds):
+                            result.set(func_name, assignee, kind=kind)
+
                 elif isinstance(insn, lang.AssignmentBase):
                     raise TODO()
 
@@ -477,6 +520,11 @@ class SymbolKindFinder(object):
             for insn in get_instructions_in_ast(func):
                 if isinstance(insn, lang.AssignExpression):
                     kim(insn.expression)
+
+                elif isinstance(insn, lang.AssignFunctionCall):
+                    kim.map_generic_call(insn.function_id,
+                            _get_arg_dict_from_call_insn(insn),
+                            single_return_only=False)
 
                 elif isinstance(insn, lang.AssignmentBase):
                     raise TODO()

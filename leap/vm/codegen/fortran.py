@@ -207,7 +207,7 @@ class CallCode(object):
 
         self.extra_args = extra_args
 
-    def __call__(self, result, function, arg_strings_dict, arg_kinds_dict,
+    def __call__(self, results, function, arg_strings_dict, arg_kinds_dict,
             code_generator):
         from leap.vm.codegen.utils import (
                 remove_common_indentation,
@@ -227,7 +227,6 @@ class CallCode(object):
         import leap.vm.codegen.data as kinds
 
         template_names = dict(
-                result=result,
                 real_scalar_kind=code_generator.real_scalar_kind,
                 complex_scalar_kind=code_generator.complex_scalar_kind,
                 get_new_identifier=(
@@ -235,6 +234,12 @@ class CallCode(object):
                 add_declaration=add_declaration,
                 declare_new=declare_new,
                 kinds=kinds)
+
+        result_names = getattr(function, "result_names", ("result",))
+
+        assert len(result_names) == len(results)
+        for res_name, res in zip(result_names, results):
+            template_names[res_name] = res
 
         template_names.update(zip(function.arg_names, args))
 
@@ -1079,49 +1084,6 @@ class CodeGenerator(StructuredCodeGenerator):
                 tgt_refcnt=self.name_manager.name_refcount(assignee_sym)))
         self.emit('')
 
-    def emit_assign_from_function_call(self, result_fortran_expr_str, expr):
-        self.emit_trace("func call {result_fortran_expr_str} = {expr}..."
-                .format(
-                    result_fortran_expr_str=result_fortran_expr_str,
-                    expr=str(expr)[:50]))
-
-        function = self.function_registry[expr.function.name]
-        codegen = function.get_codegen(self.language)
-
-        arg_strs_dict = {}
-        arg_kinds_dict = {}
-        for i, arg in enumerate(expr.parameters):
-            arg_strs_dict[i] = self.expr(arg)
-            assert isinstance(arg, Variable)
-
-            # FIXME: This can fail for args of state update notification,
-            # hence the try/catch.
-            try:
-                arg_kinds_dict[i] = self.sym_kind_table.get(
-                        self.current_function, arg.name)
-            except KeyError:
-                arg_kinds_dict[i] = None
-
-        if isinstance(expr, CallWithKwargs):
-            for arg_name, arg in expr.kw_parameters.items():
-                arg_strs_dict[arg_name] = self.expr(arg)
-                assert isinstance(arg, Variable)
-
-                # FIXME: This can fail for args of state update notification,
-                # hence the try/catch.
-                try:
-                    arg_kinds_dict[arg_name] = self.sym_kind_table.get(
-                            self.current_function, arg.name)
-                except KeyError:
-                    pass
-
-        codegen(
-                result=result_fortran_expr_str,
-                function=function,
-                arg_strings_dict=arg_strs_dict,
-                arg_kinds_dict=arg_kinds_dict,
-                code_generator=self)
-
     def emit_assign_expr_inner(self,
             assignee_fortran_name, assignee_subscript, expr, sym_kind):
         if assignee_subscript:
@@ -1133,8 +1095,10 @@ class CodeGenerator(StructuredCodeGenerator):
             subscript_str = ""
 
         if isinstance(expr, (Call, CallWithKwargs)):
-            self.emit_assign_from_function_call(
-                    assignee_fortran_name+subscript_str, expr)
+            # These are supposed to have been transformed to AssignFunctionCall.
+            raise RuntimeError("bare Call/CallWithKwargs encountered in "
+                    "Fortran code generator")
+
         else:
             self.emit_trace("{assignee_fortran_name}{subscript_str} = {expr}..."
                     .format(
@@ -1493,6 +1457,64 @@ class CodeGenerator(StructuredCodeGenerator):
 
         assert start_em is self.emitter
 
+    def emit_inst_AssignFunctionCall(self, inst):
+        self.emit_trace("func call {results} = {expr}..."
+                .format(
+                    results=", ".join(inst.assignees),
+                    expr=str(inst._as_expression())[:50]))
+
+        function = self.function_registry[inst.function_id]
+        codegen = function.get_codegen(self.language)
+
+        arg_strs_dict = {}
+        arg_kinds_dict = {}
+        for i, arg in enumerate(inst.parameters):
+            arg_strs_dict[i] = self.expr(arg)
+            assert isinstance(arg, Variable)
+
+            # FIXME: This can fail for args of state update notification,
+            # hence the try/catch.
+            try:
+                arg_kinds_dict[i] = self.sym_kind_table.get(
+                        self.current_function, arg.name)
+            except KeyError:
+                arg_kinds_dict[i] = None
+
+        for arg_name, arg in inst.kw_parameters.items():
+            arg_strs_dict[arg_name] = self.expr(arg)
+            assert isinstance(arg, Variable)
+
+            # FIXME: This can fail for args of state update notification,
+            # hence the try/catch.
+            try:
+                arg_kinds_dict[arg_name] = self.sym_kind_table.get(
+                        self.current_function, arg.name)
+            except KeyError:
+                pass
+
+        from pymbolic.mapper.dependency import DependencyMapper
+        from pymbolic import var
+        from leap.vm.codegen.data import ODEComponent
+
+        for assignee_sym in inst.assignees:
+            sym_kind = self.sym_kind_table.get(
+                    self.current_function, assignee_sym)
+            if isinstance(sym_kind, ODEComponent):
+                self.emit_allocation_check(assignee_sym, sym_kind)
+
+            assert var(assignee_sym) not in DependencyMapper()(
+                    inst._as_expression())
+
+        assignee_fortran_names = tuple(
+                self.name_manager[assignee_sym] for a in inst.assignees)
+
+        codegen(
+                results=assignee_fortran_names,
+                function=function,
+                arg_strings_dict=arg_strs_dict,
+                arg_kinds_dict=arg_kinds_dict,
+                code_generator=self)
+
     def emit_return(self):
         self.emit('999 continue ! exit label')
 
@@ -1520,19 +1542,16 @@ class CodeGenerator(StructuredCodeGenerator):
                 (),
                 inst.time)
 
-        if self.call_before_state_update or self.call_after_state_update:
-            dummy_name = self.name_manager.make_unique_fortran_name("dummy_logical")
-            self.declaration_emitter(
-                    "logical {dummy_name}".format(dummy_name=dummy_name))
+        from leap.vm.language import AssignFunctionCall
+        from pymbolic import var
 
         if self.call_before_state_update:
-            from pymbolic import var
-            self.emit_assign_from_function_call(
-                    dummy_name,
-                    var(self.call_before_state_update)(
-                        var(self.component_name_to_component_sym(
-                            inst.component_id))
-                        ))
+            self.emit_inst_AssignFunctionCall(
+                    AssignFunctionCall(
+                        (),
+                        self.call_before_state_update,
+                        (var(self.component_name_to_component_sym(
+                            inst.component_id)),)))
 
         self.emit_assign_expr(
                 '<ret_state>'+inst.component_id,
@@ -1540,13 +1559,12 @@ class CodeGenerator(StructuredCodeGenerator):
                 inst.expression)
 
         if self.call_after_state_update:
-            from pymbolic import var
-            self.emit_assign_from_function_call(
-                    dummy_name,
-                    var(self.call_after_state_update)(
-                        var(self.component_name_to_component_sym(
-                            inst.component_id))
-                        ))
+            self.emit_inst_AssignFunctionCall(
+                    AssignFunctionCall(
+                        (),
+                        self.call_after_state_update,
+                        (var(self.component_name_to_component_sym(
+                            inst.component_id)),)))
 
     def emit_inst_Raise(self, inst):
         self.emit("write (leap_stderr,*) "
@@ -1847,8 +1865,6 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
 
 builtin_print = CallCode(UTIL_MACROS + """
         write(*,*) ${arg}
-
-        ${result} = 0
         """)
 
 # }}}

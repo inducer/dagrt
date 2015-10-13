@@ -40,6 +40,15 @@ class FunctionNotFound(KeyError):
 
 class Function(RecordWithoutPickling):
     """
+    .. attribute:: result_names
+
+        A list of names of the return values of the function. Note that these
+        names serve as documentation and as identifiers to be used for
+        variables receiving function results inside generated code implementing
+        the call to the function (e.g. in the Fortran backend). They have
+        no relationship to the names to which the results ultimately get
+        assigned.
+
     .. attribute:: identifier
     .. attribute:: arg_names
     .. attribute:: default_dict
@@ -53,9 +62,13 @@ class Function(RecordWithoutPickling):
                 language_to_codegen=language_to_codegen,
                 **kwargs)
 
-    def get_result_kind(self, arg_kinds, check):
-        """Return the :class:`leap.vm.codegen.data.SymbolKind` this function
-        returns if arguments of the kinds *arg_kinds* are supplied.
+    def get_result_kinds(self, arg_kinds, check):
+        """Return a tuple of the :class:`leap.vm.codegen.data.SymbolKind`
+        instances for the values this function returns if arguments of the
+        kinds *arg_kinds* are supplied.
+
+        The length of the returned tuple must match the lenght of
+        :attr:`result_names`.
 
         :arg arg_kinds: a dictionary mapping numbers (for positional arguments)
             or identifiers (for keyword arguments) to
@@ -93,16 +106,16 @@ class Function(RecordWithoutPickling):
         return resolve_args(self.arg_names, self.default_dict, arg_dict)
 
 
-class FixedResultKindFunction(Function):
+class FixedResultKindsFunction(Function):
     def __init__(self, **kwargs):
-        result_kind = kwargs.get("result_kind", None)
-        if result_kind is None:
-            raise TypeError("result_kind argument must be specified")
+        result_kinds = kwargs.get("result_kinds", None)
+        if result_kinds is None:
+            raise TypeError("result_kinds argument must be specified")
 
-        super(FixedResultKindFunction, self).__init__(**kwargs)
+        super(FixedResultKindsFunction, self).__init__(**kwargs)
 
-    def get_result_kind(self, arg_kinds, check):
-        return self.result_kind
+    def get_result_kinds(self, arg_kinds, check):
+        return self.result_kinds
 
 # }}}
 
@@ -176,13 +189,13 @@ class _NormBase(Function):
     arg_names = ("x",)
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds, check):
+    def get_result_kinds(self, arg_kinds, check):
         x_kind, = self.resolve_args(arg_kinds)
 
         if check and not isinstance(x_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'x' of 'norm' is not an ODE component")
 
-        return Scalar(is_real_valued=True)
+        return (Scalar(is_real_valued=True),)
 
 
 class _Norm1(_NormBase):
@@ -205,11 +218,12 @@ class _DotProduct(Function):
     complex conjugate of *x* is taken first, if applicable.
     """
 
+    result_names = ("result",)
     identifier = "<builtin>dot_product"
     arg_names = ("x", "y")
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds, check):
+    def get_result_kinds(self, arg_kinds, check):
         x_kind, y_kind = self.resolve_args(arg_kinds)
 
         if check and not isinstance(x_kind, (NoneType, ODEComponent)):
@@ -217,39 +231,41 @@ class _DotProduct(Function):
         if check and not isinstance(y_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'y' of 'dot_product' is not an ODE component")
 
-        return Scalar(is_real_valued=False)
+        return (Scalar(is_real_valued=False),)
 
 
 class _Len(Function):
     """``len(x)`` returns the number of degrees of freedom in *x* """
 
+    result_names = ("result",)
     identifier = "<builtin>len"
     arg_names = ("x",)
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds, check):
+    def get_result_kinds(self, arg_kinds, check):
         x_kind, = self.resolve_args(arg_kinds)
 
         if check and not isinstance(x_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'x' of 'len' is not an ODE component")
 
-        return Scalar(is_real_valued=True)
+        return (Scalar(is_real_valued=True),)
 
 
 class _IsNaN(Function):
     """``isnan(x)`` returns True if there are any NaNs in *x*"""
 
+    result_names = ("result",)
     identifier = "<builtin>isnan"
     arg_names = ("x",)
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds, check):
+    def get_result_kinds(self, arg_kinds, check):
         x_kind, = self.resolve_args(arg_kinds)
 
         if check and not isinstance(x_kind, (NoneType, ODEComponent)):
             raise TypeError("argument 'x' of 'len' is not an ODE component")
 
-        return Boolean()
+        return (Boolean(),)
 
 
 class _Array(Function):
@@ -257,17 +273,18 @@ class _Array(Function):
     n must be an integer.
     """
 
+    result_names = ("result",)
     identifier = "<builtin>array"
     arg_names = ("n",)
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds, check):
+    def get_result_kinds(self, arg_kinds, check):
         n_kind, = self.resolve_args(arg_kinds)
 
         if check and not isinstance(n_kind, Scalar):
             raise TypeError("argument 'n' of 'array' is not a scalar")
 
-        return Array(is_real_valued=True)
+        return (Array(is_real_valued=True),)
 
 
 class _MatMul(Function):
@@ -276,11 +293,12 @@ class _MatMul(Function):
     as matrices, with a number of columns *a_cols* and *b_cols* respectively)
     """
 
+    result_names = ("result",)
     identifier = "<builtin>matmul"
     arg_names = ("a", "b", "a_cols", "b_cols")
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds, check):
+    def get_result_kinds(self, arg_kinds, check):
         a_kind, b_kind, a_cols_kind, b_cols_kind = self.resolve_args(arg_kinds)
 
         if a_kind is None or b_kind is None:
@@ -298,7 +316,7 @@ class _MatMul(Function):
 
         is_real_valued = a_kind.is_real_valued and b_kind.is_real_valued
 
-        return Array(is_real_valued)
+        return (Array(is_real_valued),)
 
 
 class _LinearSolve(Function):
@@ -307,11 +325,12 @@ class _LinearSolve(Function):
     as matrices, with a number of columns *a_cols* and *b_cols* respectively)
     """
 
+    result_names = ("result",)
     identifier = "<builtin>linear_solve"
     arg_names = ("a", "b", "a_cols", "b_cols")
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds, check):
+    def get_result_kinds(self, arg_kinds, check):
         a_kind, b_kind, a_cols_kind, b_cols_kind = self.resolve_args(arg_kinds)
 
         if a_kind is None or b_kind is None:
@@ -329,7 +348,7 @@ class _LinearSolve(Function):
 
         is_real_valued = a_kind.is_real_valued and b_kind.is_real_valued
 
-        return Array(is_real_valued)
+        return (Array(is_real_valued),)
 
 
 class _Print(Function):
@@ -337,18 +356,19 @@ class _Print(Function):
     that may be ignored.
     """
 
+    result_names = ()
     identifier = "<builtin>print"
     arg_names = ("arg",)
     default_dict = {}
 
-    def get_result_kind(self, arg_kinds, check):
+    def get_result_kinds(self, arg_kinds, check):
         arg_kind, = self.resolve_args(arg_kinds)
 
         if check and not isinstance(arg_kind, (Integer, Scalar, Array)):
             raise TypeError(
                     "argument of 'print' is not an integer, array, or scalar")
 
-        return Integer()
+        return (Integer(),)
 
 
 class _PythonBuiltinFunctionCodeGenerator(object):
@@ -415,6 +435,8 @@ base_function_registry = _make_bfr()
 class _ODERightHandSide(Function):
     default_dict = {}
 
+    result_names = ("result",)
+
     # Explicitly specify the fields of this record, otherwise, the list of fields may
     # be inherited from the superclass if an instance of the superclass is
     # initialized first. We wish to exclude "arg_names" as a field, since this class
@@ -438,7 +460,7 @@ class _ODERightHandSide(Function):
     def arg_names(self):
         return ("t",) + self.input_component_names
 
-    def get_result_kind(self, arg_kinds, check):
+    def get_result_kinds(self, arg_kinds, check):
         arg_kinds = self.resolve_args(arg_kinds)
 
         if check and not isinstance(arg_kinds[0], Scalar):
@@ -455,7 +477,7 @@ class _ODERightHandSide(Function):
                         "with component ID '%s'"
                         % (arg_name, self.identifier, input_component_id))
 
-        return ODEComponent(self.component_id)
+        return (ODEComponent(self.component_id),)
 
 
 def register_ode_rhs(
@@ -479,16 +501,16 @@ def register_function(
         identifier,
         arg_names,
         default_dict=None,
-        # There's no way for a function to not have
-        # a return type.
-        result_kind=Boolean()):
+        result_names=(),
+        result_kinds=()):
 
     return function_registry.register(
-            FixedResultKindFunction(
+            FixedResultKindsFunction(
                 identifier=identifier,
                 arg_names=arg_names,
                 default_dict=default_dict,
-                result_kind=result_kind))
+                result_names=result_names,
+                result_kinds=result_kinds))
 
 # }}}
 
