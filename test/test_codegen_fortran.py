@@ -31,7 +31,7 @@ import dagrt.codegen.fortran as f
 
 from utils import RawCodeBuilder
 
-from dagrt.tools import run_fortran
+from dagrt.utils import run_fortran
 
 #skip = pytest.mark.skipif(True, reason="not fully implemented")
 
