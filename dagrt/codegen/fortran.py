@@ -62,7 +62,7 @@ class FortranNameManager(object):
         self.name_generator = UniqueNameGenerator()
         self.local_map = KeyToUniqueNameMap(name_generator=self.name_generator)
         self.global_map = KeyToUniqueNameMap(start={
-                '<t>': 'dagrt_t', '<dt>': 'leap_dt'},
+                '<t>': 'dagrt_t', '<dt>': 'dagrt_dt'},
                 name_generator=self.name_generator)
         self.function_map = KeyToUniqueNameMap(name_generator=self.name_generator)
 
@@ -100,7 +100,7 @@ class FortranNameManager(object):
     def name_refcount(self, name, qualified_with_state=True):
         if is_state_variable(name):
             if qualified_with_state:
-                return 'dagrt_state%leap_refcnt_'+self.name_global(name)
+                return 'dagrt_state%dagrt_refcnt_'+self.name_global(name)
             else:
                 return 'dagrt_refcnt_'+self.name_global(name)
         else:
@@ -864,7 +864,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 'dagrt_state_func_' + function_name,
                 self.extra_arguments + ('dagrt_state',),
                 state_id=function_name)
-        self.declaration_emitter('type(dagrt_state_type), pointer :: leap_state')
+        self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
         self.declaration_emitter('')
 
         self.lower_ast(ast)
@@ -1159,7 +1159,7 @@ class CodeGenerator(StructuredCodeGenerator):
             fortran_name = self.name_manager.name_global(sym)
             self.sym_kind_table.set(state_id, "<target>"+fortran_name, sym_kind)
 
-        self.declaration_emitter('type(dagrt_state_type), pointer :: leap_state')
+        self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
         self.declaration_emitter('')
 
         self.current_function = state_id
@@ -1174,14 +1174,14 @@ class CodeGenerator(StructuredCodeGenerator):
                     other_specifiers=("optional",))
         self.emit('')
 
-        self.emit('real :: dagrt_nan, leap_nan_helper')
+        self.emit('real :: dagrt_nan, dagrt_nan_helper')
         self.emit('')
         self.emit('dagrt_nan_helper = 0.0')
-        self.emit('dagrt_nan = 0.0/leap_nan_helper')
+        self.emit('dagrt_nan = 0.0/dagrt_nan_helper')
         self.emit('')
 
         self.emit(
-                "dagrt_state%leap_next_state = leap_state_{0}"
+                "dagrt_state%dagrt_next_state = dagrt_state_{0}"
                 .format(dag.initial_state))
 
         for sym, sym_kind in six.iteritems(
@@ -1247,7 +1247,7 @@ class CodeGenerator(StructuredCodeGenerator):
         state_id = "<dagrt>"+function_name
         self.emit_def_begin(function_name, args, state_id=state_id)
 
-        self.declaration_emitter('type(dagrt_state_type), pointer :: leap_state')
+        self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
         self.declaration_emitter('')
 
         self.current_function = state_id
@@ -1281,7 +1281,7 @@ class CodeGenerator(StructuredCodeGenerator):
         state_id = "<dagrt>"+function_name
         self.emit_def_begin(function_name, args, state_id=state_id)
 
-        self.declaration_emitter('type(dagrt_state_type), pointer :: leap_state')
+        self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
         self.declaration_emitter('')
 
         self.current_function = state_id
@@ -1289,7 +1289,7 @@ class CodeGenerator(StructuredCodeGenerator):
         if_emit = None
         for name, state_descr in six.iteritems(dag.states):
             state_sym_name = self.state_name_to_state_sym(name)
-            cond = "dagrt_state%leap_next_state == "+state_sym_name
+            cond = "dagrt_state%dagrt_next_state == "+state_sym_name
 
             if if_emit is None:
                 if_emit = FortranIfEmitter(
@@ -1299,7 +1299,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 if_emit.emit_else_if(cond)
 
             self.emit(
-                    "dagrt_state%leap_next_state = "
+                    "dagrt_state%dagrt_next_state = "
                     + self.state_name_to_state_sym(state_descr.next_state))
 
             self.emit(
@@ -1310,7 +1310,7 @@ class CodeGenerator(StructuredCodeGenerator):
         if if_emit:
             if_emit.emit_else()
             self.emit("write(dagrt_stderr,*) 'encountered invalid state in run', "
-                    "dagrt_state%leap_next_state")
+                    "dagrt_state%dagrt_next_state")
             self.emit("stop")
 
         if_emit.__exit__(None, None, None)
@@ -1586,7 +1586,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def emit_inst_StateTransition(self, inst):
         self.emit(
-                'dagrt_state%leap_next_state = '
+                'dagrt_state%dagrt_next_state = '
                 + self.state_name_to_state_sym(inst.next_state))
 
     # }}}

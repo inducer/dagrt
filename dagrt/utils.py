@@ -1,6 +1,6 @@
-"""Various useful functions for working with the timestepper description
-language."""
-from __future__ import division, with_statement
+"""Dumping ground of miscellaneous helpfulness."""
+
+from __future__ import division, with_statement, print_function
 
 __copyright__ = """
 Copyright (C) 2014 Matt Wala
@@ -27,6 +27,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import sys
+
+
+class TODO(NotImplementedError):
+    pass
+
 
 def get_variables(expr, include_function_symbols=False):
     """Returns the set of names of variables used in the expression."""
@@ -38,6 +44,8 @@ def get_variables(expr, include_function_symbols=False):
     variable_mapper = ExtendedDependencyMapper(**args)
     return frozenset(dep.name for dep in variable_mapper(expr))
 
+
+# {{{ name wrangling
 
 def is_state_variable(var):
     """Check if the given name corresponds to a state variable."""
@@ -73,10 +81,10 @@ def get_unique_name(prefix, *name_sets):
         suffix += 1
     return prefix + str(suffix)
 
+# }}}
 
-class TODO(NotImplementedError):
-    pass
 
+# {{{ resolve_args
 
 def resolve_args(arg_names, default_dict, arg_dict):
     """Resolve positional and keyword arguments to a single argument
@@ -110,3 +118,103 @@ def resolve_args(arg_names, default_dict, arg_dict):
                 + ", ".join(str(i) for i in arg_dict))
 
     return args
+
+# }}}
+
+
+# {{{ temporary directory
+
+class TemporaryDirectory(object):
+    """Create and return a temporary directory.  This has the same
+    behavior as mkdtemp but can be used as a context manager.  For
+    example:
+
+        with TemporaryDirectory() as tmpdir:
+            ...
+
+    Upon exiting the context, the directory and everything contained
+    in it are removed.
+    """
+
+    # Yanked from
+    # https://hg.python.org/cpython/file/3.3/Lib/tempfile.py
+
+    # Handle mkdtemp raising an exception
+    name = None
+    _closed = False
+
+    def __init__(self, suffix="", prefix="tmp", dir=None):
+        from tempfile import mkdtemp
+        self.name = mkdtemp(suffix, prefix, dir)
+
+    def __repr__(self):
+        return "<{} {!r}>".format(self.__class__.__name__, self.name)
+
+    def __enter__(self):
+        return self.name
+
+    def cleanup(self, _warn=False):
+        import warnings
+        if self.name and not self._closed:
+            from shutil import rmtree
+            try:
+                rmtree(self.name)
+            except (TypeError, AttributeError) as ex:
+                if "None" not in '%s' % (ex,):
+                    raise
+                self._rmtree(self.name)
+            self._closed = True
+            if _warn and warnings.warn:
+                warnings.warn("Implicitly cleaning up {!r}".format(self))
+
+    def __exit__(self, exc, value, tb):
+        self.cleanup()
+
+    def __del__(self):
+        # Issue a ResourceWarning if implicit cleanup needed
+        self.cleanup(_warn=True)
+
+# }}}
+
+
+# {{{ run_fortran
+
+def run_fortran(sources, fortran_options=[]):
+    from utils import TemporaryDirectory
+    from os.path import join
+
+    with TemporaryDirectory() as tmpdir:
+        source_names = []
+        for name, contents in sources:
+            source_names.append(name)
+
+            with open(join(tmpdir, name), "w") as srcf:
+                srcf.write(contents)
+
+        from subprocess import check_call, Popen, PIPE
+        check_call(
+                ["gfortran", "-Wall", "-g", "-oruntest"]
+                + fortran_options
+                + list(source_names),
+                cwd=tmpdir)
+
+        p = Popen([join(tmpdir, "runtest")], stdout=PIPE, stderr=PIPE,
+                close_fds=True)
+        stdout_data, stderr_data = p.communicate()
+
+        if stdout_data:
+            print("Fortran code said this on stdout: -----------------------------",
+                    file=sys.stderr)
+            print(stdout_data.decode(), file=sys.stderr)
+            print("---------------------------------------------------------------",
+                    file=sys.stderr)
+
+        if stderr_data:
+            raise RuntimeError("Fortran code has non-empty stderr:\n" +
+                               stderr_data.decode('ascii'))
+
+        return p.returncode, stdout_data, stderr_data
+
+# }}}
+
+# vim: foldmethod=marker

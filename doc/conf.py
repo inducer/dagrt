@@ -219,7 +219,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    ('index', 'dagrt.tex', u'leap Documentation',
+    ('index', 'dagrt.tex', u'dagrt Documentation',
     u'Andreas Kloeckner', 'manual'),
 ]
 
@@ -249,7 +249,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'dagrt', u'leap Documentation',
+    ('index', 'dagrt', u'dagrt Documentation',
      [u'Andreas Kloeckner'], 1)
 ]
 
@@ -263,7 +263,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    ('index', 'dagrt', u'leap Documentation',
+    ('index', 'dagrt', u'dagrt Documentation',
     u'Andreas Kloeckner', 'dagrt', 'One line description of project.',
     'Miscellaneous'),
 ]
