@@ -68,16 +68,20 @@ class FortranNameManager(object):
         """Return the identifier for a global variable."""
         return self.global_map.get_or_make_name_for_key(var)
 
-    def name_local(self, var):
+    def name_local(self, var, prefix=None):
         """Return the identifier for a local variable."""
-        return self.local_map.get_or_make_name_for_key(var)
+        if prefix is None:
+            if not var.startswith("leap_"):
+                prefix = "lploc_"
+
+        return self.local_map.get_or_make_name_for_key(var, prefix=prefix)
 
     def name_function(self, var):
         """Return the identifier for a function."""
         return self.function_map.get_or_make_name_for_key(var)
 
     def make_unique_fortran_name(self, prefix):
-        return self.local_map.get_mapped_identifier_without_key(prefix)
+        return self.local_map.get_mapped_identifier_without_key("lpfor_"+prefix)
 
     def is_known_fortran_name(self, name):
         return self.name_generator.is_name_conflicting(name)
@@ -91,14 +95,14 @@ class FortranNameManager(object):
         else:
             return self.name_local(name)
 
-    def name_refcount(self, name):
-        """Provide an interface to the expression mapper to look up
-        the name of a local or global variable.
-        """
+    def name_refcount(self, name, qualified_with_state=True):
         if is_state_variable(name):
-            return 'leap_state%leap_refcnt_'+self.name_global(name)
+            if qualified_with_state:
+                return 'leap_state%leap_refcnt_'+self.name_global(name)
+            else:
+                return 'leap_refcnt_'+self.name_global(name)
         else:
-            return "leap_refcnt_"+self.name_local(name)
+            return self.name_local("leap_refcnt_"+name)
 
 # }}}
 
@@ -207,7 +211,7 @@ class CallCode(object):
 
         self.extra_args = extra_args
 
-    def __call__(self, result, function, arg_strings_dict, arg_kinds_dict,
+    def __call__(self, results, function, arg_strings_dict, arg_kinds_dict,
             code_generator):
         from dagrt.vm.codegen.utils import (
                 remove_common_indentation,
@@ -227,7 +231,6 @@ class CallCode(object):
         import dagrt.vm.codegen.data as kinds
 
         template_names = dict(
-                result=result,
                 real_scalar_kind=code_generator.real_scalar_kind,
                 complex_scalar_kind=code_generator.complex_scalar_kind,
                 get_new_identifier=(
@@ -235,6 +238,12 @@ class CallCode(object):
                 add_declaration=add_declaration,
                 declare_new=declare_new,
                 kinds=kinds)
+
+        result_names = getattr(function, "result_names", ("result",))
+
+        assert len(result_names) == len(results)
+        for res_name, res in zip(result_names, results):
+            template_names[res_name] = res
 
         template_names.update(zip(function.arg_names, args))
 
@@ -383,7 +392,7 @@ class ArrayType(TypeBase):
         elif index_vars is None:
             def get_index_var():
                 ArrayType.INDEX_VAR_COUNTER += 1
-                return "leap_i%d" % ArrayType.INDEX_VAR_COUNTER
+                return "i%d" % ArrayType.INDEX_VAR_COUNTER
 
             index_vars = tuple(get_index_var() for d in dimension)
 
@@ -486,7 +495,7 @@ class _ArrayLoopManager(object):
         index_expr_map = index_expr_map.copy()
 
         f_index_names = [
-            code_generator.name_manager.make_unique_fortran_name("leap_"+iname)
+            code_generator.name_manager.make_unique_fortran_name(iname)
             for iname in atype.index_vars]
 
         self.emitters = []
@@ -505,8 +514,6 @@ class _ArrayLoopManager(object):
             em.__enter__()
 
         index_expr_map.update(zip(atype.index_vars, f_index_names))
-
-        code_generator.declaration_emitter('')
 
         from pymbolic import var
 
@@ -901,6 +908,7 @@ class CodeGenerator(StructuredCodeGenerator):
             for identifier, sym_kind in six.iteritems(
                     self.sym_kind_table.global_table):
                 self.emit_variable_decl(
+                        identifier,
                         self.name_manager.name_global(identifier),
                         sym_kind=sym_kind)
 
@@ -919,7 +927,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         return comp_type
 
-    def emit_variable_decl(self, fortran_name, sym_kind,
+    def emit_variable_decl(self, sym, fortran_name, sym_kind,
             is_argument=False, other_specifiers=(), emit=None):
         if emit is None:
             emit = self.emit
@@ -959,8 +967,9 @@ class CodeGenerator(StructuredCodeGenerator):
 
             if not is_argument:
                 emit(
-                        'integer, pointer :: leap_refcnt_{id}'.format(
-                            id=fortran_name))
+                        'integer, pointer ::  {refcnt_name}'.format(
+                            refcnt_name=self.name_manager.name_refcount(
+                                sym, qualified_with_state=False)))
 
         else:
             raise ValueError("unknown variable kind: %s" % type(sym_kind).__name__)
@@ -1079,49 +1088,6 @@ class CodeGenerator(StructuredCodeGenerator):
                 tgt_refcnt=self.name_manager.name_refcount(assignee_sym)))
         self.emit('')
 
-    def emit_assign_from_function_call(self, result_fortran_expr_str, expr):
-        self.emit_trace("func call {result_fortran_expr_str} = {expr}..."
-                .format(
-                    result_fortran_expr_str=result_fortran_expr_str,
-                    expr=str(expr)[:50]))
-
-        function = self.function_registry[expr.function.name]
-        codegen = function.get_codegen(self.language)
-
-        arg_strs_dict = {}
-        arg_kinds_dict = {}
-        for i, arg in enumerate(expr.parameters):
-            arg_strs_dict[i] = self.expr(arg)
-            assert isinstance(arg, Variable)
-
-            # FIXME: This can fail for args of state update notification,
-            # hence the try/catch.
-            try:
-                arg_kinds_dict[i] = self.sym_kind_table.get(
-                        self.current_function, arg.name)
-            except KeyError:
-                arg_kinds_dict[i] = None
-
-        if isinstance(expr, CallWithKwargs):
-            for arg_name, arg in expr.kw_parameters.items():
-                arg_strs_dict[arg_name] = self.expr(arg)
-                assert isinstance(arg, Variable)
-
-                # FIXME: This can fail for args of state update notification,
-                # hence the try/catch.
-                try:
-                    arg_kinds_dict[arg_name] = self.sym_kind_table.get(
-                            self.current_function, arg.name)
-                except KeyError:
-                    pass
-
-        codegen(
-                result=result_fortran_expr_str,
-                function=function,
-                arg_strings_dict=arg_strs_dict,
-                arg_kinds_dict=arg_kinds_dict,
-                code_generator=self)
-
     def emit_assign_expr_inner(self,
             assignee_fortran_name, assignee_subscript, expr, sym_kind):
         if assignee_subscript:
@@ -1133,8 +1099,10 @@ class CodeGenerator(StructuredCodeGenerator):
             subscript_str = ""
 
         if isinstance(expr, (Call, CallWithKwargs)):
-            self.emit_assign_from_function_call(
-                    assignee_fortran_name+subscript_str, expr)
+            # These are supposed to have been transformed to AssignFunctionCall.
+            raise RuntimeError("bare Call/CallWithKwargs encountered in "
+                    "Fortran code generator")
+
         else:
             self.emit_trace("{assignee_fortran_name}{subscript_str} = {expr}..."
                     .format(
@@ -1199,6 +1167,7 @@ class CodeGenerator(StructuredCodeGenerator):
             fortran_name = self.name_manager.name_global(sym)
 
             self.emit_variable_decl(
+                    sym,
                     fortran_name, sym_kind, is_argument=True,
                     other_specifiers=("optional",))
         self.emit('')
@@ -1399,7 +1368,8 @@ class CodeGenerator(StructuredCodeGenerator):
         if state_id is not None:
             sym_table = self.sym_kind_table.per_function_table.get(state_id, {})
             for identifier, sym_kind in six.iteritems(sym_table):
-                self.emit_variable_decl(self.name_manager[identifier], sym_kind)
+                self.emit_variable_decl(
+                        identifier, self.name_manager[identifier], sym_kind)
 
             if sym_table:
                 self.emit('')
@@ -1480,7 +1450,7 @@ class CodeGenerator(StructuredCodeGenerator):
         for ident, start, stop in inst.loops:
             em = FortranDoEmitter(
                     self.emitter,
-                    ident,
+                    self.name_manager[ident],
                     "int(%s), int(%s)" % (self.expr(start), self.expr(stop-1)),
                     code_generator=self)
             em.__enter__()
@@ -1492,6 +1462,64 @@ class CodeGenerator(StructuredCodeGenerator):
             self.emitter.__exit__(None, None, None)
 
         assert start_em is self.emitter
+
+    def emit_inst_AssignFunctionCall(self, inst):
+        self.emit_trace("func call {results} = {expr}..."
+                .format(
+                    results=", ".join(inst.assignees),
+                    expr=str(inst.as_expression())[:50]))
+
+        function = self.function_registry[inst.function_id]
+        codegen = function.get_codegen(self.language)
+
+        arg_strs_dict = {}
+        arg_kinds_dict = {}
+        for i, arg in enumerate(inst.parameters):
+            arg_strs_dict[i] = self.expr(arg)
+            assert isinstance(arg, Variable)
+
+            # FIXME: This can fail for args of state update notification,
+            # hence the try/catch.
+            try:
+                arg_kinds_dict[i] = self.sym_kind_table.get(
+                        self.current_function, arg.name)
+            except KeyError:
+                arg_kinds_dict[i] = None
+
+        for arg_name, arg in inst.kw_parameters.items():
+            arg_strs_dict[arg_name] = self.expr(arg)
+            assert isinstance(arg, Variable)
+
+            # FIXME: This can fail for args of state update notification,
+            # hence the try/catch.
+            try:
+                arg_kinds_dict[arg_name] = self.sym_kind_table.get(
+                        self.current_function, arg.name)
+            except KeyError:
+                pass
+
+        from pymbolic.mapper.dependency import DependencyMapper
+        from pymbolic import var
+        from leap.vm.codegen.data import ODEComponent
+
+        for assignee_sym in inst.assignees:
+            sym_kind = self.sym_kind_table.get(
+                    self.current_function, assignee_sym)
+            if isinstance(sym_kind, ODEComponent):
+                self.emit_allocation_check(assignee_sym, sym_kind)
+
+            assert var(assignee_sym) not in DependencyMapper()(
+                    inst.as_expression())
+
+        assignee_fortran_names = tuple(
+                self.name_manager[assignee_sym] for a in inst.assignees)
+
+        codegen(
+                results=assignee_fortran_names,
+                function=function,
+                arg_strings_dict=arg_strs_dict,
+                arg_kinds_dict=arg_kinds_dict,
+                code_generator=self)
 
     def emit_return(self):
         self.emit('999 continue ! exit label')
@@ -1520,19 +1548,16 @@ class CodeGenerator(StructuredCodeGenerator):
                 (),
                 inst.time)
 
-        if self.call_before_state_update or self.call_after_state_update:
-            dummy_name = self.name_manager.make_unique_fortran_name("dummy_logical")
-            self.declaration_emitter(
-                    "logical {dummy_name}".format(dummy_name=dummy_name))
+        from leap.vm.language import AssignFunctionCall
+        from pymbolic import var
 
         if self.call_before_state_update:
-            from pymbolic import var
-            self.emit_assign_from_function_call(
-                    dummy_name,
-                    var(self.call_before_state_update)(
-                        var(self.component_name_to_component_sym(
-                            inst.component_id))
-                        ))
+            self.emit_inst_AssignFunctionCall(
+                    AssignFunctionCall(
+                        (),
+                        self.call_before_state_update,
+                        (var(self.component_name_to_component_sym(
+                            inst.component_id)),)))
 
         self.emit_assign_expr(
                 '<ret_state>'+inst.component_id,
@@ -1540,13 +1565,12 @@ class CodeGenerator(StructuredCodeGenerator):
                 inst.expression)
 
         if self.call_after_state_update:
-            from pymbolic import var
-            self.emit_assign_from_function_call(
-                    dummy_name,
-                    var(self.call_after_state_update)(
-                        var(self.component_name_to_component_sym(
-                            inst.component_id))
-                        ))
+            self.emit_inst_AssignFunctionCall(
+                    AssignFunctionCall(
+                        (),
+                        self.call_after_state_update,
+                        (var(self.component_name_to_component_sym(
+                            inst.component_id)),)))
 
     def emit_inst_Raise(self, inst):
         self.emit("write (leap_stderr,*) "
@@ -1585,8 +1609,9 @@ class Norm2Computer(TypeVisitorWithResult):
                     expr=fortran_expr))
 
 
-def codegen_builtin_norm_2(result, function, arg_strings_dict, arg_kinds_dict,
+def codegen_builtin_norm_2(results, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
+    result, = results
 
     from dagrt.vm.codegen.data import Scalar, ODEComponent, Array
     x_kind = arg_kinds_dict[0]
@@ -1628,8 +1653,9 @@ class LenComputer(TypeVisitorWithResult):
                     expr=fortran_expr))
 
 
-def codegen_builtin_len(result, function, arg_strings_dict, arg_kinds_dict,
+def codegen_builtin_len(results, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
+    result, = results
 
     from dagrt.vm.codegen.data import Scalar, Array, ODEComponent
     x_kind = arg_kinds_dict[0]
@@ -1664,8 +1690,9 @@ class IsNaNComputer(TypeVisitorWithResult):
                     expr=fortran_expr))
 
 
-def codegen_builtin_isnan(result, function, arg_strings_dict, arg_kinds_dict,
+def codegen_builtin_isnan(results, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
+    result, = results
 
     from dagrt.vm.codegen.data import Scalar, ODEComponent
     x_kind = arg_kinds_dict[0]
@@ -1713,7 +1740,10 @@ UTIL_MACROS = """
     <%def name="check_matrix(mat_array, cols_var, rows_var, func_name)" >
         if (int(${cols_var}).ne.${cols_var}) then
             write(leap_stderr,*) &
-                'argument ${cols_var} to ${func_name} is not an integer'
+                'argument ' // &
+                '${cols_var} ' // &
+                'to ${func_name}' // &
+                'is not an integer'
             stop
         endif
 
@@ -1721,8 +1751,11 @@ UTIL_MACROS = """
 
         if (${rows_var} * int(${cols_var}) .ne. size(${mat_array})) then
             write(leap_stderr,*) &
-                'size of argument ${mat_array} to ${func_name} ' // &
-                'not divisible by ${cols_var}'
+                'size of argument ' // &
+                '${mat_array}' // &
+                'to ${func_name} ' // &
+                'not divisible by ' // &
+                '${cols_var}'
             stop
         endif
     </%def>
@@ -1836,7 +1869,7 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
 
         if (${info}.ne.0) then
             write(leap_stderr,*) &
-                'gesv on ${a} failed with info=', info
+                'gesv on ${a} failed with info=', ${info}
             stop
         endif
 
@@ -1847,8 +1880,6 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
 
 builtin_print = CallCode(UTIL_MACROS + """
         write(*,*) ${arg}
-
-        ${result} = 0
         """)
 
 # }}}

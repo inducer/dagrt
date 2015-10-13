@@ -157,11 +157,14 @@ class KeyToUniqueNameMap(object):
         self._generator = _KeyTranslatingUniqueNameGeneratorWrapper(name_generator,
             key_translate_func)
 
-    def get_or_make_name_for_key(self, key):
+    def get_or_make_name_for_key(self, key, prefix=None):
         try:
             return self._dict[key]
         except KeyError:
-            new_name = self._generator(key)
+            seed = key
+            if prefix is not None:
+                seed = prefix+seed
+            new_name = self._generator(seed)
             self._dict[key] = new_name
             return new_name
 
