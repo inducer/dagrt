@@ -193,7 +193,7 @@ class FunctionCallIsolator(IdentityMapper):
             for par_name, par in rec_result.kw_parameters.items():
                 kw_parameters[par_name] = par
 
-        from leap.vm.language import AssignFunctionCall
+        from dagrt.vm.language import AssignFunctionCall
         new_insn = AssignFunctionCall(
                 assignees=(tmp_var_name,),
                 function_id=rec_result.function.name,

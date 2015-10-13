@@ -1500,7 +1500,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         from pymbolic.mapper.dependency import DependencyMapper
         from pymbolic import var
-        from leap.vm.codegen.data import ODEComponent
+        from dagrt.vm.codegen.data import ODEComponent
 
         for assignee_sym in inst.assignees:
             sym_kind = self.sym_kind_table.get(
@@ -1548,7 +1548,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 (),
                 inst.time)
 
-        from leap.vm.language import AssignFunctionCall
+        from dagrt.vm.language import AssignFunctionCall
         from pymbolic import var
 
         if self.call_before_state_update:

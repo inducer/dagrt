@@ -63,7 +63,7 @@ class Function(RecordWithoutPickling):
                 **kwargs)
 
     def get_result_kinds(self, arg_kinds, check):
-        """Return a tuple of the :class:`leap.vm.codegen.data.SymbolKind`
+        """Return a tuple of the :class:`dagrt.vm.codegen.data.SymbolKind`
         instances for the values this function returns if arguments of the
         kinds *arg_kinds* are supplied.
 
