@@ -27,9 +27,9 @@ import sys
 
 from pymbolic.primitives import LogicalNot
 
-from dagrt.vm.codegen.ast_ import (IfThen, IfThenElse, Block, InstructionWrapper,
-                                  match_ast, declare, create_ast_from_state,
-                                  simplify_ast)
+from dagrt.vm.codegen.ast import (IfThen, IfThenElse, Block, InstructionWrapper,
+                                 match_ast, declare, create_ast_from_state,
+                                 simplify_ast)
 from dagrt.vm.language import Nop, TimeIntegratorCode
 
 

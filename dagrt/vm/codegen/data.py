@@ -407,7 +407,7 @@ class SymbolKindFinder(object):
 
         result = SymbolKindTable()
 
-        from .ast_ import get_instructions_in_ast
+        from .ast import get_instructions_in_ast
 
         def make_kim(func_name, check):
             return KindInferenceMapper(

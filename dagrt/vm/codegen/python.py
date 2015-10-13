@@ -249,7 +249,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
         from .analysis import verify_code
         verify_code(dag)
 
-        from .ast_ import create_ast_from_state
+        from .ast import create_ast_from_state
 
         self.begin_emit(dag)
         for state_name in six.iterkeys(dag.states):
@@ -263,7 +263,7 @@ class PythonCodeGenerator(StructuredCodeGenerator):
     def _pre_lower(self, ast):
         self._has_yield_inst = False
         from dagrt.vm.language import YieldState
-        from .ast_ import get_instructions_in_ast
+        from .ast import get_instructions_in_ast
         for inst in get_instructions_in_ast(ast):
             if isinstance(inst, YieldState):
                 self._has_yield_inst = True

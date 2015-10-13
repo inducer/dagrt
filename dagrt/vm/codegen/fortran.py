@@ -801,7 +801,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ produce function name / function AST pairs
 
-        from .ast_ import create_ast_from_state
+        from .ast import create_ast_from_state
 
         from collections import namedtuple
         NameASTPair = namedtuple("NameASTPair", "name, ast")  # noqa
