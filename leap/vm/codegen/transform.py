@@ -180,32 +180,23 @@ class FunctionCallIsolator(IdentityMapper):
         rec_result = super_method(
                 expr, base_deps, sub_extra_deps)
 
-        from pymbolic.primitives import Call, CallWithKwargs, Variable
+        from pymbolic.primitives import Call, CallWithKwargs
         assert isinstance(rec_result, (Call, CallWithKwargs))
 
         parameters = []
         kw_parameters = {}
 
         for par in rec_result.parameters:
-            if not isinstance(par, Variable):
-                raise RuntimeError("Function argument in %s is not a plain "
-                        "variable--you may need to use FunctionArgumentIsolator "
-                        "before calling FunctionCallIsolator")
+            parameters.append(par)
 
-            parameters.append(par.name)
-
-        for par_name, par in rec_result.kw_parameters.items():
-            if not isinstance(par, Variable):
-                raise RuntimeError("Function argument in %s is not a plain "
-                        "variable--you may need to use FunctionArgumentIsolator "
-                        "before calling FunctionCallIsolator")
-
+        if isinstance(rec_result, CallWithKwargs):
+            for par_name, par in rec_result.kw_parameters.items():
                 kw_parameters[par_name] = par
 
         from leap.vm.language import AssignFunctionCall
         new_insn = AssignFunctionCall(
                 assignees=(tmp_var_name,),
-                function_name=rec_result.function.name,
+                function_id=rec_result.function.name,
                 parameters=tuple(parameters),
                 kw_parameters=kw_parameters,
                 id=tmp_insn_id,

@@ -1603,8 +1603,9 @@ class Norm2Computer(TypeVisitorWithResult):
                     expr=fortran_expr))
 
 
-def codegen_builtin_norm_2(result, function, arg_strings_dict, arg_kinds_dict,
+def codegen_builtin_norm_2(results, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
+    result, = results
 
     from leap.vm.codegen.data import Scalar, ODEComponent, Array
     x_kind = arg_kinds_dict[0]
@@ -1646,8 +1647,9 @@ class LenComputer(TypeVisitorWithResult):
                     expr=fortran_expr))
 
 
-def codegen_builtin_len(result, function, arg_strings_dict, arg_kinds_dict,
+def codegen_builtin_len(results, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
+    result, = results
 
     from leap.vm.codegen.data import Scalar, Array, ODEComponent
     x_kind = arg_kinds_dict[0]
@@ -1682,8 +1684,9 @@ class IsNaNComputer(TypeVisitorWithResult):
                     expr=fortran_expr))
 
 
-def codegen_builtin_isnan(result, function, arg_strings_dict, arg_kinds_dict,
+def codegen_builtin_isnan(results, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
+    result, = results
 
     from leap.vm.codegen.data import Scalar, ODEComponent
     x_kind = arg_kinds_dict[0]
