@@ -85,7 +85,7 @@ under the control of the user.
 
 See :module:`dagrt.function_registry` for interpretation of function names.
 The function namespace and the variable namespace are distinct. No user-defined
-identifiers should start with `leap_`.
+identifiers should start with `dagrt_`.
 
 Instructions
 ~~~~~~~~~~~~
@@ -374,7 +374,7 @@ class AssignFunctionCall(AssignmentBase):
         a transform that accomplishes this.
 
     *   Calling functions with multiple return values is not supported
-        as part of leap's language.
+        as part of dagrt's language.
 
     .. attribute:: assignees
 
@@ -1195,7 +1195,7 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
             lines.append(dep)
         lines.append("}")
 
-    return "digraph leap_code {\n%s\n}" % (
+    return "digraph dagrt_code {\n%s\n}" % (
             "\n".join(lines)
             )
 
@@ -1208,15 +1208,15 @@ def show_dependency_graph(*args, **kwargs):
     dot = get_dot_dependency_graph(*args, **kwargs)
 
     from tempfile import mkdtemp
-    temp_dir = mkdtemp(prefix="tmp_leap_dot")
+    temp_dir = mkdtemp(prefix="tmp_dagrt_dot")
 
-    dot_file_name = "leap.dot"
+    dot_file_name = "dagrt.dot"
 
     from os.path import join
     with open(join(temp_dir, dot_file_name), "w") as dotf:
         dotf.write(dot)
 
-    svg_file_name = "leap.svg"
+    svg_file_name = "dagrt.svg"
     from subprocess import check_call
     check_call(["dot", "-Tsvg", "-o", svg_file_name, dot_file_name],
             cwd=temp_dir)

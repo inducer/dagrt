@@ -46,7 +46,7 @@ PREC_IFTHENELSE = 1
 
 
 class ExtendedDependencyMapper(DependencyMapper):
-    """Extends DependencyMapper to handle values encountered in leap
+    """Extends DependencyMapper to handle values encountered in dagrt
     IR.
     """
 

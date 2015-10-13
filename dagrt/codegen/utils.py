@@ -108,7 +108,7 @@ from string import ascii_letters, digits
 _ident_chars = set('_' + ascii_letters + digits)
 
 
-def make_identifier_from_name(name, default_identifier="leap_var"):
+def make_identifier_from_name(name, default_identifier="dagrt_var"):
     result = "".join([c if c in _ident_chars else "_" for c in name])
     result = result.lstrip("_")
     if not result:

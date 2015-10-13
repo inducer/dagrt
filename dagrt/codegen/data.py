@@ -1,4 +1,4 @@
-"""Mini-type inference for leap methods"""
+"""Mini-type inference for dagrt methods"""
 from __future__ import division, with_statement, print_function
 
 from dagrt.utils import TODO

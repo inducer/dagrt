@@ -62,7 +62,7 @@ class FortranNameManager(object):
         self.name_generator = UniqueNameGenerator()
         self.local_map = KeyToUniqueNameMap(name_generator=self.name_generator)
         self.global_map = KeyToUniqueNameMap(start={
-                '<t>': 'leap_t', '<dt>': 'leap_dt'},
+                '<t>': 'dagrt_t', '<dt>': 'leap_dt'},
                 name_generator=self.name_generator)
         self.function_map = KeyToUniqueNameMap(name_generator=self.name_generator)
 
@@ -73,7 +73,7 @@ class FortranNameManager(object):
     def name_local(self, var, prefix=None):
         """Return the identifier for a local variable."""
         if prefix is None:
-            if not var.startswith("leap_"):
+            if not var.startswith("dagrt_"):
                 prefix = "lploc_"
 
         return self.local_map.get_or_make_name_for_key(var, prefix=prefix)
@@ -93,18 +93,18 @@ class FortranNameManager(object):
         the name of a local or global variable.
         """
         if is_state_variable(name):
-            return 'leap_state%'+self.name_global(name)
+            return 'dagrt_state%'+self.name_global(name)
         else:
             return self.name_local(name)
 
     def name_refcount(self, name, qualified_with_state=True):
         if is_state_variable(name):
             if qualified_with_state:
-                return 'leap_state%leap_refcnt_'+self.name_global(name)
+                return 'dagrt_state%leap_refcnt_'+self.name_global(name)
             else:
-                return 'leap_refcnt_'+self.name_global(name)
+                return 'dagrt_refcnt_'+self.name_global(name)
         else:
-            return self.name_local("leap_refcnt_"+name)
+            return self.name_local("dagrt_refcnt_"+name)
 
 # }}}
 
@@ -636,13 +636,13 @@ class AllocationEmitter(TypeVisitor):
                         str(dim_axis) for dim_axis in pointee_type.dimension)
 
         code_generator.emit_traceable(
-                'allocate({name}{dimension}, stat=leap_ierr)'.format(
+                'allocate({name}{dimension}, stat=dagrt_ierr)'.format(
                     name=fortran_expr,
                     dimension=_replace_indices(index_expr_map, dimension)))
         with FortranIfEmitter(
-                code_generator.emitter, 'leap_ierr.ne.0', code_generator):
+                code_generator.emitter, 'dagrt_ierr.ne.0', code_generator):
             code_generator.emit(
-                    "write(leap_stderr,*) 'failed to allocate {name}'".format(
+                    "write(dagrt_stderr,*) 'failed to allocate {name}'".format(
                         name=fortran_expr))
             code_generator.emit("stop")
 
@@ -757,11 +757,11 @@ class CodeGenerator(StructuredCodeGenerator):
 
     @staticmethod
     def state_name_to_state_sym(state_name):
-        return "leap_state_"+state_name
+        return "dagrt_state_"+state_name
 
     @staticmethod
     def component_name_to_component_sym(comp_name):
-        return "leap_component_"+comp_name
+        return "dagrt_component_"+comp_name
 
     @property
     def emitter(self):
@@ -861,10 +861,10 @@ class CodeGenerator(StructuredCodeGenerator):
         self.current_function = function_name
 
         self.emit_def_begin(
-                'leap_state_func_' + function_name,
-                self.extra_arguments + ('leap_state',),
+                'dagrt_state_func_' + function_name,
+                self.extra_arguments + ('dagrt_state',),
                 state_id=function_name)
-        self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
+        self.declaration_emitter('type(dagrt_state_type), pointer :: leap_state')
         self.declaration_emitter('')
 
         self.lower_ast(ast)
@@ -880,7 +880,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         from .analysis import collect_time_ids_from_dag
         for i, time_id in enumerate(collect_time_ids_from_dag(dag)):
-            self.emit("parameter (leap_time_{time_id} = {i})".format(
+            self.emit("parameter (dagrt_time_{time_id} = {i})".format(
                 time_id=time_id, i=i))
         self.emit('')
 
@@ -902,9 +902,9 @@ class CodeGenerator(StructuredCodeGenerator):
 
         with FortranTypeEmitter(
                 self.emitter,
-                'leap_state_type',
+                'dagrt_state_type',
                 self) as emit:
-            emit('integer leap_next_state')
+            emit('integer dagrt_next_state')
             emit('')
 
             for identifier, sym_kind in six.iteritems(
@@ -914,8 +914,8 @@ class CodeGenerator(StructuredCodeGenerator):
                         self.name_manager.name_global(identifier),
                         sym_kind=sym_kind)
 
-        self.emit('integer leap_stderr')
-        self.emit('parameter (leap_stderr=0)')
+        self.emit('integer dagrt_stderr')
+        self.emit('parameter (dagrt_stderr=0)')
         self.emit('')
         self.emit('contains')
         self.emit('')
@@ -1032,10 +1032,10 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_allocate_refcount(self, sym):
         refcnt_name = self.name_manager.name_refcount(sym)
 
-        self.emit_traceable('allocate({name}, stat=leap_ierr)'.format(
+        self.emit_traceable('allocate({name}, stat=dagrt_ierr)'.format(
             name=refcnt_name))
-        with FortranIfEmitter(self.emitter, 'leap_ierr.ne.0', self):
-            self.emit("write(leap_stderr,*) 'failed to allocate {name}'".format(
+        with FortranIfEmitter(self.emitter, 'dagrt_ierr.ne.0', self):
+            self.emit("write(dagrt_stderr,*) 'failed to allocate {name}'".format(
                 name=refcnt_name))
             self.emit("stop")
 
@@ -1146,12 +1146,12 @@ class CodeGenerator(StructuredCodeGenerator):
                 for sym in self.sym_kind_table.global_table
                 if not sym.startswith("<ret")]
 
-        args = self.extra_arguments + ('leap_state',) + tuple(
+        args = self.extra_arguments + ('dagrt_state',) + tuple(
                 self.name_manager.name_global(sym)
                 for sym in init_symbols)
 
         function_name = 'initialize'
-        state_id = "<leap>"+function_name
+        state_id = "<dagrt>"+function_name
         self.emit_def_begin(function_name, args, state_id=state_id)
 
         for sym in init_symbols:
@@ -1159,7 +1159,7 @@ class CodeGenerator(StructuredCodeGenerator):
             fortran_name = self.name_manager.name_global(sym)
             self.sym_kind_table.set(state_id, "<target>"+fortran_name, sym_kind)
 
-        self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
+        self.declaration_emitter('type(dagrt_state_type), pointer :: leap_state')
         self.declaration_emitter('')
 
         self.current_function = state_id
@@ -1174,14 +1174,14 @@ class CodeGenerator(StructuredCodeGenerator):
                     other_specifiers=("optional",))
         self.emit('')
 
-        self.emit('real :: leap_nan, leap_nan_helper')
+        self.emit('real :: dagrt_nan, leap_nan_helper')
         self.emit('')
-        self.emit('leap_nan_helper = 0.0')
-        self.emit('leap_nan = 0.0/leap_nan_helper')
+        self.emit('dagrt_nan_helper = 0.0')
+        self.emit('dagrt_nan = 0.0/leap_nan_helper')
         self.emit('')
 
         self.emit(
-                "leap_state%leap_next_state = leap_state_{0}"
+                "dagrt_state%leap_next_state = leap_state_{0}"
                 .format(dag.initial_state))
 
         for sym, sym_kind in six.iteritems(
@@ -1204,7 +1204,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
             from dagrt.codegen.data import Scalar
             if sym.startswith("<ret") and isinstance(sym_kind, Scalar):
-                self.emit('{fortran_name} = leap_nan'.format(
+                self.emit('{fortran_name} = dagrt_nan'.format(
                     fortran_name=tgt_fortran_name))
 
         self.emit('')
@@ -1241,13 +1241,13 @@ class CodeGenerator(StructuredCodeGenerator):
         self.current_function = None
 
     def emit_shutdown(self):
-        args = self.extra_arguments + ('leap_state',)
+        args = self.extra_arguments + ('dagrt_state',)
 
         function_name = 'shutdown'
-        state_id = "<leap>"+function_name
+        state_id = "<dagrt>"+function_name
         self.emit_def_begin(function_name, args, state_id=state_id)
 
-        self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
+        self.declaration_emitter('type(dagrt_state_type), pointer :: leap_state')
         self.declaration_emitter('')
 
         self.current_function = state_id
@@ -1264,10 +1264,10 @@ class CodeGenerator(StructuredCodeGenerator):
                         self.emitter,
                         'associated({id})'.format(id=fortran_name), self):
                     self.emit(
-                            "write(leap_stderr,*) 'leaked reference in {name}'"
+                            "write(dagrt_stderr,*) 'leaked reference in {name}'"
                             .format(name=fortran_name))
                     self.emit(
-                            "write(leap_stderr,*) 'remaining refcount ', {name}"
+                            "write(dagrt_stderr,*) 'remaining refcount ', {name}"
                             .format(name=self.name_manager.name_refcount(sym)))
 
         self.emit_def_end(function_name)
@@ -1275,13 +1275,13 @@ class CodeGenerator(StructuredCodeGenerator):
         self.current_function = None
 
     def emit_run_step(self, dag):
-        args = self.extra_arguments + ('leap_state',)
+        args = self.extra_arguments + ('dagrt_state',)
 
         function_name = 'run'
-        state_id = "<leap>"+function_name
+        state_id = "<dagrt>"+function_name
         self.emit_def_begin(function_name, args, state_id=state_id)
 
-        self.declaration_emitter('type(leap_state_type), pointer :: leap_state')
+        self.declaration_emitter('type(dagrt_state_type), pointer :: leap_state')
         self.declaration_emitter('')
 
         self.current_function = state_id
@@ -1289,7 +1289,7 @@ class CodeGenerator(StructuredCodeGenerator):
         if_emit = None
         for name, state_descr in six.iteritems(dag.states):
             state_sym_name = self.state_name_to_state_sym(name)
-            cond = "leap_state%leap_next_state == "+state_sym_name
+            cond = "dagrt_state%leap_next_state == "+state_sym_name
 
             if if_emit is None:
                 if_emit = FortranIfEmitter(
@@ -1299,18 +1299,18 @@ class CodeGenerator(StructuredCodeGenerator):
                 if_emit.emit_else_if(cond)
 
             self.emit(
-                    "leap_state%leap_next_state = "
+                    "dagrt_state%leap_next_state = "
                     + self.state_name_to_state_sym(state_descr.next_state))
 
             self.emit(
-                    "call leap_state_func_{state_name}({args})".format(
+                    "call dagrt_state_func_{state_name}({args})".format(
                         state_name=name,
                         args=", ".join(args)))
 
         if if_emit:
             if_emit.emit_else()
-            self.emit("write(leap_stderr,*) 'encountered invalid state in run', "
-                    "leap_state%leap_next_state")
+            self.emit("write(dagrt_stderr,*) 'encountered invalid state in run', "
+                    "dagrt_state%leap_next_state")
             self.emit("stop")
 
         if_emit.__exit__(None, None, None)
@@ -1359,7 +1359,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 self).__enter__()
 
         self.declaration_emitter('implicit none')
-        self.declaration_emitter('integer leap_ierr')
+        self.declaration_emitter('integer dagrt_ierr')
         self.declaration_emitter('')
 
         self.emit_extra_arg_decl(self.declaration_emitter)
@@ -1544,7 +1544,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_assign_expr(
                 '<ret_time_id>'+inst.component_id,
                 (),
-                Variable("leap_time_"+str(inst.time_id)))
+                Variable("dagrt_time_"+str(inst.time_id)))
         self.emit_assign_expr(
                 '<ret_time>'+inst.component_id,
                 (),
@@ -1575,7 +1575,7 @@ class CodeGenerator(StructuredCodeGenerator):
                             inst.component_id)),)))
 
     def emit_inst_Raise(self, inst):
-        self.emit("write (leap_stderr,*) "
+        self.emit("write (dagrt_stderr,*) "
                 "'{condition}: {message}'".format(
                     condition=inst.error_condition.__name__,
                     message=inst.error_message))
@@ -1586,7 +1586,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def emit_inst_StateTransition(self, inst):
         self.emit(
-                'leap_state%leap_next_state = '
+                'dagrt_state%leap_next_state = '
                 + self.state_name_to_state_sym(inst.next_state))
 
     # }}}
@@ -1717,7 +1717,7 @@ def codegen_builtin_isnan(results, function, arg_strings_dict, arg_kinds_dict,
 
 builtin_array = CallCode("""
         if (int(${n}).ne.${n}) then
-            write(leap_stderr,*) 'argument to array() is not an integer'
+            write(dagrt_stderr,*) 'argument to array() is not an integer'
             stop
         endif
 
@@ -1741,7 +1741,7 @@ UTIL_MACROS = """
 
     <%def name="check_matrix(mat_array, cols_var, rows_var, func_name)" >
         if (int(${cols_var}).ne.${cols_var}) then
-            write(leap_stderr,*) &
+            write(dagrt_stderr,*) &
                 'argument ' // &
                 '${cols_var} ' // &
                 'to ${func_name}' // &
@@ -1752,7 +1752,7 @@ UTIL_MACROS = """
         ${rows_var} = size(${mat_array}) / int(${cols_var})
 
         if (${rows_var} * int(${cols_var}) .ne. size(${mat_array})) then
-            write(leap_stderr,*) &
+            write(dagrt_stderr,*) &
                 'size of argument ' // &
                 '${mat_array}' // &
                 'to ${func_name} ' // &
@@ -1829,11 +1829,11 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
         ${check_matrix(b, b_cols, b_rows, "linear_solve")}
 
         if (int(${a_rows}).ne.int(${b_rows})) then
-            write(leap_stderr,*) 'inconsistent matrix sizes in linear_solve'
+            write(dagrt_stderr,*) 'inconsistent matrix sizes in linear_solve'
             stop
         endif
         if (int(${a_rows}).ne.int(${a_cols})) then
-            write(leap_stderr,*) 'non-square matrix sizes in linear_solve'
+            write(dagrt_stderr,*) 'non-square matrix sizes in linear_solve'
             stop
         endif
 
@@ -1870,7 +1870,7 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
             ${result}, int(${b_rows}), ${info})
 
         if (${info}.ne.0) then
-            write(leap_stderr,*) &
+            write(dagrt_stderr,*) &
                 'gesv on ${a} failed with info=', ${info}
             stop
         endif

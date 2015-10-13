@@ -8,13 +8,6 @@ Description Language
 
 .. automodule:: leap.vm.language
 
-Methods
--------
-
-.. automodule:: leap.method.rk
-.. automodule:: leap.method.ab
-.. automodule:: leap.method.ab.multirate
-
 Execution
 ---------
 

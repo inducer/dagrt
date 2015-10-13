@@ -54,7 +54,7 @@ class InstructionDAGVerifier(object):
         # TODO: Warn about conditions that may have side effects.
         # Eg:
         # WARNING: The condition expression for this function includes a call to
-        # an external function.  leap assumes that evaluating conditional
+        # an external function.  dagrt assumes that evaluating conditional
         # expressions does not produce side effects.  If calling the function
         # does produce a side effect, the behavior of the code may not be what
         # you expect.
