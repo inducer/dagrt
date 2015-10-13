@@ -180,7 +180,6 @@ class TemporaryDirectory(object):
 # {{{ run_fortran
 
 def run_fortran(sources, fortran_options=[]):
-    from utils import TemporaryDirectory
     from os.path import join
 
     with TemporaryDirectory() as tmpdir:
