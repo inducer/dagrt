@@ -346,51 +346,45 @@ class PythonCodeGenerator(StructuredCodeGenerator):
 
     def _emit_run(self):
         emit = PythonFunctionEmitter('run', ('self', 't_end=None', 'max_steps=None'))
-        emit('n_steps = 0')
-        emit('while True:')
-        with Indentation(emit):
-            emit('if t_end is not None and self.t >= t_end:')
-            with Indentation(emit):
-                emit('return')
+        emit("""
+            n_steps = 0
+            while True:
+                if t_end is not None and self.t >= t_end:
+                    return
 
-            emit('if max_steps is not None and n_steps >= max_steps:')
-            with Indentation(emit):
-                emit('return')
+                if max_steps is not None and n_steps >= max_steps:
+                    return
 
-            emit('cur_state = self.next_state')
-            emit('try:')
-            with Indentation(emit):
-                emit('for evt in self.run_single_step():')
-                with Indentation(emit):
-                    emit('yield evt')
+                cur_state = self.next_state
+                try:
+                    for evt in self.run_single_step():
+                        yield evt
 
-            emit('except self.FailStepException:')
-            with Indentation(emit):
-                emit('yield self.StepFailed(t=self.t)')
-                emit('continue')
+                except self.FailStepException:
+                    yield self.StepFailed(t=self.t)
+                    continue
 
-            emit('except self.TransitionEvent as evt:')
-            with Indentation(emit):
-                emit('self.next_state = evt.next_state')
+                except self.TransitionEvent as evt:
+                    self.next_state = evt.next_state
 
-            emit('yield self.StepCompleted(dt=self.dt, t=self.t, '
-                'current_state=cur_state, next_state=self.next_state)')
+                yield self.StepCompleted(dt=self.dt, t=self.t,
+                    current_state=cur_state, next_state=self.next_state)
 
-            emit('n_steps += 1')
+                n_steps += 1
+            """)
 
-        emit("")
         self._class_emitter.incorporate(emit)
 
     def _emit_run_single_step(self):
         emit = PythonFunctionEmitter('run_single_step', ('self',))
 
-        emit('self.next_state, state_func = '
-             'self.state_transition_table[self.next_state]')
+        emit("""
+            self.next_state, state_func = (
+                self.state_transition_table[self.next_state])
 
-        emit('for evt in state_func():')
-        with Indentation(emit):
-            emit('yield evt')
-        emit("")
+            for evt in state_func():
+                yield evt
+            """)
         self._class_emitter.incorporate(emit)
 
     def finish_emit(self, dag):
