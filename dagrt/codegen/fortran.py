@@ -41,8 +41,6 @@ THE SOFTWARE.
 """
 
 
-
-
 def pad_fortran(line, width):
     line += ' ' * (width - 1 - len(line))
     line += '&'
@@ -175,9 +173,13 @@ class FortranIfEmitter(FortranSubblockEmitter):
 
 
 class FortranDoEmitter(FortranSubblockEmitter):
-    def __init__(self, parent_emitter, loop_var, bounds, code_generator=None):
+    def __init__(self, parent_emitter, loop_var, bounds, code_generator=None,
+            parallel_do_preamble=None):
         super(FortranDoEmitter, self).__init__(
                 parent_emitter, "do", code_generator)
+        if parallel_do_preamble:
+            self(parallel_do_preamble)
+
         self("do {loop_var} = {bounds}".format(
             loop_var=loop_var, bounds=bounds))
 
@@ -506,12 +508,18 @@ class _ArrayLoopManager(object):
             code_generator.declaration_emitter('integer %s' % index_name)
 
             start, stop = atype.parse_dimension(dim)
+
+            parallel_do_preamble = None
+            if not self.array_type.is_allocatable():
+                parallel_do_preamble = code_generator.parallel_do_preamble
+
             em = FortranDoEmitter(
                     code_generator.emitter, index_name,
                     "%s, %s" % (
                         _replace_indices(index_expr_map, start),
                         _replace_indices(index_expr_map, stop)),
-                    code_generator)
+                    code_generator,
+                    parallel_do_preamble=parallel_do_preamble)
             self.emitters.append(em)
             em.__enter__()
 
@@ -694,6 +702,7 @@ class CodeGenerator(StructuredCodeGenerator):
             call_after_state_update=None,
             extra_arguments=(),
             extra_argument_decl=None,
+            parallel_do_preamble=None,
             trace=False):
         """
         :arg function_registry:
@@ -713,6 +722,8 @@ class CodeGenerator(StructuredCodeGenerator):
             inserted into each generated function. Must be a multi-line
             string whose first line is empty, typically from a triple-quoted
             string in Python. Leading indentation is removed.
+        :arg parallel_do_preamble: *None* or a string to be inserted before
+            each constant-trip-count simd'able ``do`` loop.
         """
         if function_registry is None:
             from dagrt.function_registry import base_function_registry
@@ -742,6 +753,8 @@ class CodeGenerator(StructuredCodeGenerator):
             extra_argument_decl = remove_common_indentation(
                 extra_argument_decl)
         self.extra_argument_decl = extra_argument_decl
+
+        self.parallel_do_preamble = parallel_do_preamble
 
         self.name_manager = FortranNameManager()
         self.expr_mapper = FortranExpressionMapper(
@@ -1454,7 +1467,8 @@ class CodeGenerator(StructuredCodeGenerator):
                     self.emitter,
                     self.name_manager[ident],
                     "int(%s), int(%s)" % (self.expr(start), self.expr(stop-1)),
-                    code_generator=self)
+                    code_generator=self,
+                    parallel_do_preamble=self.parallel_do_preamble)
             em.__enter__()
 
         self.emit_assign_expr(
