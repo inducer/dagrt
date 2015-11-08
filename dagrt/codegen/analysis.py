@@ -1,7 +1,4 @@
 """Analysis passes"""
-from pymbolic.mapper import Collector
-from dagrt.language import Instruction, YieldState, StateTransition
-
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
@@ -25,6 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from pymbolic.mapper import Collector
+from dagrt.language import (
+        Instruction, YieldState, StateTransition, AssignFunctionCall)
 
 
 # {{{ verifier
@@ -179,7 +179,13 @@ class _FunctionNameCollector(Collector):
                 | super(_FunctionNameCollector, self).map_call_with_kwargs(expr))
 
 
-def collect_function_names_from_dag(dag):
+def collect_function_names_from_dag(dag, no_expressions=False):
+    """
+    :arg no_expressions: Do not consider expressions when finding function names.
+        This saves a bit of time if, for example,
+        :func:`dagrt.codegen.transform.isolate_function_calls` has been called
+        on *dag*.
+    """
     fnc = _FunctionNameCollector()
 
     result = set()
@@ -188,7 +194,11 @@ def collect_function_names_from_dag(dag):
         result.update(fnc(expr))
         return expr
     for insn in dag.instructions:
-        insn.map_expressions(mapper)
+        if isinstance(insn, AssignFunctionCall):
+            result.add(insn.function_id)
+
+        if not no_expressions:
+            insn.map_expressions(mapper)
 
     return result
 

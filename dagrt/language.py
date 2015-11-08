@@ -1,13 +1,5 @@
 from __future__ import division, with_statement
 
-from pytools import RecordWithoutPickling, memoize_method
-from dagrt.utils import get_variables
-from contextlib import contextmanager
-
-import logging
-import six
-import six.moves
-
 __copyright__ = """
 Copyright (C) 2013 Andreas Kloeckner
 Copyright (C) 2014 Matt Wala
@@ -33,6 +25,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from pytools import RecordWithoutPickling, memoize_method
+from dagrt.utils import get_variables
+from contextlib import contextmanager
+
+import logging
+import six
+import six.moves
 
 
 logger = logging.getLogger(__name__)

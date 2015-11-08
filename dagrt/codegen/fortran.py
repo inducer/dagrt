@@ -1,23 +1,6 @@
 """Fortran code generator"""
 from __future__ import division
 
-import sys
-from functools import partial
-import re  # noqa
-import six
-
-from .expressions import FortranExpressionMapper
-from .codegen_base import StructuredCodeGenerator
-from dagrt.utils import is_state_variable
-from pytools.py_codegen import (
-        # It's the same code. So sue me.
-        PythonCodeGenerator as FortranEmitterBase)
-from pymbolic.primitives import (Call, CallWithKwargs, Variable,
-        Subscript, Lookup)
-from pymbolic.mapper import IdentityMapper
-from .utils import wrap_line_base, KeyToUniqueNameMap
-
-
 __copyright__ = "Copyright (C) 2014 Matt Wala, Andreas Kloeckner"
 
 __license__ = """
@@ -39,6 +22,23 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
+
+import sys
+from functools import partial
+import re  # noqa
+import six
+
+from .expressions import FortranExpressionMapper
+from .codegen_base import StructuredCodeGenerator
+from dagrt.utils import is_state_variable
+from pytools.py_codegen import (
+        # It's the same code. So sue me.
+        PythonCodeGenerator as FortranEmitterBase)
+from pymbolic.primitives import (Call, CallWithKwargs, Variable,
+        Subscript, Lookup)
+from pymbolic.mapper import IdentityMapper
+from .utils import (wrap_line_base, KeyToUniqueNameMap,
+        make_identifier_from_name)
 
 
 def pad_fortran(line, width):
@@ -691,6 +691,8 @@ class InitializationEmitter(TypeVisitor):
 class CodeGenerator(StructuredCodeGenerator):
     language = "fortran"
 
+    # {{{ constructor
+
     def __init__(self, module_name,
             ode_component_type_map,
             function_registry=None,
@@ -702,7 +704,12 @@ class CodeGenerator(StructuredCodeGenerator):
             call_after_state_update=None,
             extra_arguments=(),
             extra_argument_decl=None,
+
             parallel_do_preamble=None,
+
+            emit_instrumentation=False,
+            timing_function=None,
+
             trace=False):
         """
         :arg function_registry:
@@ -724,6 +731,11 @@ class CodeGenerator(StructuredCodeGenerator):
             string in Python. Leading indentation is removed.
         :arg parallel_do_preamble: *None* or a string to be inserted before
             each constant-trip-count simd'able ``do`` loop.
+        :arg emit_instrumentation: True or False, whether to emit performance
+            instrumentation.
+        :arg timing_function: *None* or the name of a function that returns
+            wall clock time as a number of seconds, as a ``real*8``.
+            Required if *emit_instrumentation* is set to *True*.
         """
         if function_registry is None:
             from dagrt.function_registry import base_function_registry
@@ -755,6 +767,11 @@ class CodeGenerator(StructuredCodeGenerator):
         self.extra_argument_decl = extra_argument_decl
 
         self.parallel_do_preamble = parallel_do_preamble
+        self.emit_instrumentation = emit_instrumentation
+        self.timing_function = timing_function
+        if emit_instrumentation and timing_function is None:
+            raise ValueError("must supply timing_function if "
+                    "emit_instrumentation is True")
 
         self.name_manager = FortranNameManager()
         self.expr_mapper = FortranExpressionMapper(
@@ -767,6 +784,22 @@ class CodeGenerator(StructuredCodeGenerator):
         self.module_emitter.__enter__()
 
         self.emitters = [self.module_emitter]
+
+    # }}}
+
+    # {{{ utilities
+
+    def get_called_function_names(self, dag):
+        from dagrt.codegen.analysis import collect_function_names_from_dag
+        result = collect_function_names_from_dag(dag, no_expressions=True)
+
+        if self.call_before_state_update:
+            result.add(self.call_before_state_update)
+
+        if self.call_after_state_update:
+            result.add(self.call_after_state_update)
+
+        return sorted(result)
 
     @staticmethod
     def state_name_to_state_sym(state_name):
@@ -796,6 +829,10 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_trace(self, line):
         if self.trace:
             self.emit("write(*,*) '%s'" % line)
+
+    # }}}
+
+    # {{{ main entrypoint
 
     def __call__(self, dag, optimize=True):
         from .analysis import verify_code
@@ -870,6 +907,10 @@ class CodeGenerator(StructuredCodeGenerator):
 
         return "\n".join(new_lines)
 
+    # }}}
+
+    # {{{ lower_function
+
     def lower_function(self, function_name, ast):
         self.current_function = function_name
 
@@ -880,10 +921,89 @@ class CodeGenerator(StructuredCodeGenerator):
         self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
         self.declaration_emitter('')
 
+        # {{{ instrumentation
+
+        if self.emit_instrumentation:
+            self.emit(
+                    "dagrt_state%dagrt_state_{state}_count "
+                    "= dagrt_state%dagrt_state_{state}_count + 1"
+                    .format(state=function_name))
+
+            timer_start_var = self.name_manager.make_unique_fortran_name(
+                "timer_start")
+            self.declaration_emitter("real*8 " + timer_start_var)
+
+            self.emit(
+                    "{timer_start_var} = {timing_function}()"
+                    .format(
+                        timer_start_var=timer_start_var,
+                        timing_function=self.timing_function))
+
+        # }}}
+
         self.lower_ast(ast)
+
+        self.emit('999 continue ! exit label')
+
+        # {{{ emit variable deinit
+
+        sym_table = self.sym_kind_table.per_function_table.get(
+                self.current_function, {})
+
+        for identifier, sym_kind in six.iteritems(sym_table):
+            self.emit_variable_deinit(identifier, sym_kind)
+
+        # }}}
+
+        self.emit_trace('leave %s' % self.current_function)
+
+        # {{{ instrumentation
+
+        if self.emit_instrumentation:
+            self.emit(
+                    "dagrt_state%dagrt_state_{state}_time "
+                    "= dagrt_state%dagrt_state_{state}_time "
+                    "+ ({timing_function}() - {timer_start_var})"
+                    .format(
+                        state=function_name,
+                        timing_function=self.timing_function,
+                        timer_start_var=timer_start_var,
+                        ))
+
+        # }}}
+
         self.emit_def_end(function_name)
 
         self.current_function = None
+
+    # }}}
+
+    # {{{ get_code
+
+    def get_code(self):
+        assert not self.module_emitter.preamble
+
+        indent_spaces = 1
+        indentation = indent_spaces*' '
+
+        wrapped_lines = []
+        for l in self.module_emitter.code:
+            line_leading_spaces = (len(l) - len(l.lstrip(" ")))
+            level = line_leading_spaces // indent_spaces
+            line_ind = level*indentation
+            if l[line_leading_spaces:].startswith("!"):
+                wrapped_lines.append(l)
+            else:
+                for wrapped_line in wrap_line(
+                        l[line_leading_spaces:],
+                        level, indentation=indentation):
+                    wrapped_lines.append(line_ind+wrapped_line)
+
+        return "\n".join(wrapped_lines)
+
+    # }}}
+
+    # {{{ begin/finish_emit
 
     def begin_emit(self, dag):
         if self.module_preamble:
@@ -927,11 +1047,47 @@ class CodeGenerator(StructuredCodeGenerator):
                         self.name_manager.name_global(identifier),
                         sym_kind=sym_kind)
 
+            # {{{ instrumentation
+
+            if self.emit_instrumentation:
+                emit('')
+                emit('! {{{ instrumentation')
+                emit('')
+
+                for state_name in sorted(dag.states):
+                    emit('integer dagrt_state_%s_count' % state_name)
+                    emit('integer dagrt_state_%s_failures' % state_name)
+                    emit('real*8 dagrt_state_%s_time' % state_name)
+
+                emit('')
+
+                for func_name in self.get_called_function_names(dag):
+                    func_id = make_identifier_from_name(func_name)
+                    emit('integer dagrt_func_%s_count' % func_id)
+                    emit('real*8 dagrt_func_%s_time' % func_id)
+
+                emit('')
+                emit('! }}}')
+                emit('')
+
+            # }}}
+
         self.emit('integer dagrt_stderr')
         self.emit('parameter (dagrt_stderr=0)')
         self.emit('')
         self.emit('contains')
         self.emit('')
+
+    def finish_emit(self, dag):
+        self.emit_initialize(dag)
+        self.emit_shutdown()
+        self.emit_run_step(dag)
+
+        self.emit_print_profile(dag)
+
+        self.module_emitter.__exit__(None, None, None)
+
+    # }}}
 
     # {{{ data management
 
@@ -1153,6 +1309,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
     # }}}
 
+    # {{{ emit_initialize
+
     def emit_initialize(self, dag):
         init_symbols = [
                 sym
@@ -1249,9 +1407,38 @@ class CodeGenerator(StructuredCodeGenerator):
                     AssignmentEmitter(self)(comp_type, tgt_fortran_name, {},
                             var("<target>"+fortran_name))
 
+        # {{{ instrumentation
+
+        if self.emit_instrumentation:
+            self.emit('')
+            self.emit('! {{{ instrumentation')
+            self.emit('')
+
+            for state_name in sorted(dag.states):
+                self.emit('dagrt_state%%dagrt_state_%s_count = 0' % state_name)
+                self.emit('dagrt_state%%dagrt_state_%s_failures = 0' % state_name)
+                self.emit('dagrt_state%%dagrt_state_%s_time = 0' % state_name)
+
+            self.emit('')
+
+            for func_name in self.get_called_function_names(dag):
+                func_id = make_identifier_from_name(func_name)
+                self.emit('dagrt_state%% dagrt_func_%s_count = 0' % func_id)
+                self.emit('dagrt_state%%dagrt_func_%s_time = 0' % func_id)
+
+            self.emit('')
+            self.emit('! }}}')
+            self.emit('')
+
+        # }}}
+
         self.emit_def_end(function_name)
 
         self.current_function = None
+
+    # }}}
+
+    # {{{ emit_shutdown
 
     def emit_shutdown(self):
         args = self.extra_arguments + ('dagrt_state',)
@@ -1286,6 +1473,10 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_def_end(function_name)
 
         self.current_function = None
+
+    # }}}
+
+    # {{{ emit_run_step
 
     def emit_run_step(self, dag):
         args = self.extra_arguments + ('dagrt_state',)
@@ -1332,37 +1523,86 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.current_function = None
 
-    def finish_emit(self, dag):
-        self.emit_initialize(dag)
-        self.emit_shutdown()
-        self.emit_run_step(dag)
+    # }}}
 
-        self.module_emitter.__exit__(None, None, None)
+    # {{{ emit_print_profile
 
-    def get_code(self):
-        assert not self.module_emitter.preamble
+    def emit_print_profile(self, dag):
+        args = ('dagrt_state',)
 
-        indent_spaces = 1
-        indentation = indent_spaces*' '
+        function_name = 'print_profile'
+        self.emit_def_begin(function_name, args, with_extra_args=False)
 
-        wrapped_lines = []
-        for l in self.module_emitter.code:
-            line_leading_spaces = (len(l) - len(l.lstrip(" ")))
-            level = line_leading_spaces // indent_spaces
-            line_ind = level*indentation
-            if l[line_leading_spaces:].startswith("!"):
-                wrapped_lines.append(l)
-            else:
-                for wrapped_line in wrap_line(
-                        l[line_leading_spaces:],
-                        level, indentation=indentation):
-                    wrapped_lines.append(line_ind+wrapped_line)
+        self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
+        self.declaration_emitter('')
 
-        return "\n".join(wrapped_lines)
+        if self.emit_instrumentation:
+            delim = "-" * 75
+            self.emit("write(*,*) '%s'" % delim)
+            self.emit("write(*,*) 'dagrt profile information'")
+            self.emit("write(*,*) '%s'" % delim)
+
+            for state_name in sorted(dag.states):
+                self.emit(
+                    "write(*,*) 'state {state} count:', "
+                    "dagrt_state%dagrt_state_{state}_count"
+                    .format(state=state_name))
+                self.emit(
+                    "write(*,*) 'state {state} failures:', "
+                    "dagrt_state%dagrt_state_{state}_failures"
+                    .format(state=state_name))
+                with FortranIfEmitter(
+                        self.emitter,
+                        'dagrt_state%dagrt_state_{state}_count > 0'
+                        .format(state=state_name),
+                        self):
+                    self.emit(
+                        "write(*,*) 'state {state} mean time:', "
+                        "dagrt_state%dagrt_state_{state}_time"
+                        "/dagrt_state%dagrt_state_{state}_count"
+                        .format(state=state_name))
+                self.emit(
+                    "write(*,*) 'state {state} total time:', "
+                    "dagrt_state%dagrt_state_{state}_time"
+                    .format(state=state_name))
+
+            self.emit('')
+            self.emit("write(*,*) '%s'" % delim)
+            self.emit('')
+
+            for func_name in self.get_called_function_names(dag):
+                func_id = make_identifier_from_name(func_name)
+                self.emit(
+                    "write(*,*) 'function {func_name} count:', "
+                    "dagrt_state%dagrt_func_{func_id}_count"
+                    .format(func_name=func_name, func_id=func_id))
+
+                with FortranIfEmitter(
+                        self.emitter,
+                        'dagrt_state%dagrt_func_{func_id}_count > 0'
+                        .format(func_id=func_id),
+                        self):
+                    self.emit(
+                        "write(*,*) 'function {func_name} mean time:', "
+                        "dagrt_state%dagrt_func_{func_id}_time"
+                        "/dagrt_state%dagrt_func_{func_id}_count"
+                        .format(func_name=func_name, func_id=func_id))
+
+                self.emit(
+                    "write(*,*) 'function {func_name} total time:', "
+                    "dagrt_state%dagrt_func_{func_id}_time"
+                    .format(func_name=func_name, func_id=func_id))
+
+            self.emit("write(*,*) '%s'" % delim)
+
+        self.emit_def_end(function_name)
+
+    # }}}
 
     # {{{ called by superclass
 
-    def emit_def_begin(self, function_name, argument_names, state_id=None):
+    def emit_def_begin(self, function_name, argument_names, state_id=None,
+            with_extra_args=True):
         self.declaration_emitter = FortranEmitter()
 
         FortranSubroutineEmitter(
@@ -1375,7 +1615,8 @@ class CodeGenerator(StructuredCodeGenerator):
         self.declaration_emitter('integer dagrt_ierr')
         self.declaration_emitter('')
 
-        self.emit_extra_arg_decl(self.declaration_emitter)
+        if with_extra_args:
+            self.emit_extra_arg_decl(self.declaration_emitter)
 
         body_emitter = FortranEmitter()
         self.emitters.append(body_emitter)
@@ -1485,6 +1726,26 @@ class CodeGenerator(StructuredCodeGenerator):
                     results=", ".join(inst.assignees),
                     expr=str(inst.as_expression())[:50]))
 
+        # {{{ instrumentation
+
+        if self.emit_instrumentation:
+            self.emit(
+                    "dagrt_state%dagrt_func_{func}_count "
+                    "= dagrt_state%dagrt_func_{func}_count + 1"
+                    .format(func=make_identifier_from_name(inst.function_id)))
+
+            timer_start_var = self.name_manager.make_unique_fortran_name(
+                "timer_start")
+            self.declaration_emitter("real*8 " + timer_start_var)
+
+            self.emit(
+                    "{timer_start_var} = {timing_function}()"
+                    .format(
+                        timer_start_var=timer_start_var,
+                        timing_function=self.timing_function))
+
+        # }}}
+
         function = self.function_registry[inst.function_id]
         codegen = function.get_codegen(self.language)
 
@@ -1537,22 +1798,23 @@ class CodeGenerator(StructuredCodeGenerator):
                 arg_kinds_dict=arg_kinds_dict,
                 code_generator=self)
 
-    def emit_return(self):
-        self.emit('999 continue ! exit label')
+        # {{{ instrumentation
 
-        # {{{ emit variable deinit
-
-        sym_table = self.sym_kind_table.per_function_table.get(
-                self.current_function, {})
-
-        for identifier, sym_kind in six.iteritems(sym_table):
-            self.emit_variable_deinit(identifier, sym_kind)
+        if self.emit_instrumentation:
+            self.emit(
+                    "dagrt_state%dagrt_func_{func}_time "
+                    "= dagrt_state%dagrt_func_{func}_time "
+                    "+ ({timing_function}() - {timer_start_var})"
+                    .format(
+                        func=make_identifier_from_name(inst.function_id),
+                        timing_function=self.timing_function,
+                        timer_start_var=timer_start_var,
+                        ))
 
         # }}}
 
-        self.emit_trace('leave %s' % self.current_function)
-
-        self.emit('return')
+    def emit_return(self):
+        self.emit("goto 999")
 
     def emit_inst_YieldState(self, inst):
         self.emit_assign_expr(
@@ -1596,6 +1858,12 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit("stop")
 
     def emit_inst_FailStep(self, inst):
+        if self.emit_instrumentation:
+            self.emit(
+                    "dagrt_state%dagrt_state_{state}_failures "
+                    "= dagrt_state%dagrt_state_{state}_failures + 1"
+                    .format(state=self.current_function))
+
         self.emit("goto 999")
 
     def emit_inst_StateTransition(self, inst):

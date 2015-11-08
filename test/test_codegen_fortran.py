@@ -105,7 +105,9 @@ def test_arrays_and_linalg():
     codegen = f.CodeGenerator(
             'arrays',
             function_registry=freg,
-            ode_component_type_map={})
+            ode_component_type_map={},
+            emit_instrumentation=True,
+            timing_function="second")
 
     code_str = codegen(code)
     if 0:

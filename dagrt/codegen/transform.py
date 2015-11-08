@@ -1,9 +1,6 @@
 """Some generic DAG transformation passes"""
+
 from __future__ import division
-
-import six
-from pymbolic.mapper import IdentityMapper
-
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -27,6 +24,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import six
+from pymbolic.mapper import IdentityMapper
 
 
 # {{{ eliminate self dependencies
