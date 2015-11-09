@@ -1020,20 +1020,37 @@ class CodeBuilder(object):
             if assignee in context.used_variables:
                 raise ValueError("write after use of " + assignee +
                                  " in the same block")
-            if assignee in context.definition_map:
+
+            if (
+                    assignee in context.definition_map
+
+                    # multiple assignments with subscript are OK
+                    and not (
+                        isinstance(inst, AssignExpression)
+                        and inst.assignee_subscript is not None)):
                 raise ValueError("multiple assignments to " + assignee)
 
         # Create the set of dependencies based on the set of used
         # variables.
         for used_variable in inst.get_read_variables():
             if used_variable in context.definition_map:
-                dependencies.add(context.definition_map[used_variable])
+                dependencies.update(context.definition_map[used_variable])
+
+        for used_variable in inst.get_assignees():
+            # Make second (indexed) writes depend on initialization
+            for def_inst_id in context.definition_map.get(used_variable, []):
+                def_inst = self._instruction_map[def_inst_id]
+                if (
+                        not isinstance(def_inst, AssignExpression)
+                        or def_inst.assignee_subscript is None):
+                    dependencies.add(def_inst_id)
 
         # Add the condition to the instruction.
         # Update context and global information.
         context.context_instruction_ids.add(inst_id)
-        context.definition_map.update((assignee, inst_id)
-                                      for assignee in inst.get_assignees())
+        for assignee in inst.get_assignees():
+            context.definition_map.setdefault(assignee, set()).add(inst_id)
+
         context.used_variables |= inst.get_read_variables()
         self._all_var_names |= inst.get_assignees()
         self._instruction_map[inst_id] = \
