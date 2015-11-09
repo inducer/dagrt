@@ -477,11 +477,13 @@ class YieldState(Instruction):
                 condition=mapper(self.condition))
 
     def __str__(self):
-        return "Ret {expr} at {time_id} as {component_id}{cond}".format(
+        return ("Ret {expr} at {time_id} with t={time} as {component_id}{cond}"
+                .format(
                     expr=self.expression,
                     time_id=self.time_id,
+                    time=self.time,
                     component_id=self.component_id,
-                    cond=self._condition_printing_suffix())
+                    cond=self._condition_printing_suffix()))
 
     exec_method = six.moves.intern("exec_YieldState")
 
