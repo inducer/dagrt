@@ -26,7 +26,7 @@ THE SOFTWARE.
 import sys
 
 from dagrt.language import YieldState
-from dagrt.language import TimeIntegratorCode, CodeBuilder
+from dagrt.language import DAGCode, CodeBuilder
 import dagrt.codegen.fortran as f
 
 from utils import RawCodeBuilder
@@ -52,7 +52,7 @@ def test_basic_codegen():
                     expression=0, component_id='state',
         depends_on=[]))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_init_and_step(
+    code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = f.CodeGenerator("simple",
@@ -99,7 +99,7 @@ def test_arrays_and_linalg():
         with cb.if_("`<builtin>norm_2`(myzero) > 10**(-8)"):
             cb.raise_(MatrixInversionFailure)
 
-    code = TimeIntegratorCode.create_with_steady_state(
+    code = DAGCode.create_with_steady_state(
         cb.state_dependencies, cb.instructions)
 
     codegen = f.CodeGenerator(

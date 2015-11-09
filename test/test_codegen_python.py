@@ -8,7 +8,7 @@ import numpy.linalg as la
 import numpy as np
 
 from dagrt.language import AssignExpression, YieldState, FailStep, Raise, Nop
-from dagrt.language import CodeBuilder, TimeIntegratorCode
+from dagrt.language import CodeBuilder, DAGCode
 from dagrt.codegen import PythonCodeGenerator
 from pymbolic import var
 
@@ -53,7 +53,7 @@ def test_basic_codegen():
                     expression=0, component_id='<state>',
         depends_on=[]))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_init_and_step(
+    code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -87,7 +87,7 @@ def test_basic_conditional_codegen():
             expression=var('<state>y'), component_id='<state>',
         depends_on=['branch']))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_init_and_step(
+    code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -121,7 +121,7 @@ def test_basic_assign_rhs_codegen():
             depends_on=['assign_rhs2'])
         )
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_init_and_step(
+    code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -148,7 +148,7 @@ def test_basic_raise_codegen():
     class TimeStepUnderflow(RuntimeError): pass
     cbuild.add_and_get_ids(Raise(TimeStepUnderflow, "underflow", id="raise"))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_init_and_step(
+    code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=["raise"])
     codegen = PythonCodeGenerator(class_name="Method")
@@ -173,7 +173,7 @@ def test_basic_fail_step_codegen():
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(FailStep(id="fail"))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_init_and_step(
+    code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=["fail"])
     codegen = PythonCodeGenerator(class_name="Method")
@@ -204,7 +204,7 @@ def test_local_name_distinctness():
             expression=var('y^') + var('y*'),
             component_id='y', depends_on=['assign_y^', 'assign_y*']))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_init_and_step(
+    code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -231,7 +231,7 @@ def test_global_name_distinctness():
             expression=var('<p>y^') + var('<p>y*'),
             component_id='y', depends_on=['assign_y^', 'assign_y*']))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_init_and_step(
+    code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -252,7 +252,7 @@ def test_function_name_distinctness():
             expression=var('<func>y^')() + var('<func>y*')(),
             component_id='y'))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_init_and_step(
+    code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -267,7 +267,7 @@ def test_function_name_distinctness():
 
 
 def test_state_transitions(python_method_impl):
-    from dagrt.language import CodeBuilder, TimeIntegratorState
+    from dagrt.language import CodeBuilder, ExecutionState
 
     with CodeBuilder(label="state_1") as builder_1:
         builder_1(var("<state>x"), 1)
@@ -275,12 +275,12 @@ def test_state_transitions(python_method_impl):
     with CodeBuilder(label="state_2") as builder_2:
         builder_2.yield_state(var("<state>x"), 'x', 0, 'final')
 
-    code = TimeIntegratorCode(
+    code = DAGCode(
         instructions=builder_1.instructions | builder_2.instructions,
         states={
-            "state_1": TimeIntegratorState(builder_1.state_dependencies,
+            "state_1": ExecutionState(builder_1.state_dependencies,
                                            next_state="state_1"),
-            "state_2": TimeIntegratorState(builder_2.state_dependencies,
+            "state_2": ExecutionState(builder_2.state_dependencies,
                                            next_state="state_2")
         },
         initial_state="state_1")
@@ -308,7 +308,7 @@ def get_IfThenElse_test_code_and_expected_result():
         cb.yield_state(tuple(var("c" + str(i)) for i in range(1, 11)),
                        "result", 0, "final")
 
-    code = TimeIntegratorCode.create_with_steady_state(
+    code = DAGCode.create_with_steady_state(
         cb.state_dependencies, cb.instructions)
 
     return (code, (0, 1, 0, 1, 0, 1, 1, 2, 1, 2))
@@ -339,7 +339,7 @@ def test_arrays_and_looping(python_method_impl):
 
     from utils import execute_and_return_single_result
 
-    code = TimeIntegratorCode.create_with_steady_state(
+    code = DAGCode.create_with_steady_state(
         cb.state_dependencies, cb.instructions)
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == 15
@@ -375,7 +375,7 @@ def test_arrays_and_linalg(python_method_impl):
 
     from utils import execute_and_return_single_result
 
-    code = TimeIntegratorCode.create_with_steady_state(
+    code = DAGCode.create_with_steady_state(
         cb.state_dependencies, cb.instructions)
     result = execute_and_return_single_result(python_method_impl, code)
 

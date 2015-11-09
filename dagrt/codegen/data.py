@@ -104,9 +104,9 @@ class Array(SymbolKind):
         return (self.is_real_valued,)
 
 
-class ODEComponent(SymbolKind):
+class UserType(SymbolKind):
     def __init__(self, component_id):
-        super(ODEComponent, self).__init__(component_id=component_id)
+        super(UserType, self).__init__(component_id=component_id)
 
     def __getinitargs__(self):
         return (self.component_id,)
@@ -201,10 +201,10 @@ def unify(kind_a, kind_b):
     if isinstance(kind_b, Boolean):
         raise ValueError("arithmetic with flags is not permitted")
 
-    if isinstance(kind_a, ODEComponent):
-        assert isinstance(kind_b, (ODEComponent, Scalar))
+    if isinstance(kind_a, UserType):
+        assert isinstance(kind_b, (UserType, Scalar))
 
-        if isinstance(kind_b, ODEComponent):
+        if isinstance(kind_b, UserType):
             if kind_a.component_id != kind_b.component_id:
                 raise ValueError(
                         "encountered arithmetic with mismatched "
@@ -219,7 +219,7 @@ def unify(kind_a, kind_b):
                 not (not kind_a.is_real_valued or not kind_b.is_real_valued))
 
     elif isinstance(kind_a, Scalar):
-        if isinstance(kind_b, ODEComponent):
+        if isinstance(kind_b, UserType):
             return kind_b
         if isinstance(kind_b, Array):
             return Array(
@@ -232,7 +232,7 @@ def unify(kind_a, kind_b):
                 not (not kind_a.is_real_valued or not kind_b.is_real_valued))
 
     elif isinstance(kind_a, Integer):
-        if isinstance(kind_b, (ODEComponent, Scalar, Array)):
+        if isinstance(kind_b, (UserType, Scalar, Array)):
             return kind_b
 
         assert isinstance(kind_b, Integer)

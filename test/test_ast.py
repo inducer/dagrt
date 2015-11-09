@@ -6,7 +6,7 @@ from pymbolic.primitives import LogicalNot
 from dagrt.codegen.ast import (IfThen, IfThenElse, Block, InstructionWrapper,
                                  match_ast, declare, create_ast_from_state,
                                  simplify_ast)
-from dagrt.language import Nop, TimeIntegratorCode
+from dagrt.language import Nop, DAGCode
 
 
 __copyright__ = "Copyright (C) 2015 Matt Wala"
@@ -60,7 +60,7 @@ def test_create_ast():
             return hash(self._state())
 
     nop = ComparableNop(condition=x, id="nop", depends_on=())
-    code = TimeIntegratorCode.create_with_steady_state(["nop"], [nop])
+    code = DAGCode.create_with_steady_state(["nop"], [nop])
     ast = create_ast_from_state(code, "main", simplify=False)
     assert ast == Block(IfThen(x, InstructionWrapper(nop.copy(condition=True))))
 

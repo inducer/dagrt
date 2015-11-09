@@ -113,8 +113,8 @@ State Instructions
 Code Container
 ~~~~~~~~~~~~~~
 
-.. autoclass:: TimeIntegratorState
-.. autoclass:: TimeIntegratorCode
+.. autoclass:: ExecutionState
+.. autoclass:: DAGCode
 
 Visualization
 ~~~~~~~~~~~~~
@@ -566,7 +566,7 @@ class FailStep(Instruction):
 
 # {{{ code container
 
-class TimeIntegratorState(RecordWithoutPickling):
+class ExecutionState(RecordWithoutPickling):
     """
     .. attribute:: depends_on
 
@@ -588,12 +588,12 @@ class TimeIntegratorState(RecordWithoutPickling):
         return cls(depends_on=cb.state_dependencies, next_state=next_state)
 
     def __init__(self, depends_on, next_state):
-        super(TimeIntegratorState, self).__init__(
+        super(ExecutionState, self).__init__(
                 depends_on=depends_on,
                 next_state=next_state)
 
 
-class TimeIntegratorCode(RecordWithoutPickling):
+class DAGCode(RecordWithoutPickling):
     """
     .. attribute:: instructions
 
@@ -602,7 +602,7 @@ class TimeIntegratorCode(RecordWithoutPickling):
 
     .. attribute:: states
 
-        is a map from time integrator state names to :class:`TimeIntegratorState`
+        is a map from time integrator state names to :class:`ExecutionState`
         instances
 
     .. attribute:: initial_state
@@ -612,18 +612,18 @@ class TimeIntegratorCode(RecordWithoutPickling):
 
     @classmethod
     def create_with_steady_state(cls, dep_on, instructions):
-        states = {'main': TimeIntegratorState(dep_on, next_state='main')}
+        states = {'main': ExecutionState(dep_on, next_state='main')}
         return cls(instructions, states, 'main')
 
     @classmethod
     def create_with_init_and_step(cls, initialization_dep_on,
                                   step_dep_on, instructions):
         states = {}
-        states['initialization'] = TimeIntegratorState(
+        states['initialization'] = ExecutionState(
                 initialization_dep_on,
                 next_state='primary')
 
-        states['primary'] = TimeIntegratorState(
+        states['primary'] = ExecutionState(
                 step_dep_on,
                 next_state='primary')
 

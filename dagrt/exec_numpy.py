@@ -91,7 +91,7 @@ class NumpyInterpreter(object):
 
     def __init__(self, code, function_map):
         """
-        :arg code: an instance of :class:`dagrt.TimeIntegratorCode`
+        :arg code: an instance of :class:`dagrt.DAGCode`
         :arg function_map: a mapping from function identifiers to functions
         """
         self.code = code

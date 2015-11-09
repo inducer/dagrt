@@ -4,7 +4,7 @@ from __future__ import division, with_statement
 import sys
 
 from dagrt.language import AssignExpression, YieldState
-from dagrt.language import TimeIntegratorCode
+from dagrt.language import DAGCode
 from dagrt.codegen import PythonCodeGenerator, CodeGenerationError
 
 from pymbolic import var
@@ -56,7 +56,7 @@ def test_circular_dependency_detection():
             expression=var('<state>y'), component_id='<state>',
         depends_on=['assign']))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_init_and_step(
+    code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -78,7 +78,7 @@ def test_missing_dependency_detection():
             expression=var('<state>y'), component_id='<state>',
             depends_on=['assign'])
         ])
-    code = TimeIntegratorCode.create_with_init_and_step(
+    code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -97,7 +97,7 @@ def test_missing_state_detection():
     with CodeBuilder(label="state_1") as cb:
         cb.state_transition("state_2")
 
-    code = TimeIntegratorCode.create_with_steady_state(
+    code = DAGCode.create_with_steady_state(
         dep_on=cb.state_dependencies, instructions=cb.instructions)
 
     from dagrt.codegen.analysis import verify_code

@@ -6,7 +6,7 @@ import pytest
 import sys
 
 from dagrt.language import AssignExpression, YieldState
-from dagrt.language import TimeIntegratorCode
+from dagrt.language import DAGCode
 from pymbolic import var
 
 from utils import execute_and_return_single_result, RawCodeBuilder
@@ -51,7 +51,7 @@ def test_len(python_method_impl, obj, len_):
                    expression=var('x'), component_id='<state>',
                    depends_on=['assign_1']))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_steady_state(
+    code = DAGCode.create_with_steady_state(
             dep_on=['return'],
             instructions=cbuild.instructions)
 
@@ -69,7 +69,7 @@ def test_isnan(python_method_impl, value):
                    expression=var('x'), component_id='<state>',
                    depends_on=['assign_1']))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_steady_state(
+    code = DAGCode.create_with_steady_state(
             dep_on=['return'],
             instructions=cbuild.instructions)
 
@@ -102,7 +102,7 @@ def test_norm(python_method_impl, order, norm_suffix, test_vector):
                    expression=var('n'), component_id='<state>',
                    depends_on=['assign_2']))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_steady_state(
+    code = DAGCode.create_with_steady_state(
             dep_on=['return'],
             instructions=cbuild.instructions)
 
@@ -121,7 +121,7 @@ def test_dot_product(python_method_impl, x, y):
                    expression=var('x'), component_id='<state>',
                    depends_on=['assign_1']))
     cbuild.commit()
-    code = TimeIntegratorCode.create_with_steady_state(
+    code = DAGCode.create_with_steady_state(
             dep_on=['return'],
             instructions=cbuild.instructions)
 

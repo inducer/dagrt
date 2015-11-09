@@ -272,7 +272,7 @@ class CallCode(object):
 
 # {{{ expression modifiers
 
-class ODEComponentReferenceTransformer(IdentityMapper):
+class UserTypeReferenceTransformer(IdentityMapper):
     def __init__(self, sym_kind_table, current_function):
         self.sym_kind_table = sym_kind_table
         self.current_function = current_function
@@ -286,8 +286,8 @@ class ODEComponentReferenceTransformer(IdentityMapper):
             raise TypeError("unsupported object")
 
     def map_variable(self, expr):
-        from dagrt.codegen.data import ODEComponent
-        if isinstance(self.find_sym_kind(expr), ODEComponent):
+        from dagrt.codegen.data import UserType
+        if isinstance(self.find_sym_kind(expr), UserType):
             return self.transform(expr)
         else:
             return expr
@@ -296,7 +296,7 @@ class ODEComponentReferenceTransformer(IdentityMapper):
     map_subscript = map_variable
 
 
-class StructureLookupAppender(ODEComponentReferenceTransformer):
+class StructureLookupAppender(UserTypeReferenceTransformer):
     def __init__(self, sym_kind_table, current_function, component):
         super(StructureLookupAppender, self).__init__(
                 sym_kind_table, current_function)
@@ -306,7 +306,7 @@ class StructureLookupAppender(ODEComponentReferenceTransformer):
         return expr.attr(self.component)
 
 
-class ArraySubscriptAppender(ODEComponentReferenceTransformer):
+class ArraySubscriptAppender(UserTypeReferenceTransformer):
     def __init__(self, sym_kind_table, current_function, subscript):
         super(ArraySubscriptAppender, self).__init__(
                 sym_kind_table, current_function)
@@ -878,14 +878,14 @@ class CodeGenerator(StructuredCodeGenerator):
             raise RuntimeError("ODE components with undeclared types: %r"
                     % (component_ids - set(self.ode_component_type_map)))
 
-        from dagrt.codegen.data import Scalar, ODEComponent
+        from dagrt.codegen.data import Scalar, UserType
         for comp_id in component_ids:
             self.sym_kind_table.set(
                     None, "<ret_time_id>"+comp_id, Scalar(is_real_valued=True))
             self.sym_kind_table.set(
                     None, "<ret_time>"+comp_id, Scalar(is_real_valued=True))
             self.sym_kind_table.set(
-                    None, "<ret_state>"+comp_id, ODEComponent(comp_id))
+                    None, "<ret_state>"+comp_id, UserType(comp_id))
 
         self.begin_emit(dag)
         for fdescr in fdescrs:
@@ -1107,7 +1107,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         type_specifiers = other_specifiers
 
-        from dagrt.codegen.data import ODEComponent
+        from dagrt.codegen.data import UserType
         if isinstance(sym_kind, Boolean):
             type_name = 'logical'
 
@@ -1127,7 +1127,7 @@ class CodeGenerator(StructuredCodeGenerator):
         elif isinstance(sym_kind, Integer):
             type_name = 'integer'
 
-        elif isinstance(sym_kind, ODEComponent):
+        elif isinstance(sym_kind, UserType):
             comp_type = self.get_ode_component_type(sym_kind.component_id,
                     is_argument=is_argument)
 
@@ -1156,8 +1156,8 @@ class CodeGenerator(StructuredCodeGenerator):
                 id=fortran_name))
 
     def emit_variable_init(self, name, sym_kind):
-        from dagrt.codegen.data import ODEComponent
-        if isinstance(sym_kind, ODEComponent):
+        from dagrt.codegen.data import UserType
+        if isinstance(sym_kind, UserType):
             comp_type = self.get_ode_component_type(sym_kind.component_id)
             InitializationEmitter(self)(comp_type, self.name_manager[name], {})
 
@@ -1165,8 +1165,8 @@ class CodeGenerator(StructuredCodeGenerator):
         fortran_name = self.name_manager[name]
         refcnt_name = self.name_manager.name_refcount(name)
 
-        from dagrt.codegen.data import ODEComponent
-        if not isinstance(sym_kind, ODEComponent):
+        from dagrt.codegen.data import UserType
+        if not isinstance(sym_kind, UserType):
             return
 
         with FortranIfEmitter(
@@ -1191,8 +1191,8 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_refcounted_allocation(self, sym, sym_kind):
         fortran_name = self.name_manager[sym]
 
-        from dagrt.codegen.data import ODEComponent
-        if not isinstance(sym_kind, ODEComponent):
+        from dagrt.codegen.data import UserType
+        if not isinstance(sym_kind, UserType):
             return
 
         self.emit_allocation(fortran_name, sym_kind)
@@ -1218,8 +1218,8 @@ class CodeGenerator(StructuredCodeGenerator):
         fortran_name = self.name_manager[sym]
         refcnt_name = self.name_manager.name_refcount(sym)
 
-        from dagrt.codegen.data import ODEComponent
-        assert isinstance(sym_kind, ODEComponent)
+        from dagrt.codegen.data import UserType
+        assert isinstance(sym_kind, UserType)
 
         with FortranIfEmitter(
                 self.emitter, '.not.associated(%s)' % fortran_name, self) as emit_if:
@@ -1281,8 +1281,8 @@ class CodeGenerator(StructuredCodeGenerator):
                         subscript_str=subscript_str,
                         expr=str(expr)[:50]))
 
-            from dagrt.codegen.data import ODEComponent
-            if not isinstance(sym_kind, ODEComponent):
+            from dagrt.codegen.data import UserType
+            if not isinstance(sym_kind, UserType):
                 self.emit(
                         "{name}{subscript_str} = {expr}"
                         .format(
@@ -1394,8 +1394,8 @@ class CodeGenerator(StructuredCodeGenerator):
                     self.emitter, 'present(%s)' % fortran_name, self):
                 self.emit_refcounted_allocation(sym, sym_kind)
 
-                from dagrt.codegen.data import ODEComponent
-                if not isinstance(sym_kind, ODEComponent):
+                from dagrt.codegen.data import UserType
+                if not isinstance(sym_kind, UserType):
                     self.emit(
                             "{lhs} = {rhs}"
                             .format(
@@ -1454,13 +1454,13 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.current_function = state_id
 
-        from dagrt.codegen.data import ODEComponent
+        from dagrt.codegen.data import UserType
 
         for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
             self.emit_variable_deinit(sym, sym_kind)
 
         for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
-            if isinstance(sym_kind, ODEComponent):
+            if isinstance(sym_kind, UserType):
                 fortran_name = self.name_manager[sym]
                 with FortranIfEmitter(
                         self.emitter,
@@ -1666,7 +1666,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emitter.emit_else()
 
     def emit_assign_expr(self, assignee_sym, assignee_subscript, expr):
-        from dagrt.codegen.data import ODEComponent, Array
+        from dagrt.codegen.data import UserType, Array
 
         assignee_fortran_name = self.name_manager[assignee_sym]
 
@@ -1677,7 +1677,7 @@ class CodeGenerator(StructuredCodeGenerator):
             raise TypeError("only arrays support subscripted assignment")
             return
 
-        if not isinstance(sym_kind, ODEComponent):
+        if not isinstance(sym_kind, UserType):
             self.emit_assign_expr_inner(
                     assignee_fortran_name, assignee_subscript, expr, sym_kind)
             return
@@ -1779,12 +1779,12 @@ class CodeGenerator(StructuredCodeGenerator):
 
         from pymbolic.mapper.dependency import DependencyMapper
         from pymbolic import var
-        from dagrt.codegen.data import ODEComponent
+        from dagrt.codegen.data import UserType
 
         for assignee_sym in inst.assignees:
             sym_kind = self.sym_kind_table.get(
                     self.current_function, assignee_sym)
-            if isinstance(sym_kind, ODEComponent):
+            if isinstance(sym_kind, UserType):
                 self.emit_allocation_check(assignee_sym, sym_kind)
 
             assert var(assignee_sym) not in DependencyMapper()(
@@ -1899,14 +1899,14 @@ def codegen_builtin_norm_2(results, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
     result, = results
 
-    from dagrt.codegen.data import Scalar, ODEComponent, Array
+    from dagrt.codegen.data import Scalar, UserType, Array
     x_kind = arg_kinds_dict[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
             ftype = BuiltinType("real*8")
         else:
             ftype = BuiltinType("complex*16")
-    elif isinstance(x_kind, ODEComponent):
+    elif isinstance(x_kind, UserType):
         ftype = code_generator.ode_component_type_map[x_kind.component_id]
 
     elif isinstance(x_kind, Array):
@@ -1943,14 +1943,14 @@ def codegen_builtin_len(results, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
     result, = results
 
-    from dagrt.codegen.data import Scalar, Array, ODEComponent
+    from dagrt.codegen.data import Scalar, Array, UserType
     x_kind = arg_kinds_dict[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
             ftype = BuiltinType("real*8")
         else:
             ftype = BuiltinType("complex*16")
-    elif isinstance(x_kind, ODEComponent):
+    elif isinstance(x_kind, UserType):
         ftype = code_generator.ode_component_type_map[x_kind.component_id]
     elif isinstance(x_kind, Array):
         code_generator.emit("{result} = size({arg})".format(
@@ -1980,14 +1980,14 @@ def codegen_builtin_isnan(results, function, arg_strings_dict, arg_kinds_dict,
         code_generator):
     result, = results
 
-    from dagrt.codegen.data import Scalar, ODEComponent
+    from dagrt.codegen.data import Scalar, UserType
     x_kind = arg_kinds_dict[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
             ftype = BuiltinType("real*8")
         else:
             ftype = BuiltinType("complex*16")
-    elif isinstance(x_kind, ODEComponent):
+    elif isinstance(x_kind, UserType):
         ftype = code_generator.ode_component_type_map[x_kind.component_id]
     else:
         raise TypeError("unsupported kind for norm_2 argument: %s" % x_kind)

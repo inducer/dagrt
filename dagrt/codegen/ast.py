@@ -206,7 +206,7 @@ def redefines(ast, expression):
 def create_ast_from_state(code, state, simplify=True):
     """
     Return an AST representation of the instructions corresponding to the state
-    named `state` as found in the :class:`TimeIntegratorCode` instance `code`.
+    named `state` as found in the :class:`DAGCode` instance `code`.
     """
 
     # Construct a topological order of the instructions.
