@@ -676,7 +676,7 @@ class TimeIntegratorCode(RecordWithoutPickling):
                         insn.id,
                         str(insn).replace("\n", "\n        ")))
 
-        for state_name, state in six.iteritems(self.states):
+        for state_name, state in sorted(six.iteritems(self.states)):
             printed_insn_ids = set()
 
             lines.append("STATE %s" % state_name)
