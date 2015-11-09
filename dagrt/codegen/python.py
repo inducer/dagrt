@@ -1,16 +1,4 @@
 """Python code generator"""
-from .expressions import PythonExpressionMapper
-from .codegen_base import StructuredCodeGenerator
-from .utils import (wrap_line_base, exec_in_new_namespace,
-                    KeyToUniqueNameMap)
-from pytools.py_codegen import (
-        PythonCodeGenerator as PythonEmitter,
-        PythonFunctionGenerator as PythonFunctionEmitter,
-        Indentation)
-from dagrt.utils import is_state_variable
-from functools import partial
-import six
-
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
@@ -33,6 +21,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
+
+from .expressions import PythonExpressionMapper
+from .codegen_base import StructuredCodeGenerator
+from .utils import (wrap_line_base, exec_in_new_namespace,
+                    KeyToUniqueNameMap)
+from pytools.py_codegen import (
+        PythonCodeGenerator as PythonEmitter,
+        PythonFunctionGenerator as PythonFunctionEmitter)
+from dagrt.utils import is_state_variable
+from functools import partial
+import six
+
 
 # from .ir import YieldStateInst
 
