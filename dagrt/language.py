@@ -123,7 +123,39 @@ Visualization
 
 .. autofunction:: show_dependency_graph
 
+Code Creation
+~~~~~~~~~~~~~
+
+.. autoclass :: CodeBuilder
+
 """
+
+
+# {{{ utilities
+
+def _stringify_instructions(roots, id_to_insn, prefix=""):
+        lines = []
+
+        printed_insn_ids = set()
+
+        def print_insn(insn):
+            if insn.id in printed_insn_ids:
+                return
+            printed_insn_ids.add(insn.id)
+
+            for dep_id in insn.depends_on:
+                print_insn(id_to_insn[dep_id])
+
+            lines.append(
+                    "%s{%s} %s" % (
+                        prefix, insn.id, str(insn).replace("\n", "\n        ")))
+
+        for root_insn in roots:
+            print_insn(root_insn)
+
+        return lines
+
+# }}}
 
 
 class Instruction(RecordWithoutPickling):
@@ -664,32 +696,19 @@ class DAGCode(RecordWithoutPickling):
 
     def __str__(self):
         lines = []
-
-        def print_insn(insn):
-            if insn.id in printed_insn_ids:
-                return
-            printed_insn_ids.add(insn.id)
-
-            for dep_id in insn.depends_on:
-                print_insn(self.id_to_insn[dep_id])
-
-            lines.append(
-                    "    {%s} %s" % (
-                        insn.id,
-                        str(insn).replace("\n", "\n        ")))
-
         for state_name, state in sorted(six.iteritems(self.states)):
-            printed_insn_ids = set()
-
             lines.append("STATE %s" % state_name)
 
             for root_id in state.depends_on:
-                print_insn(self.id_to_insn[root_id])
+                lines.extend(_stringify_instructions(
+                    [self.id_to_insn[root_id]],
+                    self.id_to_insn, prefix="    "))
 
             lines.append("    -> (next state) %s" % state.next_state)
             lines.append("")
 
         return "\n".join(lines)
+
 
 # }}}
 
@@ -1134,6 +1153,14 @@ class CodeBuilder(object):
         self.fence()
         self.state_dependencies = list(self._contexts[-1].lead_instruction_ids)
         self.instructions = set(self._instruction_map.values())
+
+    def __str__(self):
+        roots = [
+                self._instruction_map[insn_id]
+                for ctx in self._contexts
+                for insn_id in ctx.context_instruction_ids]
+
+        return "\n".join(_stringify_instructions(roots, self._instruction_map))
 
 # }}}
 
