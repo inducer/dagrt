@@ -1345,13 +1345,11 @@ class CodeGenerator(StructuredCodeGenerator):
                     other_specifiers=("optional",))
         self.emit('')
 
-        self.emit("""
-            character :: dagrt_nan_str*3
-            real :: dagrt_nan
+        self.emit("character :: dagrt_nan_str*3")
+        self.emit("real :: dagrt_nan")
 
-            dagrt_nan_str = 'NaN'
-            READ(dagrt_nan_str,*) dagrt_nan
-            """)
+        self.emit("dagrt_nan_str = 'NaN'")
+        self.emit("read(dagrt_nan_str,*) dagrt_nan")
 
         self.emit(
                 "dagrt_state%dagrt_next_state = dagrt_state_{0}"
