@@ -611,14 +611,6 @@ class ExecutionState(RecordWithoutPickling):
         is specified by the user.
     """
 
-    @classmethod
-    def from_cb(cls, cb, next_state):
-        """
-        :arg cb: A :class:`CodeBuilder` instance
-        :arg next_state: The name of the default next state
-        """
-        return cls(depends_on=cb.state_dependencies, next_state=next_state)
-
     def __init__(self, depends_on, next_state):
         super(ExecutionState, self).__init__(
                 depends_on=depends_on,
@@ -1161,6 +1153,14 @@ class CodeBuilder(object):
                 for insn_id in ctx.context_instruction_ids]
 
         return "\n".join(_stringify_instructions(roots, self._instruction_map))
+
+    def as_execution_state(self, next_state):
+        """
+        :arg cb: A :class:`CodeBuilder` instance
+        :arg next_state: The name of the default next state
+        """
+        return ExecutionState(
+                depends_on=self.state_dependencies, next_state=next_state)
 
 # }}}
 
