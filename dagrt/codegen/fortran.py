@@ -1968,7 +1968,7 @@ def codegen_builtin_len(results, function, arg_strings_dict, arg_kinds_dict,
 class IsNaNComputer(TypeVisitorWithResult):
     def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map):
         self.code_generator.emit(
-                "{result} = {result} .or. isnan({expr})"
+                "{result} = {result} .or. (({expr}).ne.({expr}))"
                 .format(
                     result=self.result_expr,
                     expr=fortran_expr))
