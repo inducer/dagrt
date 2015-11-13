@@ -1013,13 +1013,17 @@ class CodeGenerator(StructuredCodeGenerator):
 
         from .analysis import collect_time_ids_from_dag
         for i, time_id in enumerate(collect_time_ids_from_dag(dag)):
+            self.emit("integer dagrt_time_{time_id}".format(time_id=time_id))
             self.emit("parameter (dagrt_time_{time_id} = {i})".format(
                 time_id=time_id, i=i))
         self.emit('')
 
         for i, state in enumerate(dag.states):
+            state_sym_name = self.state_name_to_state_sym(state)
+            self.emit("integer {state_sym_name}".format(
+                state_sym_name=state_sym_name))
             self.emit("parameter ({state_sym_name} = {i})".format(
-                state_sym_name=self.state_name_to_state_sym(state), i=i))
+                state_sym_name=state_sym_name, i=i))
 
         self.emit('')
 
