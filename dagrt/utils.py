@@ -192,7 +192,12 @@ def run_fortran(sources, fortran_options=[]):
 
         from subprocess import check_call, Popen, PIPE
         check_call(
-                ["gfortran", "-Wall", "-g", "-oruntest"]
+                ["gfortran",
+                    "-Wall",
+                    "-Wno-unused-dummy-argument",
+                    "-Wno-unused-variable",
+                    "-Wno-maybe-uninitialized",
+                    "-g", "-oruntest"]
                 + fortran_options
                 + list(source_names),
                 cwd=tmpdir)
