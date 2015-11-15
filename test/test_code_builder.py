@@ -38,10 +38,6 @@ THE SOFTWARE.
 """
 
 
-
-
-
-
 def test_CodeBuilder_yield(python_method_impl):
     with CodeBuilder() as builder:
         builder.yield_state(1, 'x', 0, 'final')
