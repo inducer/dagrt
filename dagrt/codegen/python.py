@@ -152,9 +152,20 @@ def _builtin_linear_solve(self, a, b, a_cols, b_cols):
 
     return res_mat.reshape(-1, order="F")
 
+def _builtin_svd(self, a, a_cols):
+    if a_cols != self._numpy.floor(a_cols):
+        raise ValueError("linear_solve() argument a_cols is not an integer")
+    a_cols = int(a_cols)
+
+    a_mat = a.reshape(-1, a_cols, order="F")
+
+    import numpy.linalg as la
+    u, sigma, vt = la.svd(a_mat, full_matrices=0)
+
+    return u.reshape(-1, order="F"), sigma, vt.reshape(-1, order="F")
+
 def _builtin_print(self, arg):
     print(arg)
-    return 0
 '''
 
 

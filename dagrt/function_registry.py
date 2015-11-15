@@ -353,6 +353,33 @@ class _LinearSolve(Function):
         return (Array(is_real_valued),)
 
 
+class _SVD(Function):
+    """``linear_solve(a, a_cols)`` returns a 2D array ``u``, a 1D array ``sigma``, and
+    a 2D array ``vt``, representing the (reduced) SVD of ``a``.
+    """
+
+    result_names = ("u", "sigma", "vt")
+    identifier = "<builtin>svd"
+    arg_names = ("a", "a_cols")
+    default_dict = {}
+
+    def get_result_kinds(self, arg_kinds, check):
+        a_kind, a_cols_kind = self.resolve_args(arg_kinds)
+
+        if a_kind is None:
+            raise UnableToInferKind(
+                    "svd needs to know its argument to infer result kind")
+
+        if check and not isinstance(a_kind, Array):
+            raise TypeError("argument 'a' of 'linear_solve' is not an array")
+        if check and not isinstance(a_cols_kind, Scalar):
+            raise TypeError("argument 'a_cols' of 'linear_solve' is not a scalar")
+
+        is_real_valued = a_kind.is_real_valued
+
+        return (Array(is_real_valued), Array(is_real_valued), Array(is_real_valued))
+
+
 class _Print(Function):
     """``print(arg)`` prints the given operand to standard output. Returns an integer
     that may be ignored.
@@ -399,6 +426,7 @@ def _make_bfr():
             (_MatMul(), "self._builtin_matmul({args})"),
             (_LinearSolve(), "self._builtin_linear_solve({args})"),
             (_Print(), "self._builtin_print({args})"),
+            (_SVD(), "self._builtin_svd({args})"),
             ]:
 
         bfr = bfr.register(func)

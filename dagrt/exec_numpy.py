@@ -143,6 +143,18 @@ class NumpyInterpreter(object):
 
             return res_mat.reshape(-1, order="F")
 
+        def builtin_svd(a, a_cols):
+            if a_cols != np.floor(a_cols):
+                raise ValueError("linear_solve() argument a_cols is not an integer")
+            a_cols = int(a_cols)
+
+            a_mat = a.reshape(-1, a_cols, order="F")
+
+            import numpy.linalg as la
+            u, sigma, vt = la.svd(a_mat, full_matrices=0)
+
+            return u.reshape(-1, order="F"), sigma, vt.reshape(-1, order="F")
+
         def builtin_print(arg):
             print(arg)
             return 0
@@ -159,6 +171,7 @@ class NumpyInterpreter(object):
                 "<builtin>array": builtin_array,
                 "<builtin>matmul": builtin_matmul,
                 "<builtin>linear_solve": builtin_linear_solve,
+                "<builtin>svd": builtin_svd,
                 "<builtin>print": builtin_print,
                 }
 
@@ -297,6 +310,9 @@ class NumpyInterpreter(object):
         func = self.eval_mapper.functions[insn.function_id]
 
         results = func(*parameters, **kw_parameters)
+
+        if len(insn.assignees) == 0:
+            return
 
         if len(insn.assignees) == 1:
             results = (results,)

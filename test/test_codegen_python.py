@@ -1,22 +1,6 @@
 #! /usr/bin/env python
 from __future__ import division, with_statement, print_function
 
-import sys
-import pytest
-
-import numpy.linalg as la
-import numpy as np
-
-from dagrt.language import AssignExpression, YieldState, FailStep, Raise, Nop
-from dagrt.language import CodeBuilder, DAGCode
-from dagrt.codegen import PythonCodeGenerator
-from pymbolic import var
-
-from utils import (  # noqa
-        RawCodeBuilder, python_method_impl_interpreter as pmi_int,
-        python_method_impl_codegen as pmi_cg)
-
-
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
 
 __license__ = """
@@ -39,9 +23,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import sys
+import pytest
 
+import numpy.linalg as la
+import numpy as np
 
+from dagrt.language import AssignExpression, YieldState, FailStep, Raise, Nop
+from dagrt.language import CodeBuilder, DAGCode
+from dagrt.codegen import PythonCodeGenerator
+from pymbolic import var
 
+from utils import (  # noqa
+        RawCodeBuilder, python_method_impl_interpreter as pmi_int,
+        python_method_impl_codegen as pmi_cg)
 
 
 def test_basic_codegen():
@@ -145,7 +140,10 @@ def test_basic_assign_rhs_codegen():
 def test_basic_raise_codegen():
     """Test code generation of the Raise instruction."""
     cbuild = RawCodeBuilder()
-    class TimeStepUnderflow(RuntimeError): pass
+
+    class TimeStepUnderflow(RuntimeError):
+        pass
+
     cbuild.add_and_get_ids(Raise(TimeStepUnderflow, "underflow", id="raise"))
     cbuild.commit()
     code = DAGCode.create_with_init_and_step(
@@ -369,7 +367,7 @@ def test_arrays_and_linalg(python_method_impl):
         cb("vdm_inverse", "`<builtin>linear_solve`(vdm, identity, n, n)")
         cb("myarray", "`<builtin>matmul`(vdm, vdm_inverse, n, n)")
 
-        cb("dummy", "`<builtin>print`(myarray)")
+        cb((), "`<builtin>print`(myarray)")
 
         cb.yield_state("myarray", "result", 0, "final")
 
@@ -383,6 +381,46 @@ def test_arrays_and_linalg(python_method_impl):
 
     assert la.norm(result - np.eye(4)) < 1e-10
 
+
+def test_svd(python_method_impl):
+    with CodeBuilder(label="primary") as cb:
+        cb("n", 3)
+        cb("nodes", "`<builtin>array`(n)")
+        cb("vdm", "`<builtin>array`(n*n)")
+        cb("identity", "`<builtin>array`(n*n)")
+        cb.fence()
+
+        cb("nodes[i]", "i/n",
+                loops=[("i", 0, "n")])
+
+        cb("vdm[j*n + i]", "nodes[i]**j",
+                loops=[("i", 0, "n"), ("j", 0, "n")])
+
+        cb.fence()
+
+        cb("vdm_u, vdm_sigma, vdm_vt", "`<builtin>svd`(vdm, n)")
+        cb.fence()
+        cb("vdm_usigma", "`<builtin>array`(n*n)")
+        cb("vdm_v", "`<builtin>array`(n*n)")
+        cb("vdm_usigma[i + j*n]", "vdm_u[i + j*n] * vdm_sigma[j]",
+                loops=[("i", 0, "n"), ("j", 0, "n")])
+        cb("vdm_v[i + j*n]", "vdm_vt[j + i*n]",
+                loops=[("i", 0, "n"), ("j", 0, "n")])
+
+        cb("vdm_2", "`<builtin>matmul`(vdm_usigma, vdm_vt, n, n)")
+        cb("diff", "vdm-vdm_2")
+
+        cb((), "`<builtin>print`(diff)")
+
+        cb.yield_state("diff", "result", 0, "final")
+
+    from utils import execute_and_return_single_result
+
+    code = DAGCode.create_with_steady_state(
+        cb.state_dependencies, cb.instructions)
+    result = execute_and_return_single_result(python_method_impl, code)
+
+    assert la.norm(result) < 1e-10
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:

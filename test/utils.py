@@ -1,9 +1,6 @@
 """Various usefulness"""
 from __future__ import division, with_statement
 
-import numpy as np
-
-
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
 
 __license__ = """
@@ -26,6 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import numpy as np  # noqa
 
 
 # {{{ things to pass for python_method_impl
@@ -38,6 +36,8 @@ def python_method_impl_interpreter(code, **kwargs):
 def python_method_impl_codegen(code, **kwargs):
     from dagrt.codegen import PythonCodeGenerator
     codegen = PythonCodeGenerator(class_name='Method')
+    # with open("outf.py", "w") as outf:
+    #     print(codegen(code), file=outf)
     return codegen.get_class(code)(**kwargs)
 
 # }}}
