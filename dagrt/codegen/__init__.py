@@ -27,4 +27,4 @@ from . import python
 
 
 CodeGenerationError = analysis.CodeGenerationError
-PythonCodeGenerator = python.PythonCodeGenerator
+PythonCodeGenerator = python.CodeGenerator

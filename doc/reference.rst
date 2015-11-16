@@ -16,7 +16,7 @@ Python
 
 .. automodule:: dagrt.codegen.python
 
-.. autoclass:: PythonCodeGenerator
+.. autoclass:: CodeGenerator
 
 Fortran
 ~~~~~~~
