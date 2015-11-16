@@ -38,6 +38,45 @@ class TransitionEvent(Exception):
         self.next_state = next_state
 
 
+# {{{ events returned from NumpyInterpreter.run()
+
+class StateComputed(namedtuple("StateComputed",
+          ["t", "time_id", "component_id", "state_component"])):
+    """
+    .. attribute:: t
+    .. attribute:: time_id
+    .. attribute:: component_id
+
+        Identifier of the state component being returned.
+
+    .. attribute:: state_component
+    """
+
+class StepCompleted(
+        namedtuple("StepCompleted",
+            ["dt", "t", "current_state", "next_state"])):
+    """
+    .. attribute:: dt
+
+        Size of next time step.
+
+    .. attribute:: t
+
+        Approximate integrator time at end of step.
+
+    .. attribute:: current_state
+    .. attribute:: next_state
+    """
+
+class StepFailed(namedtuple("StepFailed", ["t"])):
+    """
+    .. attribute:: t
+
+        Floating point number.
+    """
+# }}}
+
+
 # {{{ interpreter
 
 class NumpyInterpreter(object):
@@ -51,43 +90,9 @@ class NumpyInterpreter(object):
     .. automethod:: run_single_step
     """
 
-    # {{{ events returned from run()
-
-    class StateComputed(namedtuple("StateComputed",
-              ["t", "time_id", "component_id", "state_component"])):
-        """
-        .. attribute:: t
-        .. attribute:: time_id
-        .. attribute:: component_id
-
-            Identifier of the state component being returned.
-
-        .. attribute:: state_component
-        """
-
-    class StepCompleted(
-            namedtuple("StepCompleted",
-                ["dt", "t", "current_state", "next_state"])):
-        """
-        .. attribute:: dt
-
-            Size of next time step.
-
-        .. attribute:: t
-
-            Approximate integrator time at end of step.
-
-        .. attribute:: current_state
-        .. attribute:: next_state
-        """
-
-    class StepFailed(namedtuple("StepFailed", ["t"])):
-        """
-        .. attribute:: t
-
-            Floating point number.
-        """
-    # }}}
+    StateComputed = StateComputed
+    StepCompleted = StepCompleted
+    StepFailed = StepFailed
 
     def __init__(self, code, function_map):
         """
@@ -196,7 +201,7 @@ class NumpyInterpreter(object):
             self.context["<state>"+key] = val
 
     def run(self, t_end=None, max_steps=None):
-        """Generates :ref:`numpy-exec-events`."""
+        """Generates events."""
 
         n_steps = 0
         while True:
@@ -212,17 +217,17 @@ class NumpyInterpreter(object):
                     yield evt
 
             except FailStepException:
-                yield self.StepFailed(t=self.context["<t>"])
+                yield StepFailed(t=self.context["<t>"])
                 continue
 
             except TransitionEvent as evt:
                 self.next_state = evt.next_state
 
-            yield self.StepCompleted(
-                    dt=self.context["<dt>"],
-                    t=self.context["<t>"],
-                    current_state=cur_state,
-                    next_state=self.next_state)
+            yield StepCompleted(
+                dt=self.context["<dt>"],
+                t=self.context["<t>"],
+                current_state=cur_state,
+                next_state=self.next_state)
 
             n_steps += 1
 
@@ -259,11 +264,11 @@ class NumpyInterpreter(object):
         raise NotImplementedError("Encountered AssignSolved.")
 
     def exec_YieldState(self, insn):
-        return self.StateComputed(
-                    t=self.eval_mapper(insn.time),
-                    time_id=insn.time_id,
-                    component_id=insn.component_id,
-                    state_component=self.eval_mapper(insn.expression)), []
+        return StateComputed(
+            t=self.eval_mapper(insn.time),
+            time_id=insn.time_id,
+            component_id=insn.component_id,
+            state_component=self.eval_mapper(insn.expression)), []
 
     def exec_AssignExpression(self, insn):
         if not insn.loops:
