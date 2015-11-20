@@ -40,14 +40,20 @@ logger = logging.getLogger(__name__)
 
 __doc__ = """
 Identifier conventions
-~~~~~~~~~~~~~~~~~~~~~~
+======================
 
 Identifiers whose names start with the pattern <letters> are special.  The
 following special variable names are supported:
 
+Internal names
+~~~~~~~~~~~~~~
+
 ``<p>NAME``
     This variable contains persistent state.
     (that survives from one step to the next)
+
+``<cond>NAME``
+    This variable is used by a conditional. May not be re-defined.
 
 ``<dt>``
     The time increment for the present time step.
@@ -67,6 +73,9 @@ following special variable names are supported:
     This variable contains persistent state.
     (that survives from one step to the next)
 
+User-controlled values
+~~~~~~~~~~~~~~~~~~~~~~
+
 ``<state>NAME``
     State identifier under user (=scheme writer) control
 
@@ -81,9 +90,6 @@ following special variable names are supported:
 
     For targets that are incapable of returning state mid-step, these variables
     are used to store computed state.
-
-The latter two serve to separate the name space used by the method from that
-under the control of the user.
 
 See :mod:`dagrt.function_registry` for interpretation of function names. The
 function namespace and the variable namespace are distinct. No user-defined

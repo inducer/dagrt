@@ -23,107 +23,114 @@ THE SOFTWARE.
 """
 
 from pymbolic.mapper import Collector
-from dagrt.language import (
-        Instruction, YieldState, StateTransition, AssignFunctionCall)
+from dagrt.language import YieldState, StateTransition, AssignFunctionCall
 
 
 # {{{ verifier
 
-class InstructionDAGVerifier(object):
-    """Verifies that code is well-formed.
 
-    .. attribute:: warnings
+def _quote(string):
+    return "\"{}\"".format(string)
 
-        is a human-readable list of warnings detected by the verifier.
 
-    .. attribute:: errors
-
-        is a human-readable list of errors detected by the verifier.
+def verify_state_transitions(instructions, states, errors):
     """
+    Ensure that states referenced by StateTransition exist.
 
-    def __init__(self, instructions, state_names, dependency_lists):
-        """
-        :arg instructions: A set of instructions to verify
-        :arg state_names: The list of state names
-        :arg dependency_lists: A list of sets of instruction ids. Each set of
-            instruction ids represents the dependencies for a state.
-        """
-        warnings = []
-        errors = []
+    :arg instructions: A set of instructions to verify
+    :arg states: A map from state names to states
+    :arg errors: An error list to which new errors get appended
+    """
+    state_names = [key for key in states.keys()]
+    for inst in instructions:
+        if not isinstance(inst, StateTransition):
+            continue
+        if inst.next_state not in state_names:
+            errors.append(
+                "State \"{}\" referenced by instruction \"{}\" not found"
+                .format(inst.next_state, inst))
 
-        # TODO: Warn about conditions that may have side effects.
-        # Eg:
-        # WARNING: The condition expression for this function includes a call to
-        # an external function.  dagrt assumes that evaluating conditional
-        # expressions does not produce side effects.  If calling the function
-        # does produce a side effect, the behavior of the code may not be what
-        # you expect.
 
-        # TODO: Make error messages more useful. Eg. name the offending
-        # instruction.
+def verify_all_dependencies_exist(instructions, states, errors):
+    """
+    Ensure that all instruction dependencies exist.
 
-        if not self._verify_instructions_well_typed(instructions):
-            errors += ['Instructions are not well formed.']
-        elif not self._verify_state_transitions(instructions, state_names):
-            errors += ['A state referenced by a transition instruction'
-                       ' does not exit.']
-        elif not self._verify_all_dependencies_exist(instructions,
-                                                     *dependency_lists):
-            errors += ['Code is missing a dependency.']
-        elif not self._verify_no_circular_dependencies(instructions):
-            errors += ['Code has circular dependencies.']
+    :arg instructions: A set of instructions to verify
+    :arg states: A map from state names to states
+    :arg errors: An error list to which new errors get appended
+    """
+    ids = set(inst.id for inst in instructions)
 
-        self.warnings = warnings
-        self.errors = errors
+    # Check instructions
+    for inst in instructions:
+        deps = set(inst.depends_on)
+        if not deps <= ids:
+            errors.extend(
+                ["Dependency \"{}\" referenced by instruction \"{}\" not found"
+                 .format(dep_name, inst) for dep_name in deps - ids])
 
-    def _verify_instructions_well_typed(self, instructions):
-        """Ensure that all instructions are of the expected format."""
-        for inst in instructions:
-            # TODO: Be strict about the correctness of the input.
-            if not isinstance(inst, Instruction):
-                return False
-        return True
+    # Check states.
+    import six
+    for state_name, state in six.iteritems(states):
+        deps = set(state.depends_on)
+        if not deps <= ids:
+            errors.extend(
+                ["Dependencies {} referenced by state \"{}\" not found"
+                 .format(", ".join(_quote(dep) for dep in ids - deps),
+                         state_name)])
 
-    def _verify_state_transitions(self, instructions, states):
-        """Ensure that states referenced by StateTransition exist."""
-        for inst in instructions:
-            if isinstance(inst, StateTransition):
-                if inst.next_state not in states:
-                    return False
-        return True
 
-    def _verify_all_dependencies_exist(self, instructions, *dependency_lists):
-        """Ensure that all instruction dependencies exist."""
-        ids = set(inst.id for inst in instructions)
-        for inst in instructions:
-            deps = set(inst.depends_on)
-            if not deps <= ids:
-                return False
-        for dependency_list in dependency_lists:
-            if not set(dependency_list) <= ids:
-                return False
-        return True
+def verify_no_circular_dependencies(instructions, errors):
+    """
+    Ensure that there are no circular dependencies among the instructions.
 
-    def _verify_no_circular_dependencies(self, instructions):
-        """Ensure that there are no circular dependencies among the instructions."""
-        id_to_instruction = dict((inst.id, inst) for inst in instructions)
-        stack = list(instructions)
-        visiting = set()
-        visited = set()
-        while stack:
-            top = stack[-1]
-            if top.id not in visited:
-                visited.add(top.id)
-                visiting.add(top.id)
-                for neighbor in top.depends_on:
-                    if neighbor in visiting:
-                        return False
-                    stack.append(id_to_instruction[neighbor])
+    :arg instructions: A set of instructions to verify
+    :arg errors: An error list to which new errors get appended
+    """
+    id_to_instruction = dict((inst.id, inst) for inst in instructions)
+    stack = list(instructions)
+    visiting = set()
+    visited = set()
+    while stack:
+        top = stack[-1]
+        if top.id not in visited:
+            visited.add(top.id)
+            visiting.add(top.id)
+            for neighbor in top.depends_on:
+                if neighbor in visiting:
+                    errors.append("Circular dependency chain found")
+                    return
+                stack.append(id_to_instruction[neighbor])
+        else:
+            if top.id in visiting:
+                visiting.remove(top.id)
+            stack.pop()
+
+
+def verify_single_definition_cond_rule(instructions, errors):
+    """
+    Verify that <cond> variables are never redefined.
+
+    :arg instructions: A set of instructions to verify
+    :arg errors: An error list to which new errors get appended
+    """
+    cond_variables = {}
+
+    for instruction in instructions:
+        for varname in instruction.get_assignees():
+            if not varname.startswith("<cond>"):
+                continue
+            if varname not in cond_variables:
+                cond_variables[varname] = [instruction]
             else:
-                if top.id in visiting:
-                    visiting.remove(top.id)
-                stack.pop()
-        return True
+                cond_variables[varname].append(instruction)
+
+    import six
+    for varname, insts in six.iteritems(cond_variables):
+        if len(insts) > 1:
+            errors.append(
+                "Conditional variable \"{}\" defined by multiple instructions: {}"
+                .format(varname, ", ".join(_quote(str(inst)) for inst in insts)))
 
 
 class CodeGenerationError(Exception):
@@ -135,28 +142,24 @@ class CodeGenerationError(Exception):
             '\n'.join(self.errors)
 
 
-class CodeGenerationWarning(UserWarning):
-    pass
-
-
 def verify_code(code):
     """Verify that the DAG is well-formed."""
-    from .analysis import InstructionDAGVerifier
-    verifier = InstructionDAGVerifier(
-            code.instructions,
-            [state for state in code.states.keys()],
-            [state.depends_on
-                for state in code.states.values()])
+    errors = []
 
-    if verifier.errors:
-        raise CodeGenerationError(verifier.errors)
-    if verifier.warnings:
-        # Python comes with a facility to silence/filter warnigns,
-        # no need to replicate that functionality.
+    try:
+        # Wrap in a try block, since some verifier passes may fail due to badly
+        # malformed code.
+        verify_all_dependencies_exist(code.instructions, code.states, errors)
+        verify_no_circular_dependencies(code.instructions, errors)
+        verify_state_transitions(code.instructions, code.states, errors)
+        verify_single_definition_cond_rule(code.instructions, errors)
+    except Exception as e:
+        # Ensure there is at least one error to report.
+        if len(errors) == 0:
+            raise e
 
-        from warnings import warn
-        for warning in verifier.warnings:
-            warn(warning, CodeGenerationWarning)
+    if errors:
+        raise CodeGenerationError(errors)
 
 # }}}
 

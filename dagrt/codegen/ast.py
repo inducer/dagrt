@@ -1,5 +1,5 @@
 """Abstract syntax"""
-from pymbolic.mapper import Collector, IdentityMapper
+from pymbolic.mapper import IdentityMapper
 from pymbolic.mapper.dependency import DependencyMapper
 from pymbolic.mapper.unifier import UnidirectionalUnifier
 from pymbolic.primitives import Expression, LogicalNot
@@ -27,7 +27,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-
 
 
 class IfThen(Expression):
@@ -117,12 +116,6 @@ class _ExtendedDependencyMapper(_ASTCombinerMixin, DependencyMapper):
     pass
 
 
-class _ASTDefinedVariablesCollector(_ASTCombinerMixin, Collector):
-
-    def map_InstructionWrapper(self, expr):
-        return expr.instruction.get_assignees()
-
-
 class _ASTMatcher(UnidirectionalUnifier):
     """
     Extend UnidirectionalUnifier to handle matching of AST fragments (along with
@@ -187,20 +180,6 @@ def get_instructions_in_ast(ast):
     for child in children:
         for inst in get_instructions_in_ast(child):
             yield inst
-
-
-def redefines(ast, expression):
-    """
-    Return whether any of the variables in `expression` are redefined
-    in the AST fragment `ast`.
-    """
-
-    from dagrt.utils import get_variables
-    variables = get_variables(expression)
-    # TODO: Cache results / copy caches over when copying AST fragments
-    redefined_variables = _ASTDefinedVariablesCollector()(ast)
-
-    return bool(variables & redefined_variables)
 
 
 def create_ast_from_state(code, state, simplify=True):
@@ -379,7 +358,7 @@ class _ASTSimplificationMapper(IdentityMapper):
 
             # IfThen(p, t), IfThen(p, tt) => IfThen(p, Block(t, tt))
             match = match_ast(child_pair, (IfThen(p, t), IfThen(p, tt)))
-            if match and not redefines(match["t"], match["p"]):
+            if match:
                 current_child = IfThen(match["p"],
                                        flat_Block(match["t"], match["tt"]))
                 self.changed = True
@@ -387,14 +366,14 @@ class _ASTSimplificationMapper(IdentityMapper):
 
             # IfThen(p, t), IfThen(not p, tt) => IfThenElse(p, t, tt)
             match = match_ast(child_pair, (IfThen(p, t), IfThen(LogicalNot(p), tt)))
-            if match and not redefines(match["t"], match["p"]):
+            if match:
                 current_child = IfThenElse(match["p"], match["t"], match["tt"])
                 self.changed = True
                 continue
 
             # IfThen IfThenElse -> IfThenElse
             match = match_ast(child_pair, (IfThen(p, t), IfThenElse(p, tt, ttt)))
-            if match and not redefines(match["t"], match["p"]):
+            if match:
                 current_child = IfThenElse(match["p"],
                                            flat_Block(match["t"], match["tt"]),
                                            match["ttt"])
@@ -405,8 +384,7 @@ class _ASTSimplificationMapper(IdentityMapper):
             #  => IfThenElse(p, t, Block(tt, ttt))
             match = match_ast(child_pair, (IfThenElse(p, t, tt),
                                            IfThen(LogicalNot(p), ttt)))
-            if match and not redefines(match["t"], match["p"]) and not \
-                    redefines(match["tt"], match["p"]):
+            if match:
                 current_child = IfThenElse(match["p"], match["t"],
                                            flat_Block(match["tt"], match["ttt"]))
                 self.changed = True

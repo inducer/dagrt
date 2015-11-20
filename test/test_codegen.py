@@ -5,7 +5,8 @@ import sys
 
 from dagrt.language import AssignExpression, YieldState
 from dagrt.language import DAGCode
-from dagrt.codegen import PythonCodeGenerator, CodeGenerationError
+from dagrt.codegen import CodeGenerationError
+from dagrt.codegen.analysis import verify_code
 
 from pymbolic import var
 
@@ -35,10 +36,6 @@ THE SOFTWARE.
 """
 
 
-
-
-
-
 def test_circular_dependency_detection():
     """Check that the code generator detects that there is a circular
     dependency."""
@@ -50,8 +47,11 @@ def test_circular_dependency_detection():
             assignee_subscript=(),
             expression=1,
             depends_on=['assign2']),
-        AssignExpression(id='assign2', assignee='<state>y', assignee_subscript=(),
-            expression=1, depends_on=['assign']),
+        AssignExpression(id='assign2',
+            assignee='<state>y',
+            assignee_subscript=(),
+            expression=1,
+            depends_on=['assign']),
         YieldState(id='return', time=0, time_id='final',
             expression=var('<state>y'), component_id='<state>',
         depends_on=['assign']))
@@ -59,9 +59,8 @@ def test_circular_dependency_detection():
     code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
-    codegen = PythonCodeGenerator(class_name='Method')
     try:
-        codegen(code)
+        verify_code(code)
     except CodeGenerationError:
         pass
     else:
@@ -81,9 +80,8 @@ def test_missing_dependency_detection():
     code = DAGCode.create_with_init_and_step(
             initialization_dep_on=[],
             instructions=instructions, step_dep_on=['return'])
-    codegen = PythonCodeGenerator(class_name='Method')
     try:
-        codegen(code)
+        verify_code(code)
     except CodeGenerationError:
         pass
     else:
@@ -99,8 +97,39 @@ def test_missing_state_detection():
 
     code = DAGCode.create_with_steady_state(
         dep_on=cb.state_dependencies, instructions=cb.instructions)
+    try:
+        verify_code(code)
+    except CodeGenerationError:
+        pass
+    else:
+        assert False
 
-    from dagrt.codegen.analysis import verify_code
+
+def test_cond_detection():
+    """Check that the code generator detects a redefinition of a <cond> variable."""
+    cbuild = RawCodeBuilder()
+    cbuild.add_and_get_ids(
+        AssignExpression(
+            id='assign1',
+            assignee='<cond>c',
+            assignee_subscript=(),
+            expression=1,
+            depends_on=[]),
+        AssignExpression(
+            id='assign2',
+            assignee='<cond>c',
+            assignee_subscript=(),
+            expression=2,
+            depends_on=['assign1']),
+        YieldState(id='return',
+            time=0, time_id='final',
+            expression=1,
+            component_id='<state>',
+            depends_on=['assign2']))
+    cbuild.commit()
+    code = DAGCode.create_with_init_and_step(
+            initialization_dep_on=[],
+            instructions=cbuild.instructions, step_dep_on=['return'])
     try:
         verify_code(code)
     except CodeGenerationError:
