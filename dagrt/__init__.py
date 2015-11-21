@@ -1,4 +1,4 @@
-"""Leap root module"""
+"""Dagrt root module"""
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 

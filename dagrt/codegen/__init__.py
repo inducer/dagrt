@@ -1,4 +1,4 @@
-"""Turn timestepper descriptions into source code"""
+"""Code generation for dagrt"""
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
