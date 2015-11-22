@@ -321,25 +321,24 @@ class _RenameVariableMapper(IdentityMapper):
             return var(renamed)
 
 
-def substitute(expr, substitution_dict):
-    """
-    Perform substitution in `expr` based on `substitution_dict`.
-    """
-    renamer = _RenameVariableMapper(lambda s: substitution_dict[s]
-                                    if s in substitution_dict
-                                    else None)
-    return renamer(expr)
-
-
-def parse(str_expr):
+def parse(expr):
     """Return a pymbolic expression constructed from the string. Values
     between backticks ("`") are parsed as variable names.
     """
+    from pymbolic import var
+
+    def remove_backticks(expr):
+        if not isinstance(expr, var):
+            return expr
+        varname = expr.name
+        if varname.startswith('`') and varname.endswith('`'):
+            return var(varname[1:-1])
+        return expr
+
+    from pymbolic.mapper.substitutor import SubstitutionMapper
     parser = _ExtendedParser()
-    renamer = _RenameVariableMapper(lambda s: s[1:-1]
-                                    if s.startswith('`') and s.endswith('`')
-                                    else s)
-    return renamer(parser(str_expr))
+    substitutor = SubstitutionMapper(remove_backticks)
+    return substitutor(parser(expr))
 
 
 # vim: foldmethod=marker

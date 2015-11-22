@@ -1,30 +1,57 @@
 Reference
 =========
 
-.. module:: leap
+.. module:: dagrt
 
-Description Language
+Description language
 --------------------
 
-.. automodule:: leap.vm.language
+.. automodule:: dagrt.language
 
-Execution
----------
+Code generation
+---------------
+
+Python
+~~~~~~
+
+.. automodule:: dagrt.codegen.python
+
+.. autoclass:: CodeGenerator
+
+Fortran
+~~~~~~~
+
+.. automodule::	dagrt.codegen.fortran
+
+.. autoclass:: CodeGenerator
+
+Function registry
+~~~~~~~~~~~~~~~~~
+
+The function registry is used by targets to register external
+functions and customized function call code.
+
+.. automodule:: dagrt.function_registry
+   :members:
+
+Transformations
+~~~~~~~~~~~~~~~
+
+.. automodule:: dagrt.codegen.transform
+   :members:
+
+Utilities
+~~~~~~~~~
+
+.. automodule:: dagrt.codegen.utils
+   :members:
+
+.. automodule:: dagrt.utils
+   :members:
+
 
 :mod:`numpy`-based interpretation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------
 
-.. automodule:: leap.vm.exec_numpy
-
-.. autoclass:: NumpyInterpreter
-
-.. _numpy-exec-events:
-
-Events
-^^^^^^
-
-.. autoclass:: StateComputed
-
-.. autoclass:: StepCompleted
-
-.. autoclass:: StepFailed
+.. automodule:: dagrt.exec_numpy
+   :members:

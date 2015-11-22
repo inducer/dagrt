@@ -32,10 +32,6 @@ THE SOFTWARE.
 """
 
 
-
-
-
-
 def test_create_ast():
     x, = declare("x")
 
@@ -112,18 +108,6 @@ def test_simplify():
         IfThenElse(p, Block(0, 1), 2)
     assert simplify_ast(Block(IfThenElse(p, 0, 1), IfThen(LogicalNot(p), 2))) == \
         IfThenElse(p, 0, Block(1, 2))
-
-    # Check that simplification respects redefinitions.
-    from dagrt.language import AssignExpression
-    redef = InstructionWrapper(AssignExpression("p", (), 10))
-    input_same_as_output = lambda f, x: f(x) == x
-    assert input_same_as_output(simplify_ast, Block(IfThen(p, redef), IfThen(p, 0)))
-    assert input_same_as_output(simplify_ast, Block(IfThenElse(p, 0, redef),
-                                                    IfThen(LogicalNot(p), 1)))
-    assert input_same_as_output(simplify_ast, Block(IfThenElse(p, redef, 0),
-                                                    IfThen(LogicalNot(p), 1)))
-    assert input_same_as_output(simplify_ast, Block(IfThen(p, redef),
-                                                    IfThenElse(p, 0, 1)))
 
 
 if __name__ == "__main__":

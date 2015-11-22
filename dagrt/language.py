@@ -40,14 +40,20 @@ logger = logging.getLogger(__name__)
 
 __doc__ = """
 Identifier conventions
-~~~~~~~~~~~~~~~~~~~~~~
+======================
 
 Identifiers whose names start with the pattern <letters> are special.  The
 following special variable names are supported:
 
+Internal names
+~~~~~~~~~~~~~~
+
 ``<p>NAME``
     This variable contains persistent state.
     (that survives from one step to the next)
+
+``<cond>NAME``
+    This variable is used by a conditional. May not be re-defined.
 
 ``<dt>``
     The time increment for the present time step.
@@ -67,6 +73,9 @@ following special variable names are supported:
     This variable contains persistent state.
     (that survives from one step to the next)
 
+User-controlled values
+~~~~~~~~~~~~~~~~~~~~~~
+
 ``<state>NAME``
     State identifier under user (=scheme writer) control
 
@@ -74,16 +83,16 @@ following special variable names are supported:
     (that survives from one step to the next)
 
 ``<ret_time_id>COMPONENT_ID``
+
 ``<ret_time>COMPONENT_ID``
+
 ``<ret_state>COMPONENT_ID``
+
     For targets that are incapable of returning state mid-step, these variables
     are used to store computed state.
 
-The latter two serve to separate the name space used by the method from that
-under the control of the user.
-
-See :module:`dagrt.function_registry` for interpretation of function names.
-The function namespace and the variable namespace are distinct. No user-defined
+See :mod:`dagrt.function_registry` for interpretation of function names. The
+function namespace and the variable namespace are distinct. No user-defined
 identifiers should start with `dagrt_`.
 
 Instructions
@@ -108,8 +117,6 @@ State Instructions
 
 .. autoclass:: FailStep
 
-.. autoclass:: If
-
 Code Container
 ~~~~~~~~~~~~~~
 
@@ -127,6 +134,8 @@ Code Creation
 ~~~~~~~~~~~~~
 
 .. autoclass :: CodeBuilder
+
+=======
 
 """
 
@@ -791,6 +800,16 @@ class ExecutionController(object):
 
 class CodeBuilder(object):
     """
+    .. attribute:: instructions
+
+       The set of instructions generated for the state
+
+    .. attribute:: state_dependencies
+
+       A list of instruction names. Starting with these instructions
+       as the root dependencies, the state can be executed by following
+       the dependency list of each instruction.
+
     .. automethod:: fence
     .. automethod:: if_
     .. automethod:: else_
@@ -799,7 +818,6 @@ class CodeBuilder(object):
     .. automethod:: fresh_var
     .. automethod:: assign_solved
     .. automethod:: assign_solved_1
-    .. automethod:: assign_call
     .. automethod:: yield_state
     .. automethod:: fail_step
     .. automethod:: raise_
@@ -832,6 +850,9 @@ class CodeBuilder(object):
                 condition=condition)
 
     def __init__(self, label="state"):
+        """
+        :arg label: The name of the state to generate
+        """
         self.label = label
         self._instruction_map = {}
         self._instruction_count = 0

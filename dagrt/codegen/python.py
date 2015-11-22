@@ -241,7 +241,7 @@ class BareExpression(object):
         return self.s
 
 
-class PythonCodeGenerator(StructuredCodeGenerator):
+class CodeGenerator(StructuredCodeGenerator):
 
     def __init__(self, class_name, function_registry=None):
         if function_registry is None:
