@@ -147,8 +147,13 @@ def _builtin_linear_solve(self, a, b, a_cols, b_cols):
     a_mat = a.reshape(-1, a_cols, order="F")
     b_mat = b.reshape(-1, b_cols, order="F")
 
+    a_rows = a_mat.shape
+
     import numpy.linalg as la
-    res_mat = la.solve(a_mat, b_mat)
+    if a_rows != a_cols:
+        res_mat = la.lstsq(a_mat, b_mat)[0]
+    else:
+        res_mat = la.solve(a_mat, b_mat)
 
     return res_mat.reshape(-1, order="F")
 
