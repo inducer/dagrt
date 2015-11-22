@@ -30,27 +30,28 @@ def builtin_len(x):
 
 def builtin_isnan(x):
     import numpy as np
-    return np.size(x)
-
-
-def _builtin_norm(x, ord):
-    import numpy as np
-    if np.isscalar(x):
-        return abs(x)
-    return np.linalg.norm(x, ord)
+    return np.isnan(x)
 
 
 def builtin_norm_1(x):
-    return _builtin_norm(x, 1)
+    import numpy as np
+    if np.isscalar(x):
+        return abs(x)
+    return np.linalg.norm(x, 1)
 
 
 def builtin_norm_2(x):
-    return _builtin_norm(x, 2)
+    import numpy as np
+    if np.isscalar(x):
+        return abs(x)
+    return np.linalg.norm(x, 2)
 
 
 def builtin_norm_inf(x):
     import numpy as np
-    return _builtin_norm(x, np.inf)
+    if np.isscalar(x):
+        return abs(x)
+    return np.linalg.norm(x, np.inf)
 
 
 def builtin_dot_product(a, b):

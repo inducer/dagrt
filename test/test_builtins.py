@@ -31,7 +31,11 @@ from dagrt.language import AssignExpression, YieldState
 from dagrt.language import DAGCode
 from pymbolic import var
 
-from utils import execute_and_return_single_result, RawCodeBuilder
+from utils import (  # noqa
+        execute_and_return_single_result,
+        RawCodeBuilder,
+        python_method_impl_interpreter as pmi_int,
+        python_method_impl_codegen as pmi_cg)
 
 
 @pytest.mark.parametrize(('obj, len_'), [(np.ones(0), 0),
