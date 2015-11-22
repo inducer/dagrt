@@ -23,7 +23,6 @@ THE SOFTWARE.
 """
 
 from collections import namedtuple
-import numpy as np
 from dagrt.expression import EvaluationMapper
 import six
 
@@ -52,6 +51,7 @@ class StateComputed(namedtuple("StateComputed",
     .. attribute:: state_component
     """
 
+
 class StepCompleted(
         namedtuple("StepCompleted",
             ["dt", "t", "current_state", "next_state"])):
@@ -67,6 +67,7 @@ class StepCompleted(
     .. attribute:: current_state
     .. attribute:: next_state
     """
+
 
 class StepFailed(namedtuple("StepFailed", ["t"])):
     """
@@ -105,80 +106,7 @@ class NumpyInterpreter(object):
         self.context = {}
         self.next_state = self.code.initial_state
 
-        def builtin_norm(x, ord):
-            if np.isscalar(x):
-                return abs(x)
-            return np.linalg.norm(x, ord)
-
-        def builtin_array(n):
-            if n != np.floor(n):
-                raise ValueError("array() argument n is not an integer")
-            n = int(n)
-
-            return np.empty(n, dtype=np.float64)
-
-        def builtin_matmul(a, b, a_cols, b_cols):
-            if a_cols != np.floor(a_cols):
-                raise ValueError("matmul() argument a_cols is not an integer")
-            if b_cols != np.floor(b_cols):
-                raise ValueError("matmul() argument b_cols is not an integer")
-            a_cols = int(a_cols)
-            b_cols = int(b_cols)
-
-            a_mat = a.reshape(-1, a_cols, order="F")
-            b_mat = b.reshape(-1, b_cols, order="F")
-
-            res_mat = a_mat.dot(b_mat)
-
-            return res_mat.reshape(-1, order="F")
-
-        def builtin_linear_solve(a, b, a_cols, b_cols):
-            if a_cols != np.floor(a_cols):
-                raise ValueError("linear_solve() argument a_cols is not an integer")
-            if b_cols != np.floor(b_cols):
-                raise ValueError("linear_solve() argument b_cols is not an integer")
-            a_cols = int(a_cols)
-            b_cols = int(b_cols)
-
-            a_mat = a.reshape(-1, a_cols, order="F")
-            b_mat = b.reshape(-1, b_cols, order="F")
-
-            import numpy.linalg as la
-            res_mat = la.solve(a_mat, b_mat)
-
-            return res_mat.reshape(-1, order="F")
-
-        def builtin_svd(a, a_cols):
-            if a_cols != np.floor(a_cols):
-                raise ValueError("linear_solve() argument a_cols is not an integer")
-            a_cols = int(a_cols)
-
-            a_mat = a.reshape(-1, a_cols, order="F")
-
-            import numpy.linalg as la
-            u, sigma, vt = la.svd(a_mat, full_matrices=0)
-
-            return u.reshape(-1, order="F"), sigma, vt.reshape(-1, order="F")
-
-        def builtin_print(arg):
-            print(arg)
-            return 0
-
-        from functools import partial
-
-        builtins = {
-                "<builtin>len": np.size,
-                "<builtin>isnan": np.isnan,
-                "<builtin>norm_1": partial(builtin_norm, ord=1),
-                "<builtin>norm_2": partial(builtin_norm, ord=2),
-                "<builtin>norm_inf": partial(builtin_norm, ord=np.inf),
-                "<builtin>dot_product": np.vdot,
-                "<builtin>array": builtin_array,
-                "<builtin>matmul": builtin_matmul,
-                "<builtin>linear_solve": builtin_linear_solve,
-                "<builtin>svd": builtin_svd,
-                "<builtin>print": builtin_print,
-                }
+        from dagrt.builtins_python import builtins
 
         # Ensure none of the names in the function map conflict with the
         # builtins.

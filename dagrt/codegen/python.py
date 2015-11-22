@@ -98,74 +98,6 @@ class TransitionEvent(Exception):
 
 class _function_symbol_container(object):
     pass
-
-def _builtin_norm_1(self, x):
-    if self._numpy.isscalar(x):
-        return abs(x)
-    return self._numpy.linalg.norm(x, 1)
-
-def _builtin_norm_2(self, x):
-    if self._numpy.isscalar(x):
-        return abs(x)
-    return self._numpy.linalg.norm(x, 2)
-
-def _builtin_norm_inf(self, x):
-    if self._numpy.isscalar(x):
-        return abs(x)
-    return self._numpy.linalg.norm(x, self._numpy.inf)
-
-def _builtin_array(self, n):
-    if n != self._numpy.floor(n):
-        raise ValueError("array() argument n is not an integer")
-    n = int(n)
-
-    return self._numpy.empty(n)
-
-def _builtin_matmul(self, a, b, a_cols, b_cols):
-    if a_cols != self._numpy.floor(a_cols):
-        raise ValueError("matmul() argument a_cols is not an integer")
-    if b_cols != self._numpy.floor(b_cols):
-        raise ValueError("matmul() argument b_cols is not an integer")
-    a_cols = int(a_cols)
-    b_cols = int(b_cols)
-
-    a_mat = a.reshape(-1, a_cols, order="F")
-    b_mat = b.reshape(-1, b_cols, order="F")
-
-    res_mat = a_mat.dot(b_mat)
-
-    return res_mat.reshape(-1, order="F")
-
-def _builtin_linear_solve(self, a, b, a_cols, b_cols):
-    if a_cols != self._numpy.floor(a_cols):
-        raise ValueError("linear_solve() argument a_cols is not an integer")
-    if b_cols != self._numpy.floor(b_cols):
-        raise ValueError("linear_solve() argument b_cols is not an integer")
-    a_cols = int(a_cols)
-    b_cols = int(b_cols)
-
-    a_mat = a.reshape(-1, a_cols, order="F")
-    b_mat = b.reshape(-1, b_cols, order="F")
-
-    import numpy.linalg as la
-    res_mat = la.solve(a_mat, b_mat)
-
-    return res_mat.reshape(-1, order="F")
-
-def _builtin_svd(self, a, a_cols):
-    if a_cols != self._numpy.floor(a_cols):
-        raise ValueError("linear_solve() argument a_cols is not an integer")
-    a_cols = int(a_cols)
-
-    a_mat = a.reshape(-1, a_cols, order="F")
-
-    import numpy.linalg as la
-    u, sigma, vt = la.svd(a_mat, full_matrices=0)
-
-    return u.reshape(-1, order="F"), sigma, vt.reshape(-1, order="F")
-
-def _builtin_print(self, arg):
-    print(arg)
 '''
 
 
@@ -306,8 +238,26 @@ class CodeGenerator(StructuredCodeGenerator):
     def _emit_inner_classes(self):
         """Emit the inner classes that describe objects returned by the method."""
         emit = PythonEmitter()
+
         for line in _inner_class_code.splitlines():
             emit(line)
+
+        from inspect import getsourcefile
+        import dagrt.builtins_python as builtins
+        builtins_source_file = getsourcefile(builtins)
+
+        if builtins_source_file is None:
+            raise RuntimeError(
+                    "source code for built-in functions cannot be located")
+
+        with open(builtins_source_file) as srcf:
+            builtins_source = srcf.read()
+
+        for l in builtins_source.split("\n"):
+            if l.startswith("def builtin"):
+                emit("@staticmethod")
+            emit(l.replace("builtin", "_builtin"))
+
         self._class_emitter.incorporate(emit)
 
     def _emit_constructor(self, dag):
