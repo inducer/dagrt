@@ -689,7 +689,7 @@ class CodeGenerator(StructuredCodeGenerator):
     # {{{ constructor
 
     def __init__(self, module_name,
-            ode_component_type_map,
+            user_type_map,
             function_registry=None,
             module_preamble=None,
             real_scalar_kind="8",
@@ -708,7 +708,7 @@ class CodeGenerator(StructuredCodeGenerator):
             trace=False):
         """
         :arg function_registry:
-        :arg ode_component_type_map: a map from ODE component_id names
+        :arg user_type_map: a map from user type names
             to :class:`FortranType` instances
         :arg call_before_state_update: The name of a function that should
             be called before each state update. The function must be known
@@ -738,7 +738,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.module_name = module_name
         self.function_registry = function_registry
-        self.ode_component_type_map = ode_component_type_map
+        self.user_type_map = user_type_map
 
         self.trace = trace
 
@@ -869,9 +869,9 @@ class CodeGenerator(StructuredCodeGenerator):
         from .analysis import collect_ode_component_names_from_dag
         component_ids = collect_ode_component_names_from_dag(dag)
 
-        if not component_ids <= set(self.ode_component_type_map):
-            raise RuntimeError("ODE components with undeclared types: %r"
-                    % (component_ids - set(self.ode_component_type_map)))
+        if not component_ids <= set(self.user_type_map):
+            raise RuntimeError("User type missing from user type map: %r"
+                    % (component_ids - set(self.user_type_map)))
 
         from dagrt.codegen.data import Scalar, UserType
         for comp_id in component_ids:
@@ -1091,7 +1091,7 @@ class CodeGenerator(StructuredCodeGenerator):
     # {{{ data management
 
     def get_ode_component_type(self, component_id, is_argument=False):
-        comp_type = self.ode_component_type_map[component_id]
+        comp_type = self.user_type_map[component_id]
         if not is_argument:
             comp_type = PointerType(comp_type)
 
@@ -1680,7 +1680,7 @@ class CodeGenerator(StructuredCodeGenerator):
             return
 
         if assignee_subscript:
-            raise ValueError("ODE components do not support subscripting")
+            raise ValueError("User types do not support subscripting")
 
         if isinstance(expr, Variable):
             self.emit_ode_component_move(
@@ -1909,7 +1909,7 @@ def codegen_builtin_norm_2(results, function, arg_strings_dict, arg_kinds_dict,
         else:
             ftype = BuiltinType("complex*16")
     elif isinstance(x_kind, UserType):
-        ftype = code_generator.ode_component_type_map[x_kind.component_id]
+        ftype = code_generator.user_type_map[x_kind.component_id]
 
     elif isinstance(x_kind, Array):
         code_generator.emit("{result} = norm2({arg})".format(
@@ -1953,7 +1953,7 @@ def codegen_builtin_len(results, function, arg_strings_dict, arg_kinds_dict,
         else:
             ftype = BuiltinType("complex*16")
     elif isinstance(x_kind, UserType):
-        ftype = code_generator.ode_component_type_map[x_kind.component_id]
+        ftype = code_generator.user_type_map[x_kind.component_id]
     elif isinstance(x_kind, Array):
         code_generator.emit("{result} = size({arg})".format(
             result=result,
@@ -1990,7 +1990,7 @@ def codegen_builtin_isnan(results, function, arg_strings_dict, arg_kinds_dict,
         else:
             ftype = BuiltinType("complex*16")
     elif isinstance(x_kind, UserType):
-        ftype = code_generator.ode_component_type_map[x_kind.component_id]
+        ftype = code_generator.user_type_map[x_kind.component_id]
     else:
         raise TypeError("unsupported kind for norm_2 argument: %s" % x_kind)
 

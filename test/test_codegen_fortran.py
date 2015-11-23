@@ -56,7 +56,7 @@ def test_basic_codegen():
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = f.CodeGenerator("simple",
-            ode_component_type_map={
+            user_type_map={
                 "state": f.ArrayType(
                     (200,),
                     f.BuiltinType('real (kind=8)'),)
@@ -105,7 +105,7 @@ def test_arrays_and_linalg():
     codegen = f.CodeGenerator(
             'arrays',
             function_registry=freg,
-            ode_component_type_map={},
+            user_type_map={},
             emit_instrumentation=True,
             timing_function="second")
 
