@@ -30,7 +30,7 @@ from dagrt.language import YieldState, StateTransition, AssignFunctionCall
 
 
 def _quote(string):
-    return "\"{}\"".format(string)
+    return "\"{0}\"".format(string)
 
 
 def verify_state_transitions(instructions, states, errors):
@@ -47,7 +47,7 @@ def verify_state_transitions(instructions, states, errors):
             continue
         if inst.next_state not in state_names:
             errors.append(
-                "State \"{}\" referenced by instruction \"{}\" not found"
+                "State \"{0}\" referenced by instruction \"{1}\" not found"
                 .format(inst.next_state, inst))
 
 
@@ -66,7 +66,7 @@ def verify_all_dependencies_exist(instructions, states, errors):
         deps = set(inst.depends_on)
         if not deps <= ids:
             errors.extend(
-                ["Dependency \"{}\" referenced by instruction \"{}\" not found"
+                ["Dependency \"{0}\" referenced by instruction \"{1}\" not found"
                  .format(dep_name, inst) for dep_name in deps - ids])
 
     # Check states.
@@ -75,7 +75,7 @@ def verify_all_dependencies_exist(instructions, states, errors):
         deps = set(state.depends_on)
         if not deps <= ids:
             errors.extend(
-                ["Dependencies {} referenced by state \"{}\" not found"
+                ["Dependencies {0} referenced by state \"{1}\" not found"
                  .format(", ".join(_quote(dep) for dep in ids - deps),
                          state_name)])
 
@@ -129,7 +129,7 @@ def verify_single_definition_cond_rule(instructions, errors):
     for varname, insts in six.iteritems(cond_variables):
         if len(insts) > 1:
             errors.append(
-                "Conditional variable \"{}\" defined by multiple instructions: {}"
+                "Conditional variable \"{0}\" defined by multiple instructions: {1}"
                 .format(varname, ", ".join(_quote(str(inst)) for inst in insts)))
 
 
