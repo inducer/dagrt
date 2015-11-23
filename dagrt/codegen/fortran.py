@@ -509,17 +509,12 @@ class _ArrayLoopManager(object):
 
             start, stop = atype.parse_dimension(dim)
 
-            parallel_do_preamble = None
-            if not self.array_type.is_allocatable():
-                parallel_do_preamble = code_generator.parallel_do_preamble
-
             em = FortranDoEmitter(
                     code_generator.emitter, index_name,
                     "%s, %s" % (
                         _replace_indices(index_expr_map, start),
                         _replace_indices(index_expr_map, stop)),
-                    code_generator,
-                    parallel_do_preamble=parallel_do_preamble)
+                    code_generator)
             self.emitters.append(em)
             em.__enter__()
 
@@ -1707,13 +1702,18 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_inst_AssignExpression(self, inst):
         start_em = self.emitter
 
-        for ident, start, stop in inst.loops:
+        for iloop, (ident, start, stop) in enumerate(inst.loops):
+            # Only parallelize the innermost loop
+            pdp = None
+            if iloop + 1 == len(inst.loops):
+                pdp = self.parallel_do_preamble
+
             em = FortranDoEmitter(
                     self.emitter,
                     self.name_manager[ident],
                     "int(%s), int(%s)" % (self.expr(start), self.expr(stop-1)),
                     code_generator=self,
-                    parallel_do_preamble=self.parallel_do_preamble)
+                    parallel_do_preamble=pdp)
             em.__enter__()
 
         self.emit_assign_expr(
