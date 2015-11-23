@@ -1090,8 +1090,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
     # {{{ data management
 
-    def get_ode_component_type(self, component_id, is_argument=False):
-        comp_type = self.user_type_map[component_id]
+    def get_fortran_type_for_user_type(self, type_identifier, is_argument=False):
+        comp_type = self.user_type_map[type_identifier]
         if not is_argument:
             comp_type = PointerType(comp_type)
 
@@ -1127,7 +1127,7 @@ class CodeGenerator(StructuredCodeGenerator):
             type_name = 'integer'
 
         elif isinstance(sym_kind, UserType):
-            comp_type = self.get_ode_component_type(sym_kind.component_id,
+            comp_type = self.get_fortran_type_for_user_type(sym_kind.identifier,
                     is_argument=is_argument)
 
             type_name = comp_type.get_base_type()
@@ -1157,7 +1157,7 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_variable_init(self, name, sym_kind):
         from dagrt.codegen.data import UserType
         if isinstance(sym_kind, UserType):
-            comp_type = self.get_ode_component_type(sym_kind.component_id)
+            comp_type = self.get_fortran_type_for_user_type(sym_kind.identifier)
             InitializationEmitter(self)(comp_type, self.name_manager[name], {})
 
     def emit_variable_deinit(self, name, sym_kind):
@@ -1173,7 +1173,7 @@ class CodeGenerator(StructuredCodeGenerator):
             with FortranIfEmitter(
                     self.emitter, '{refcnt}.eq.1'.format(refcnt=refcnt_name), self) \
                             as if_emit:
-                comp_type = self.get_ode_component_type(sym_kind.component_id)
+                comp_type = self.get_fortran_type_for_user_type(sym_kind.identifier)
                 DeallocationEmitter(self, InitializationEmitter(self))(
                         comp_type, self.name_manager[name], {})
 
@@ -1210,7 +1210,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_traceable('{refcnt} = 1'.format(refcnt=refcnt_name))
 
     def emit_allocation(self, fortran_name, sym_kind):
-        comp_type = self.get_ode_component_type(sym_kind.component_id)
+        comp_type = self.get_fortran_type_for_user_type(sym_kind.identifier)
         AllocationEmitter(self)(comp_type, fortran_name, {})
 
     def emit_allocation_check(self, sym, sym_kind):
@@ -1289,7 +1289,7 @@ class CodeGenerator(StructuredCodeGenerator):
                             subscript_str=subscript_str,
                             expr=self.expr(expr)))
             else:
-                comp_type = self.get_ode_component_type(sym_kind.component_id)
+                comp_type = self.get_fortran_type_for_user_type(sym_kind.identifier)
                 AssignmentEmitter(self)(comp_type, assignee_fortran_name, {}, expr)
 
         self.emit('')
@@ -1399,8 +1399,8 @@ class CodeGenerator(StructuredCodeGenerator):
                                 lhs=tgt_fortran_name,
                                 rhs=fortran_name))
                 else:
-                    comp_type = self.get_ode_component_type(
-                            sym_kind.component_id)
+                    comp_type = self.get_fortran_type_for_user_type(
+                            sym_kind.identifier)
 
                     from pymbolic import var
                     AssignmentEmitter(self)(comp_type, tgt_fortran_name, {},
@@ -1909,7 +1909,7 @@ def codegen_builtin_norm_2(results, function, arg_strings_dict, arg_kinds_dict,
         else:
             ftype = BuiltinType("complex*16")
     elif isinstance(x_kind, UserType):
-        ftype = code_generator.user_type_map[x_kind.component_id]
+        ftype = code_generator.user_type_map[x_kind.identifier]
 
     elif isinstance(x_kind, Array):
         code_generator.emit("{result} = norm2({arg})".format(
@@ -1953,7 +1953,7 @@ def codegen_builtin_len(results, function, arg_strings_dict, arg_kinds_dict,
         else:
             ftype = BuiltinType("complex*16")
     elif isinstance(x_kind, UserType):
-        ftype = code_generator.user_type_map[x_kind.component_id]
+        ftype = code_generator.user_type_map[x_kind.identifier]
     elif isinstance(x_kind, Array):
         code_generator.emit("{result} = size({arg})".format(
             result=result,
@@ -1990,7 +1990,7 @@ def codegen_builtin_isnan(results, function, arg_strings_dict, arg_kinds_dict,
         else:
             ftype = BuiltinType("complex*16")
     elif isinstance(x_kind, UserType):
-        ftype = code_generator.user_type_map[x_kind.component_id]
+        ftype = code_generator.user_type_map[x_kind.identifier]
     else:
         raise TypeError("unsupported kind for norm_2 argument: %s" % x_kind)
 

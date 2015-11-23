@@ -1,14 +1,6 @@
 """Mini-type inference for dagrt methods"""
 from __future__ import division, with_statement, print_function
 
-from dagrt.utils import TODO
-
-import dagrt.language as lang
-from dagrt.utils import is_state_variable
-from pytools import RecordWithoutPickling
-from pymbolic.mapper import Mapper
-
-
 __copyright__ = """
 Copyright (C) 2013 Andreas Kloeckner
 Copyright (C) 2014 Matt Wala
@@ -34,7 +26,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from dagrt.utils import TODO
 
+import dagrt.language as lang
+from dagrt.utils import is_state_variable
+from pytools import RecordWithoutPickling
+from pymbolic.mapper import Mapper
 
 
 def _get_arg_dict_from_call_insn(insn):
@@ -105,11 +102,11 @@ class Array(SymbolKind):
 
 
 class UserType(SymbolKind):
-    def __init__(self, component_id):
-        super(UserType, self).__init__(component_id=component_id)
+    def __init__(self, identifier):
+        super(UserType, self).__init__(identifier=identifier)
 
     def __getinitargs__(self):
-        return (self.component_id,)
+        return (self.identifier,)
 
 # }}}
 
@@ -205,10 +202,10 @@ def unify(kind_a, kind_b):
         assert isinstance(kind_b, (UserType, Scalar))
 
         if isinstance(kind_b, UserType):
-            if kind_a.component_id != kind_b.component_id:
+            if kind_a.identifier != kind_b.identifier:
                 raise ValueError(
                         "encountered arithmetic with mismatched "
-                        "ODE components")
+                        "user types")
 
         return kind_a
 
