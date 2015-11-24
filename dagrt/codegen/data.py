@@ -28,6 +28,7 @@ THE SOFTWARE.
 
 from dagrt.utils import TODO
 
+import six
 import dagrt.language as lang
 from dagrt.utils import is_state_variable
 from pytools import RecordWithoutPickling
@@ -543,6 +544,25 @@ class SymbolKindFinder(object):
         # }}}
 
         return result
+
+# }}}
+
+
+# {{{ collect user types
+
+def collect_user_types(skt):
+    result = set()
+
+    for kind in six.itervalues(skt.global_table):
+        if isinstance(kind, UserType):
+            result.add(kind.identifier)
+
+    for tbl in six.itervalues(skt.per_function_table):
+        for kind in six.itervalues(tbl):
+            if isinstance(kind, UserType):
+                result.add(kind.identifier)
+
+    return result
 
 # }}}
 

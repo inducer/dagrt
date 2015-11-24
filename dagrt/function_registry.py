@@ -471,18 +471,18 @@ class _ODERightHandSide(Function):
     # be inherited from the superclass if an instance of the superclass is
     # initialized first. We wish to exclude "arg_names" as a field, since this class
     # synthesizes it as a member.
-    fields = set(["identifier", "component_id", "input_component_ids",
+    fields = set(["identifier", "output_type_id", "input_type_ids",
                   "language_to_codegen", "input_component_names"])
 
-    def __init__(self, identifier, component_id, input_component_ids,
+    def __init__(self, identifier, output_type_id, input_type_ids,
             language_to_codegen=None, input_component_names=None):
         if input_component_names is None:
-            input_component_names = input_component_ids
+            input_component_names = input_type_ids
 
         super(_ODERightHandSide, self).__init__(
                 identifier=identifier,
-                component_id=component_id,
-                input_component_ids=input_component_ids,
+                output_type_id=output_type_id,
+                input_type_ids=input_type_ids,
                 language_to_codegen=language_to_codegen,
                 input_component_names=input_component_names)
 
@@ -498,31 +498,31 @@ class _ODERightHandSide(Function):
                     % self.identifier)
 
         for arg_name, arg_kind_passed, input_component_id in zip(
-                self.arg_names[1:], arg_kinds[1:], self.input_component_ids):
+                self.arg_names[1:], arg_kinds[1:], self.input_type_ids):
             if arg_kind_passed is None and not check:
                 pass
             elif check and not (isinstance(arg_kind_passed, UserType)
                     and arg_kind_passed.component_id == input_component_id):
-                raise TypeError("argument '%s' of '%s' is not an ODE component "
-                        "with component ID '%s'"
+                raise TypeError("argument '%s' of '%s' is not a user type "
+                        "with identifier '%s'"
                         % (arg_name, self.identifier, input_component_id))
 
-        return (UserType(self.component_id),)
+        return (UserType(self.output_type_id),)
 
 
 def register_ode_rhs(
         function_registry,
-        component_id, identifier=None, input_component_ids=None,
+        output_type_id, identifier=None, input_type_ids=None,
         input_component_names=None):
     if identifier is None:
-        identifier = "<func>"+component_id
+        identifier = "<func>"+output_type_id
 
-    if input_component_ids is None:
-        input_component_ids = (component_id,)
+    if input_type_ids is None:
+        input_type_ids = (output_type_id,)
 
     return function_registry.register(
             _ODERightHandSide(
-                identifier, component_id, input_component_ids,
+                identifier, output_type_id, input_type_ids,
                 input_component_names=input_component_names))
 
 

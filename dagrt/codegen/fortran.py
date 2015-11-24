@@ -31,6 +31,7 @@ import six
 from .expressions import FortranExpressionMapper
 from .codegen_base import StructuredCodeGenerator
 from dagrt.utils import is_state_variable
+from dagrt.codegen.data import UserType
 from pytools.py_codegen import (
         # It's the same code. So sue me.
         PythonCodeGenerator as FortranEmitterBase)
@@ -286,7 +287,6 @@ class UserTypeReferenceTransformer(IdentityMapper):
             raise TypeError("unsupported object")
 
     def map_variable(self, expr):
-        from dagrt.codegen.data import UserType
         if isinstance(self.find_sym_kind(expr), UserType):
             return self.transform(expr)
         else:
@@ -736,6 +736,15 @@ class CodeGenerator(StructuredCodeGenerator):
             from dagrt.function_registry import base_function_registry
             function_registry = base_function_registry
 
+        for type_name, type_val in six.iteritems(user_type_map):
+            # Because if it's already a pointer, we have a hard time declaring
+            # the input type of our memory management routines.
+
+            if isinstance(type_val, PointerType):
+                raise ValueError("type '%s': PointerType is not allowed as the "
+                        "outermost type in user type mappings"
+                        % type_name)
+
         self.module_name = module_name
         self.function_registry = function_registry
         self.user_type_map = user_type_map
@@ -780,6 +789,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.emitters = [self.module_emitter]
 
+        self.current_function = None
+
     # }}}
 
     # {{{ utilities
@@ -795,6 +806,9 @@ class CodeGenerator(StructuredCodeGenerator):
             result.add(self.call_after_state_update)
 
         return sorted(result)
+
+    def get_alloc_check_name(self, utype_id):
+        return "leap_alloc_check_"+make_identifier_from_name(utype_id)
 
     @staticmethod
     def state_name_to_state_sym(state_name):
@@ -1013,6 +1027,8 @@ class CodeGenerator(StructuredCodeGenerator):
                 time_id=time_id, i=i))
         self.emit('')
 
+        # {{{ state name constants
+
         for i, state in enumerate(dag.states):
             state_sym_name = self.state_name_to_state_sym(state)
             self.emit("integer {state_sym_name}".format(
@@ -1021,6 +1037,10 @@ class CodeGenerator(StructuredCodeGenerator):
                 state_sym_name=state_sym_name, i=i))
 
         self.emit('')
+
+        # }}}
+
+        # {{{ component name constants
 
         from .analysis import collect_ode_component_names_from_dag
         component_ids = collect_ode_component_names_from_dag(dag)
@@ -1032,6 +1052,10 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.emit('')
 
+        # }}}
+
+        # {{{ state type
+
         with FortranTypeEmitter(
                 self.emitter,
                 'dagrt_state_type',
@@ -1042,9 +1066,10 @@ class CodeGenerator(StructuredCodeGenerator):
             for identifier, sym_kind in six.iteritems(
                     self.sym_kind_table.global_table):
                 self.emit_variable_decl(
-                        identifier,
                         self.name_manager.name_global(identifier),
-                        sym_kind=sym_kind)
+                        sym_kind=sym_kind,
+                        refcount_name=self.name_manager.name_refcount(
+                            identifier, qualified_with_state=False))
 
             # {{{ instrumentation
 
@@ -1071,11 +1096,70 @@ class CodeGenerator(StructuredCodeGenerator):
 
             # }}}
 
+        # }}}
+
         self.emit('integer dagrt_stderr')
         self.emit('parameter (dagrt_stderr=0)')
         self.emit('')
         self.emit('contains')
         self.emit('')
+
+        # {{{ memory management routines
+
+        from dagrt.codegen.data import collect_user_types
+        user_types = collect_user_types(self.sym_kind_table)
+
+        for utype_id in user_types:
+            self.declaration_emitter = FortranEmitter()
+
+            val_name = make_identifier_from_name(utype_id)
+            function_name = self.get_alloc_check_name(utype_id)
+
+            self.emit_def_begin(function_name,
+                    self.extra_arguments + (val_name, "refcount"))
+
+            sym_kind = UserType(utype_id)
+            self.emit_variable_decl(val_name, sym_kind,
+                    is_argument=True, emit=self.declaration_emitter,
+                    other_specifiers=("pointer",))
+            self.declaration_emitter('integer, pointer :: refcount')
+            self.declaration_emitter('')
+
+            with FortranIfEmitter(
+                    self.emitter,
+                    '.not.associated(%s)' % val_name,
+                    self) as emit_if:
+
+                ftype = self.get_fortran_type_for_user_type(utype_id)
+                AllocationEmitter(self)(ftype, val_name, {})
+
+                self.emit_allocate_refcount("refcount")
+
+                emit_if.emit_else()
+
+                # If the refcount is 1, then nobody else is referring to
+                # the memory, and we might as well repurpose/overwrite it,
+                # so there's nothing more to do in that case.
+
+                with FortranIfEmitter(
+                        self.emitter, 'refcount.ne.1', self) as emit_if:
+
+                    self.emit_traceable(
+                            'refcount = refcount - 1')
+
+                    # We get here if the refcount is not 1 initially, which
+                    # means it's not zero here--someone else is still
+                    # referring to the data. Let them have it, we'll make
+                    # a new array.
+
+                    self.emit('')
+
+                    AllocationEmitter(self)(ftype, val_name, {})
+                    self.emit_allocate_refcount("refcount")
+
+            self.emit_def_end(function_name)
+
+        # }}}
 
     def finish_emit(self, dag):
         self.emit_initialize(dag)
@@ -1091,14 +1175,15 @@ class CodeGenerator(StructuredCodeGenerator):
     # {{{ data management
 
     def get_fortran_type_for_user_type(self, type_identifier, is_argument=False):
-        comp_type = self.user_type_map[type_identifier]
+        ftype = self.user_type_map[type_identifier]
         if not is_argument:
-            comp_type = PointerType(comp_type)
+            ftype = PointerType(ftype)
 
-        return comp_type
+        return ftype
 
-    def emit_variable_decl(self, sym, fortran_name, sym_kind,
-            is_argument=False, other_specifiers=(), emit=None):
+    def emit_variable_decl(self, fortran_name, sym_kind,
+            is_argument=False, other_specifiers=(), emit=None,
+            refcount_name=None):
         if emit is None:
             emit = self.emit
 
@@ -1127,19 +1212,18 @@ class CodeGenerator(StructuredCodeGenerator):
             type_name = 'integer'
 
         elif isinstance(sym_kind, UserType):
-            comp_type = self.get_fortran_type_for_user_type(sym_kind.identifier,
+            ftype = self.get_fortran_type_for_user_type(sym_kind.identifier,
                     is_argument=is_argument)
 
-            type_name = comp_type.get_base_type()
+            type_name = ftype.get_base_type()
             type_specifiers = (
                     type_specifiers
-                    + comp_type.get_type_specifiers(defer_dim=is_argument))
+                    + ftype.get_type_specifiers(defer_dim=is_argument))
 
             if not is_argument:
                 emit(
-                        'integer, pointer ::  {refcnt_name}'.format(
-                            refcnt_name=self.name_manager.name_refcount(
-                                sym, qualified_with_state=False)))
+                        'integer, pointer ::  {refcount_name}'.format(
+                            refcount_name=refcount_name))
 
         else:
             raise ValueError("unknown variable kind: %s" % type(sym_kind).__name__)
@@ -1157,8 +1241,8 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_variable_init(self, name, sym_kind):
         from dagrt.codegen.data import UserType
         if isinstance(sym_kind, UserType):
-            comp_type = self.get_fortran_type_for_user_type(sym_kind.identifier)
-            InitializationEmitter(self)(comp_type, self.name_manager[name], {})
+            ftype = self.get_fortran_type_for_user_type(sym_kind.identifier)
+            InitializationEmitter(self)(ftype, self.name_manager[name], {})
 
     def emit_variable_deinit(self, name, sym_kind):
         fortran_name = self.name_manager[name]
@@ -1173,16 +1257,16 @@ class CodeGenerator(StructuredCodeGenerator):
             with FortranIfEmitter(
                     self.emitter, '{refcnt}.eq.1'.format(refcnt=refcnt_name), self) \
                             as if_emit:
-                comp_type = self.get_fortran_type_for_user_type(sym_kind.identifier)
+                ftype = self.get_fortran_type_for_user_type(sym_kind.identifier)
                 DeallocationEmitter(self, InitializationEmitter(self))(
-                        comp_type, self.name_manager[name], {})
+                        ftype, self.name_manager[name], {})
 
                 self.emit_traceable(
                         'deallocate({refcnt})'.format(refcnt=refcnt_name))
 
                 if_emit.emit_else()
 
-                InitializationEmitter(self)(comp_type, self.name_manager[name], {})
+                InitializationEmitter(self)(ftype, self.name_manager[name], {})
                 self.emit_traceable(
                         '{refcnt} = {refcnt} - 1'
                         .format(refcnt=refcnt_name))
@@ -1194,12 +1278,12 @@ class CodeGenerator(StructuredCodeGenerator):
         if not isinstance(sym_kind, UserType):
             return
 
-        self.emit_allocation(fortran_name, sym_kind)
-        self.emit_allocate_refcount(sym)
+        ftype = self.get_fortran_type_for_user_type(sym_kind.identifier)
+        AllocationEmitter(self)(ftype, fortran_name, {})
 
-    def emit_allocate_refcount(self, sym):
-        refcnt_name = self.name_manager.name_refcount(sym)
+        self.emit_allocate_refcount(self.name_manager.name_refcount(sym))
 
+    def emit_allocate_refcount(self, refcnt_name):
         self.emit_traceable('allocate({name}, stat=dagrt_ierr)'.format(
             name=refcnt_name))
         with FortranIfEmitter(self.emitter, 'dagrt_ierr.ne.0', self):
@@ -1209,36 +1293,21 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.emit_traceable('{refcnt} = 1'.format(refcnt=refcnt_name))
 
-    def emit_allocation(self, fortran_name, sym_kind):
-        comp_type = self.get_fortran_type_for_user_type(sym_kind.identifier)
-        AllocationEmitter(self)(comp_type, fortran_name, {})
-
     def emit_allocation_check(self, sym, sym_kind):
         fortran_name = self.name_manager[sym]
         refcnt_name = self.name_manager.name_refcount(sym)
 
-        from dagrt.codegen.data import UserType
-        assert isinstance(sym_kind, UserType)
+        self.emit(
+                "call {alloc_check_name}({args})"
+                .format(
+                    alloc_check_name=self.get_alloc_check_name(
+                        sym_kind.identifier),
+                    args=", ".join(
+                        self.extra_arguments
+                        + (fortran_name, refcnt_name))
+                    ))
 
-        with FortranIfEmitter(
-                self.emitter, '.not.associated(%s)' % fortran_name, self) as emit_if:
-            self.emit_refcounted_allocation(sym, sym_kind)
-
-            emit_if.emit_else()
-
-            with FortranIfEmitter(
-                    self.emitter,
-                    '{refcnt}.ne.1'.format(refcnt=refcnt_name),
-                    self) as emit_if:
-                self.emit_traceable(
-                        '{refcnt} = {refcnt} - 1'
-                        .format(refcnt=refcnt_name))
-
-                self.emit('')
-
-                self.emit_refcounted_allocation(sym, sym_kind)
-
-    def emit_ode_component_move(self, assignee_sym, assignee_fortran_name,
+    def emit_user_type_move(self, assignee_sym, assignee_fortran_name,
             sym_kind, expr):
         self.emit_variable_deinit(assignee_sym, sym_kind)
 
@@ -1289,8 +1358,8 @@ class CodeGenerator(StructuredCodeGenerator):
                             subscript_str=subscript_str,
                             expr=self.expr(expr)))
             else:
-                comp_type = self.get_fortran_type_for_user_type(sym_kind.identifier)
-                AssignmentEmitter(self)(comp_type, assignee_fortran_name, {}, expr)
+                ftype = self.get_fortran_type_for_user_type(sym_kind.identifier)
+                AssignmentEmitter(self)(ftype, assignee_fortran_name, {}, expr)
 
         self.emit('')
 
@@ -1339,9 +1408,9 @@ class CodeGenerator(StructuredCodeGenerator):
             fortran_name = self.name_manager.name_global(sym)
 
             self.emit_variable_decl(
-                    sym,
                     fortran_name, sym_kind, is_argument=True,
                     other_specifiers=("optional",))
+
         self.emit('')
 
         self.emit("character :: dagrt_nan_str*3")
@@ -1399,11 +1468,11 @@ class CodeGenerator(StructuredCodeGenerator):
                                 lhs=tgt_fortran_name,
                                 rhs=fortran_name))
                 else:
-                    comp_type = self.get_fortran_type_for_user_type(
+                    ftype = self.get_fortran_type_for_user_type(
                             sym_kind.identifier)
 
                     from pymbolic import var
-                    AssignmentEmitter(self)(comp_type, tgt_fortran_name, {},
+                    AssignmentEmitter(self)(ftype, tgt_fortran_name, {},
                             var("<target>"+fortran_name))
 
         # {{{ instrumentation
@@ -1624,7 +1693,9 @@ class CodeGenerator(StructuredCodeGenerator):
             sym_table = self.sym_kind_table.per_function_table.get(state_id, {})
             for identifier, sym_kind in six.iteritems(sym_table):
                 self.emit_variable_decl(
-                        identifier, self.name_manager[identifier], sym_kind)
+                        self.name_manager[identifier], sym_kind,
+                        refcount_name=self.name_manager.name_refcount(
+                                identifier, qualified_with_state=False))
 
             if sym_table:
                 self.emit('')
@@ -1683,7 +1754,7 @@ class CodeGenerator(StructuredCodeGenerator):
             raise ValueError("User types do not support subscripting")
 
         if isinstance(expr, Variable):
-            self.emit_ode_component_move(
+            self.emit_user_type_move(
                     assignee_sym, assignee_fortran_name, sym_kind, expr)
             return
 
