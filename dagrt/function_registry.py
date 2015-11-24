@@ -472,23 +472,23 @@ class _ODERightHandSide(Function):
     # initialized first. We wish to exclude "arg_names" as a field, since this class
     # synthesizes it as a member.
     fields = set(["identifier", "output_type_id", "input_type_ids",
-                  "language_to_codegen", "input_component_names"])
+                  "language_to_codegen", "input_names"])
 
     def __init__(self, identifier, output_type_id, input_type_ids,
-            language_to_codegen=None, input_component_names=None):
-        if input_component_names is None:
-            input_component_names = input_type_ids
+            language_to_codegen=None, input_names=None):
+        if input_names is None:
+            input_names = input_type_ids
 
         super(_ODERightHandSide, self).__init__(
                 identifier=identifier,
                 output_type_id=output_type_id,
                 input_type_ids=input_type_ids,
                 language_to_codegen=language_to_codegen,
-                input_component_names=input_component_names)
+                input_names=input_names)
 
     @property
     def arg_names(self):
-        return ("t",) + self.input_component_names
+        return ("t",) + self.input_names
 
     def get_result_kinds(self, arg_kinds, check):
         arg_kinds = self.resolve_args(arg_kinds)
@@ -513,7 +513,7 @@ class _ODERightHandSide(Function):
 def register_ode_rhs(
         function_registry,
         output_type_id, identifier=None, input_type_ids=None,
-        input_component_names=None):
+        input_names=None):
     if identifier is None:
         identifier = "<func>"+output_type_id
 
@@ -523,7 +523,7 @@ def register_ode_rhs(
     return function_registry.register(
             _ODERightHandSide(
                 identifier, output_type_id, input_type_ids,
-                input_component_names=input_component_names))
+                input_names=input_names))
 
 
 def register_function(
