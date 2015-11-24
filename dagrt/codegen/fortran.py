@@ -810,6 +810,9 @@ class CodeGenerator(StructuredCodeGenerator):
     def get_alloc_check_name(self, utype_id):
         return "leap_alloc_check_"+make_identifier_from_name(utype_id)
 
+    def get_var_deinit_name(self, utype_id):
+        return "leap_deinit_"+make_identifier_from_name(utype_id)
+
     @staticmethod
     def state_name_to_state_sym(state_name):
         return "dagrt_state_"+state_name
@@ -1109,9 +1112,9 @@ class CodeGenerator(StructuredCodeGenerator):
         from dagrt.codegen.data import collect_user_types
         user_types = collect_user_types(self.sym_kind_table)
 
-        for utype_id in user_types:
-            self.declaration_emitter = FortranEmitter()
+        # {{{ allocation checks
 
+        for utype_id in user_types:
             val_name = make_identifier_from_name(utype_id)
             function_name = self.get_alloc_check_name(utype_id)
 
@@ -1158,6 +1161,44 @@ class CodeGenerator(StructuredCodeGenerator):
                     self.emit_allocate_refcount("refcount")
 
             self.emit_def_end(function_name)
+
+        # }}}
+
+        # {{{ deinit
+
+        for utype_id in user_types:
+            val_name = make_identifier_from_name(utype_id)
+            function_name = self.get_var_deinit_name(utype_id)
+
+            self.emit_def_begin(function_name,
+                    self.extra_arguments + (val_name, "refcount"))
+
+            sym_kind = UserType(utype_id)
+            self.emit_variable_decl(val_name, sym_kind,
+                    is_argument=True, emit=self.declaration_emitter,
+                    other_specifiers=("pointer",))
+            self.declaration_emitter('integer, pointer :: refcount')
+            self.declaration_emitter('')
+
+            with FortranIfEmitter(
+                    self.emitter, 'associated(%s)' % val_name, self):
+                with FortranIfEmitter(
+                        self.emitter, 'refcount.eq.1', self) \
+                                as if_emit:
+                    ftype = self.get_fortran_type_for_user_type(sym_kind.identifier)
+                    DeallocationEmitter(self, InitializationEmitter(self))(
+                            ftype, val_name, {})
+
+                    self.emit_traceable('deallocate(refcount)')
+
+                    if_emit.emit_else()
+
+                    InitializationEmitter(self)(ftype, val_name, {})
+                    self.emit_traceable('refcount = refcount - 1')
+
+            self.emit_def_end(function_name)
+
+        # }}}
 
         # }}}
 
@@ -1252,24 +1293,15 @@ class CodeGenerator(StructuredCodeGenerator):
         if not isinstance(sym_kind, UserType):
             return
 
-        with FortranIfEmitter(
-                self.emitter, 'associated(%s)' % fortran_name, self):
-            with FortranIfEmitter(
-                    self.emitter, '{refcnt}.eq.1'.format(refcnt=refcnt_name), self) \
-                            as if_emit:
-                ftype = self.get_fortran_type_for_user_type(sym_kind.identifier)
-                DeallocationEmitter(self, InitializationEmitter(self))(
-                        ftype, self.name_manager[name], {})
-
-                self.emit_traceable(
-                        'deallocate({refcnt})'.format(refcnt=refcnt_name))
-
-                if_emit.emit_else()
-
-                InitializationEmitter(self)(ftype, self.name_manager[name], {})
-                self.emit_traceable(
-                        '{refcnt} = {refcnt} - 1'
-                        .format(refcnt=refcnt_name))
+        self.emit(
+                "call {var_deinit_name}({args})"
+                .format(
+                    var_deinit_name=self.get_var_deinit_name(
+                        sym_kind.identifier),
+                    args=", ".join(
+                        self.extra_arguments
+                        + (fortran_name, refcnt_name))
+                    ))
 
     def emit_refcounted_allocation(self, sym, sym_kind):
         fortran_name = self.name_manager[sym]
