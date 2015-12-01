@@ -1,7 +1,5 @@
 """Abstract syntax"""
 from pymbolic.mapper import IdentityMapper
-from pymbolic.mapper.dependency import DependencyMapper
-from pymbolic.mapper.unifier import UnidirectionalUnifier
 from pymbolic.primitives import Expression, LogicalNot
 from dagrt.language import Nop
 
@@ -83,6 +81,16 @@ class Block(Expression):
     mapper_method = "map_Block"
 
 
+class NullASTNode(Expression):
+
+    init_arg_names = ()
+
+    def __getinitargs__(self):
+        return ()
+
+    mapper_method = "map_NullASTNode"
+
+
 class InstructionWrapper(Expression):
     """
     .. attribute: instruction
@@ -97,66 +105,6 @@ class InstructionWrapper(Expression):
         return self.instruction,
 
     mapper_method = "map_InstructionWrapper"
-
-
-class _ASTCombinerMixin(object):
-
-    def map_IfThen(self, expr):
-        return self.combine([self.rec(expr.condition), self.rec(expr.then)])
-
-    def map_IfThenElse(self, expr):
-        return self.combine([self.rec(expr.condition), self.rec(expr.then),
-                             self.rec(expr.else_)])
-
-    def map_Block(self, expr):
-        return self.combine([self.rec(child) for child in expr.children])
-
-
-class _ExtendedDependencyMapper(_ASTCombinerMixin, DependencyMapper):
-    pass
-
-
-class _ASTMatcher(UnidirectionalUnifier):
-    """
-    Extend UnidirectionalUnifier to handle matching of AST fragments (along with
-    LogicalNot).
-    """
-
-    def map_logical_not(self, expr, other, urecs):
-        if not isinstance(other, type(expr)):
-            return []
-        return self.rec(expr.child, other.child, urecs)
-
-    def map_IfThen(self, expr, other, urecs):
-        if not isinstance(other, type(expr)):
-            return []
-        urecs = self.rec(expr.condition, other.condition, urecs)
-        return self.rec(expr.then, other.then, urecs)
-
-    def map_IfThenElse(self, expr, other, urecs):
-        if not isinstance(other, type(expr)):
-            return []
-        urecs = self.rec(expr.condition, other.condition, urecs)
-        urecs = self.rec(expr.then, other.then, urecs)
-        return self.rec(expr.else_, other.else_, urecs)
-
-    def map_Block(self, expr, other, urecs):
-        if not isinstance(other, type(expr)):
-            return []
-
-        if len(expr.children) != len(other.children):
-            return []
-
-        for child, other_child in zip(expr.children, other.children):
-            urecs = self.rec(child, other_child, urecs)
-
-        return urecs
-
-
-def get_all_variables_in_ast(ast):
-    """Return the names of all the variables in the AST fragment `ast`."""
-    # TODO: Cache results / copy caches over when copying AST fragments
-    return _ExtendedDependencyMapper()(ast)
 
 
 def get_instructions_in_ast(ast):
@@ -182,7 +130,7 @@ def get_instructions_in_ast(ast):
             yield inst
 
 
-def create_ast_from_state(code, state, simplify=True):
+def create_ast_from_state(code, state):
     """
     Return an AST representation of the instructions corresponding to the state
     named `state` as found in the :class:`DAGCode` instance `code`.
@@ -197,7 +145,7 @@ def create_ast_from_state(code, state, simplify=True):
 
     # TODO: Clump nodes together in the topological order based on conditionals.
 
-    stack.extend(list(code.states[state].depends_on))
+    stack.extend(sorted(code.states[state].depends_on))
     while stack:
         instruction = stack[-1]
         if instruction in visited:
@@ -208,7 +156,7 @@ def create_ast_from_state(code, state, simplify=True):
         else:
             visited.add(instruction)
             visiting.add(instruction)
-            for dependency in instruction_map[instruction].depends_on:
+            for dependency in sorted(instruction_map[instruction].depends_on):
                 stack.append(dependency)
 
     # Convert the topological order to an AST.
@@ -217,7 +165,7 @@ def create_ast_from_state(code, state, simplify=True):
     from pymbolic.primitives import LogicalAnd
 
     for instruction in map(instruction_map.__getitem__, topological_order):
-        if simplify and isinstance(instruction, Nop):
+        if isinstance(instruction, Nop):
             continue
 
         # Instructions become AST nodes. An unconditional instruction is wrapped
@@ -227,98 +175,120 @@ def create_ast_from_state(code, state, simplify=True):
         if isinstance(instruction.condition, LogicalAnd):
             # LogicalAnd(c1, c2, ...) => IfThen(c1, IfThen(c2, ...))
             conditions = reversed(instruction.condition.children)
-            inst = IfThen(next(conditions),
-                          InstructionWrapper(instruction.copy(condition=True)))
+            inst = IfThenElse(next(conditions),
+                              InstructionWrapper(instruction.copy(condition=True)),
+                              NullASTNode())
             for next_cond in conditions:
-                inst = IfThen(next_cond, inst)
+                inst = IfThenElse(next_cond, inst, NullASTNode())
             main_block.append(inst)
 
         elif instruction.condition is not True:
-            main_block.append(IfThen(instruction.condition,
-                              InstructionWrapper(instruction.copy(condition=True))))
+            main_block.append(IfThenElse(instruction.condition,
+                InstructionWrapper(instruction.copy(condition=True)),
+                NullASTNode()))
 
         else:
             main_block.append(InstructionWrapper(instruction))
 
     ast = Block(*main_block)
 
-    if simplify:
-        ast = simplify_ast(ast)
-
-    return ast
+    return simplify_ast(ast)
 
 
 def simplify_ast(ast):
     """Return an optimized copy of the AST `ast`."""
-    MAX_ITERS = 5
-    mapper = _ASTSimplificationMapper()
-    ast = mapper(ast)
-    mapper_application_count = 1
-
-    while mapper.changed and mapper_application_count < MAX_ITERS:
-        # TODO: Implement the following optimizations:
-        #
-        # 1. Hoisting of <cond> into if statements: the frontend translates
-        #
-        #    with cb.if_(complex_condition):
-        #        cb("x", 1)
-        #
-        # into
-        #
-        #    AssignExpression("<cond>var", complex_condition)
-        #    AssignExpression("x", 1, condition=<cond>var).
-        #
-        # While this simplifies the subsequent code generation steps, the end
-        # result is not as readable as it could be because of the temparary
-        # assignment, so we should undo this at a late stage.
-        #
-        # 2. Dead code elimination: for cleaning up after (1) as well as for
-        # generally improving readability of the code.
-        ast = mapper(ast)
-        mapper_application_count += 1
-
-    return ast
+    return ASTPostSimplifyMapper()(ASTSimplifyMapper()(ASTPreSimplifyMapper()(ast)))
 
 
-def match_ast(expression, template):
-    """
-    Do pattern matching for AST fragments.
-
-    :param expression: A :mod:`pymbolic` AST fragment
-    :param template: A :mod`pymbolic` AST fragment whose variables will be matched
-    with subexpressions of `expression`
-
-    :return: A map from variable names to subexpressions, or `None` if no match
-    was found
-    """
-    names = [var.name for var in get_all_variables_in_ast(template)]
-    matcher = _ASTMatcher(names)
-    records = matcher(template, expression)
-    if not records:
-        return None
-    return dict((key.name, val) for key, val in records[0].equations)
-
-
-def declare(*varnames):
-    """
-    Do a bulk declaration of :mod:`pymbolic` variables.
-    """
-    from pymbolic import var
-    return [var(name) for name in varnames]
-
-
-class _ASTSimplificationMapper(IdentityMapper):
-
-    def __call__(self, ast):
-        self.changed = False
-        return self.rec(ast)
-
-    def map_IfThen(self, expr):
-        return IfThen(self.rec(expr.condition), self.rec(expr.then))
+class ASTIdentityMapper(IdentityMapper):
 
     def map_IfThenElse(self, expr):
-        return IfThenElse(self.rec(expr.condition), self.rec(expr.then),
+        return type(expr)(self.rec(expr.condition), self.rec(expr.then),
                           self.rec(expr.else_))
+
+    def map_IfThen(self, expr):
+        return type(expr)(self.rec(expr.condition), self.rec(expr.then))
+
+    def map_Block(self, expr):
+        return type(expr)(*[self.rec(child) for child in expr.children])
+
+    def map_NullASTNode(self, expr):
+        return type(expr)()
+
+    def map_InstructionWrapper(self, expr):
+        return type(expr)(expr.instruction)
+
+
+class ASTPreSimplifyMapper(ASTIdentityMapper):
+
+    def map_IfThen(self, expr):
+        return IfThenElse(expr.condition, self.rec(expr.then), NullASTNode())
+
+
+class ASTPostSimplifyMapper(ASTIdentityMapper):
+
+    def __call__(self, ast):
+        ast = self.rec(ast)
+        if isinstance(ast, NullASTNode):
+            return Block()
+        return ast
+
+    def map_IfThenElse(self, expr):
+        then = self.rec(expr.then)
+        else_ = self.rec(expr.else_)
+        is_then_null = isinstance(then, NullASTNode)
+        is_else_null = isinstance(else_, NullASTNode)
+        if is_then_null and is_else_null:
+            return NullASTNode()
+        elif is_then_null:
+            return IfThen(LogicalNot(expr.condition), else_)
+        elif is_else_null:
+            return IfThen(expr.condition, then)
+        else:
+            return IfThenElse(expr.condition, then, else_)
+
+    def map_Block(self, expr):
+        new_children = []
+        for child in expr.children:
+            child = self.rec(child)
+            if isinstance(child, NullASTNode):
+                continue
+            new_children.append(child)
+        if len(new_children) == 0:
+            return NullASTNode()
+        elif len(new_children) == 1:
+            return new_children[0]
+        else:
+            return Block(*new_children)
+
+    def map_InstructionWrapper(self, expr):
+        return InstructionWrapper(expr.instruction)
+
+
+class ASTSimplifyMapper(ASTIdentityMapper):
+
+    def map_IfThenElse(self, expr):
+        if expr.condition is True:
+            return self.rec(expr.then)
+        elif expr.condition is False:
+            return self.rec(expr.else_)
+
+        condition = expr.condition
+        then = self.rec(expr.then)
+        else_ = self.rec(expr.else_)
+
+        # Simplify the condition.
+        while isinstance(condition, LogicalNot):
+            condition = condition.child
+            then, else_ = (else_, then)
+
+        # Simplify the children, if they have the same condition.
+        if isinstance(then, IfThenElse) and condition == then.condition:
+            then = then.then
+        if isinstance(else_, IfThenElse) and condition == else_.condition:
+            else_ = else_.else_
+
+        return IfThenElse(condition, then, else_)
 
     def map_Block(self, expr):
         from collections import deque
@@ -329,68 +299,43 @@ class _ASTSimplificationMapper(IdentityMapper):
 
         children = []
 
-        # current_child is the current AST node that is being worked on by the
-        # algorithm.
-        current_child = children_queue.popleft()
-
-        # Variables for pattern matching
-        p, t, tt, ttt = declare("p", "t", "tt", "ttt")
-
         def flat_Block(*nodes):
             result = []
             for node in nodes:
+                if isinstance(node, NullASTNode):
+                    continue
                 if isinstance(node, Block):
                     result.extend(node.children)
                 else:
                     result.append(node)
             return Block(*result)
 
+        # current_child is the current AST node that is being worked on.
+        current_child = children_queue.popleft()
+        while isinstance(current_child, NullASTNode):
+            current_child = children_queue.popleft()
+
         while children_queue:
             next_child = children_queue.popleft()
 
-            # Expand any inner Blocks first.
+            if isinstance(next_child, NullASTNode):
+                continue
+
+            # Expand any inner Blocks.
             if isinstance(next_child, Block):
                 children_queue.extendleft(next_child.children)
-                self.changed = True
                 continue
 
-            child_pair = (current_child, next_child)
-
-            # IfThen(p, t), IfThen(p, tt) => IfThen(p, Block(t, tt))
-            match = match_ast(child_pair, (IfThen(p, t), IfThen(p, tt)))
-            if match:
-                current_child = IfThen(match["p"],
-                                       flat_Block(match["t"], match["tt"]))
-                self.changed = True
+            # Merge adjacent conditionals.
+            if isinstance(current_child, IfThenElse) \
+                    and isinstance(next_child, IfThenElse) \
+                    and current_child.condition == next_child.condition:
+                current_child = \
+                    IfThenElse(current_child.condition,
+                               flat_Block(current_child.then, next_child.then),
+                               flat_Block(current_child.else_, next_child.else_))
                 continue
 
-            # IfThen(p, t), IfThen(not p, tt) => IfThenElse(p, t, tt)
-            match = match_ast(child_pair, (IfThen(p, t), IfThen(LogicalNot(p), tt)))
-            if match:
-                current_child = IfThenElse(match["p"], match["t"], match["tt"])
-                self.changed = True
-                continue
-
-            # IfThen IfThenElse -> IfThenElse
-            match = match_ast(child_pair, (IfThen(p, t), IfThenElse(p, tt, ttt)))
-            if match:
-                current_child = IfThenElse(match["p"],
-                                           flat_Block(match["t"], match["tt"]),
-                                           match["ttt"])
-                self.changed = True
-                continue
-
-            # IfThenElse(p, t, tt), IfThen(not p, ttt)
-            #  => IfThenElse(p, t, Block(tt, ttt))
-            match = match_ast(child_pair, (IfThenElse(p, t, tt),
-                                           IfThen(LogicalNot(p), ttt)))
-            if match:
-                current_child = IfThenElse(match["p"], match["t"],
-                                           flat_Block(match["tt"], match["ttt"]))
-                self.changed = True
-                continue
-
-            # No opportunity for combining the children was found.
             children.append(current_child)
             current_child = next_child
 
@@ -399,6 +344,3 @@ class _ASTSimplificationMapper(IdentityMapper):
         if len(children) == 1:
             return children[0]
         return Block(*children)
-
-    def map_InstructionWrapper(self, expr):
-        return InstructionWrapper(expr.instruction)

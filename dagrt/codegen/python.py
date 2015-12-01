@@ -189,7 +189,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self._expr_mapper = PythonExpressionMapper(
                 self._name_manager, function_registry, numpy='self._numpy')
 
-    def __call__(self, dag, optimize=True):
+    def __call__(self, dag):
         from .analysis import verify_code
         verify_code(dag)
 
@@ -197,7 +197,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.begin_emit(dag)
         for state_name in six.iterkeys(dag.states):
-            ast = create_ast_from_state(dag, state_name, optimize)
+            ast = create_ast_from_state(dag, state_name)
             self._pre_lower(ast)
             self.lower_function(state_name, ast)
         self.finish_emit(dag)

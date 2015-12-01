@@ -846,7 +846,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
     # {{{ main entrypoint
 
-    def __call__(self, dag, optimize=True):
+    def __call__(self, dag):
         from .analysis import verify_code
         verify_code(dag)
 
@@ -872,7 +872,7 @@ class CodeGenerator(StructuredCodeGenerator):
         fdescrs = []
 
         for state_name in six.iterkeys(dag.states):
-            ast = create_ast_from_state(dag, state_name, optimize)
+            ast = create_ast_from_state(dag, state_name)
             fdescrs.append(NameASTPair(state_name, ast))
 
         # }}}
