@@ -280,7 +280,7 @@ class IfThenElseExpander(IdentityMapper):
         from pymbolic.primitives import LogicalNot
         from pymbolic import var
 
-        flag = var(self.var_name_gen("<flag>ifthenelse_cond"))
+        flag = var(self.var_name_gen("<cond>ifthenelse_cond"))
         tmp_result = self.var_name_gen("ifthenelse_result")
         if_insn_id = self.insn_id_gen("ifthenelse_cond")
         then_insn_id = self.insn_id_gen("ifthenelse_then")
