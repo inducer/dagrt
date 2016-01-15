@@ -1211,6 +1211,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.module_emitter.__exit__(None, None, None)
 
+        self.emit("! vim:foldmethod=marker")
+
     # }}}
 
     # {{{ data management
@@ -1801,6 +1803,16 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_allocation_check(assignee_sym, sym_kind)
         self.emit_assign_expr_inner(
                 assignee_fortran_name, assignee_subscript, expr, sym_kind)
+
+    def lower_inst(self, inst):
+        """Emit the code for an instruction."""
+
+        self.emit("! {{{ %s" % inst)
+        self.emit("")
+        super(CodeGenerator, self).lower_inst(inst)
+        self.emit("")
+        self.emit("! }}}")
+        self.emit("")
 
     def emit_inst_AssignExpression(self, inst):
         start_em = self.emitter
