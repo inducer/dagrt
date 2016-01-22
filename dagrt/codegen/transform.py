@@ -35,7 +35,7 @@ def eliminate_self_dependencies(dag):
     var_name_gen = dag.get_var_name_generator()
 
     new_instructions = []
-    for insn in dag.instructions:
+    for insn in sorted(dag.instructions, key=lambda insn: insn.id):
         read_and_written = insn.get_read_variables() & insn.get_assignees()
 
         if not read_and_written:
@@ -127,7 +127,7 @@ class FunctionArgumentIsolator(IdentityMapper):
                 dict(
                     (key,
                      self.isolate_arg(val, base_condition, base_deps, extra_deps))
-                    for key, val in six.iteritems(expr.kw_parameters))
+                    for key, val in sorted(six.iteritems(expr.kw_parameters)))
                     )
 
 
@@ -142,7 +142,7 @@ def isolate_function_arguments(dag):
             insn_id_gen=insn_id_gen,
             var_name_gen=var_name_gen)
 
-    for insn in dag.instructions:
+    for insn in sorted(dag.instructions, key=lambda insn: insn.id):
         base_deps = insn.depends_on
         new_deps = []
 
@@ -236,7 +236,7 @@ def isolate_function_calls(dag):
             insn_id_gen=insn_id_gen,
             var_name_gen=var_name_gen)
 
-    for insn in dag.instructions:
+    for insn in sorted(dag.instructions, key=lambda insn: insn.id):
         new_deps = []
 
         from dagrt.language import AssignExpression

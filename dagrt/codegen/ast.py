@@ -156,8 +156,8 @@ def create_ast_from_state(code, state):
         else:
             visited.add(instruction)
             visiting.add(instruction)
-            for dependency in sorted(instruction_map[instruction].depends_on):
-                stack.append(dependency)
+            stack.extend(
+                    sorted(instruction_map[instruction].depends_on))
 
     # Convert the topological order to an AST.
     main_block = []

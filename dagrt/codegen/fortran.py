@@ -871,7 +871,7 @@ class CodeGenerator(StructuredCodeGenerator):
         NameASTPair = namedtuple("NameASTPair", "name, ast")  # noqa
         fdescrs = []
 
-        for state_name in six.iterkeys(dag.states):
+        for state_name in sorted(six.iterkeys(dag.states)):
             ast = create_ast_from_state(dag, state_name)
             fdescrs.append(NameASTPair(state_name, ast))
 
@@ -900,7 +900,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     None, "<ret_state>"+comp_id, UserType(comp_id))
 
         self.begin_emit(dag)
-        for fdescr in fdescrs:
+        for fdescr in sorted(fdescrs, key=lambda fdescr: fdescr.name):
             self.lower_function(fdescr.name, fdescr.ast)
         self.finish_emit(dag)
 
@@ -962,7 +962,7 @@ class CodeGenerator(StructuredCodeGenerator):
         sym_table = self.sym_kind_table.per_function_table.get(
                 self.current_function, {})
 
-        for identifier, sym_kind in six.iteritems(sym_table):
+        for identifier, sym_kind in sorted(six.iteritems(sym_table)):
             self.emit_variable_deinit(identifier, sym_kind)
 
         # }}}
@@ -1024,7 +1024,7 @@ class CodeGenerator(StructuredCodeGenerator):
             self.emit('')
 
         from .analysis import collect_time_ids_from_dag
-        for i, time_id in enumerate(collect_time_ids_from_dag(dag)):
+        for i, time_id in enumerate(sorted(collect_time_ids_from_dag(dag))):
             self.emit("integer dagrt_time_{time_id}".format(time_id=time_id))
             self.emit("parameter (dagrt_time_{time_id} = {i})".format(
                 time_id=time_id, i=i))
@@ -1032,7 +1032,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ state name constants
 
-        for i, state in enumerate(dag.states):
+        for i, state in enumerate(sorted(dag.states)):
             state_sym_name = self.state_name_to_state_sym(state)
             self.emit("integer {state_sym_name}".format(
                 state_sym_name=state_sym_name))
@@ -1048,7 +1048,7 @@ class CodeGenerator(StructuredCodeGenerator):
         from .analysis import collect_ode_component_names_from_dag
         component_ids = collect_ode_component_names_from_dag(dag)
 
-        for i, comp_id in enumerate(component_ids):
+        for i, comp_id in enumerate(sorted(component_ids)):
             self.emit("parameter ({comp_sym_name} = {i})".format(
                 comp_sym_name=self.component_name_to_component_sym(comp_id),
                 i=i))
@@ -1066,8 +1066,8 @@ class CodeGenerator(StructuredCodeGenerator):
             emit('integer dagrt_next_state')
             emit('')
 
-            for identifier, sym_kind in six.iteritems(
-                    self.sym_kind_table.global_table):
+            for identifier, sym_kind in sorted(six.iteritems(
+                    self.sym_kind_table.global_table)):
                 self.emit_variable_decl(
                         self.name_manager.name_global(identifier),
                         sym_kind=sym_kind,
@@ -1114,7 +1114,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ allocation checks
 
-        for utype_id in user_types:
+        for utype_id in sorted(user_types):
             val_name = make_identifier_from_name(utype_id)
             function_name = self.get_alloc_check_name(utype_id)
 
@@ -1166,7 +1166,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ deinit
 
-        for utype_id in user_types:
+        for utype_id in sorted(user_types):
             val_name = make_identifier_from_name(utype_id)
             function_name = self.get_var_deinit_name(utype_id)
 
@@ -1414,10 +1414,10 @@ class CodeGenerator(StructuredCodeGenerator):
     # {{{ emit_initialize
 
     def emit_initialize(self, dag):
-        init_symbols = [
+        init_symbols = sorted(
                 sym
                 for sym in self.sym_kind_table.global_table
-                if not sym.startswith("<ret")]
+                if not sym.startswith("<ret"))
 
         args = self.extra_arguments + ('dagrt_state',) + tuple(
                 self.name_manager.name_global(sym)
@@ -1457,8 +1457,8 @@ class CodeGenerator(StructuredCodeGenerator):
                 "dagrt_state%dagrt_next_state = dagrt_state_{0}"
                 .format(dag.initial_state))
 
-        for sym, sym_kind in six.iteritems(
-                self.sym_kind_table.global_table):
+        for sym, sym_kind in sorted(six.iteritems(
+                self.sym_kind_table.global_table)):
             self.emit_variable_init(sym, sym_kind)
 
         # {{{ initialize scalar outputs to NaN
@@ -1467,7 +1467,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit('! initialize scalar outputs to NaN')
         self.emit('')
 
-        for sym in self.sym_kind_table.global_table:
+        for sym in sorted(self.sym_kind_table.global_table):
             sym_kind = self.sym_kind_table.global_table[sym]
 
             tgt_fortran_name = self.name_manager[sym]
@@ -1556,10 +1556,10 @@ class CodeGenerator(StructuredCodeGenerator):
 
         from dagrt.codegen.data import UserType
 
-        for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
+        for sym, sym_kind in sorted(six.iteritems(self.sym_kind_table.global_table)):
             self.emit_variable_deinit(sym, sym_kind)
 
-        for sym, sym_kind in six.iteritems(self.sym_kind_table.global_table):
+        for sym, sym_kind in sorted(six.iteritems(self.sym_kind_table.global_table)):
             if isinstance(sym_kind, UserType):
                 fortran_name = self.name_manager[sym]
                 with FortranIfEmitter(
@@ -1593,7 +1593,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.current_function = state_id
 
         if_emit = None
-        for name, state_descr in six.iteritems(dag.states):
+        for name, state_descr in sorted(six.iteritems(dag.states)):
             state_sym_name = self.state_name_to_state_sym(name)
             cond = "dagrt_state%dagrt_next_state == "+state_sym_name
 
@@ -1725,7 +1725,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         if state_id is not None:
             sym_table = self.sym_kind_table.per_function_table.get(state_id, {})
-            for identifier, sym_kind in six.iteritems(sym_table):
+            for identifier, sym_kind in sorted(six.iteritems(sym_table)):
                 self.emit_variable_decl(
                         self.name_manager[identifier], sym_kind,
                         refcount_name=self.name_manager.name_refcount(
@@ -1738,7 +1738,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_trace('enter %s' % function_name)
 
         if state_id is not None:
-            for identifier, sym_kind in six.iteritems(sym_table):
+            for identifier, sym_kind in sorted(six.iteritems(sym_table)):
                 self.emit_variable_init(identifier, sym_kind)
 
             if sym_table:

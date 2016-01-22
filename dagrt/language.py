@@ -476,7 +476,7 @@ class AssignFunctionCall(AssignmentBase):
     def __str__(self):
         pars = list(str(p) for p in self.parameters) + [
                 "%s=%s" % (name, value)
-                for name, value in self.kw_parameters.items()]
+                for name, value in sorted(self.kw_parameters.items())]
 
         result = "{assignees} <- {func_id}({pars}){cond}".format(
             assignees=", ".join(self.assignees),
