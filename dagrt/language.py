@@ -344,6 +344,17 @@ class AssignSolved(AssignmentBase):
                                  in self.other_params.values()))
         return variables
 
+    def map_expressions(self, mapper):
+        from pymbolic.primitives import Variable
+
+        lhss = tuple(mapper(Variable(assignee)) for assignee in self.assignees)
+        assert all(isinstance(lhs, Variable) for lhs in lhss)
+
+        return self.copy(
+                assignees=tuple(lhs.name for lhs in lhss),
+                condition=mapper(self.condition),
+                expressions=mapper(self.expressions))
+
     def __str__(self):
         lines = []
         lines.append("AssignSolved")
@@ -425,10 +436,15 @@ class AssignFunctionCall(AssignmentBase):
                 kw_parameters=self.kw_parameters)
 
     def map_expressions(self, mapper):
-        from pymbolic.primitives import CallWithKwargs
+        from pymbolic.primitives import CallWithKwargs, Variable
         mapped_expr = mapper(self.as_expression())
         assert isinstance(mapped_expr, CallWithKwargs)
+
+        lhss = tuple(mapper(Variable(assignee)) for assignee in self.assignees)
+        assert all(isinstance(lhs, Variable) for lhs in lhss)
+
         return self.copy(
+                assignees=tuple(lhs.name for lhs in lhss),
                 condition=mapper(self.condition),
                 function_id=mapped_expr.function.name,
                 parameters=mapped_expr.parameters,
