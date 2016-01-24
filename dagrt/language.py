@@ -26,6 +26,10 @@ THE SOFTWARE.
 """
 
 from pytools import RecordWithoutPickling, memoize_method
+from pymbolic.imperative.instructions import (
+        ConditionalInstruction as InstructionBase,
+        ConditionalAssignment as AssignExpressionBase)
+
 from dagrt.utils import get_variables
 from contextlib import contextmanager
 
@@ -167,64 +171,13 @@ def _stringify_instructions(roots, id_to_insn, prefix=""):
 # }}}
 
 
-class Instruction(RecordWithoutPickling):
-    """
-    .. attribute:: condition
-
-       The instruction condition as a :mod:`pymbolic` expression (`True` if the
-       instruction is unconditionally executed)
-
-    .. attribute:: depends_on
-
-        A :class:`frozenset` of instruction ids that are reuqired to be
-        executed within this execution context before this instruction can be
-        executed.
-
-    .. attribute:: id
-
-        A string, a unique identifier for this instruction.
-
-    .. automethod:: get_assignees
-    .. automethod:: get_read_variables
-
-    """
-
-    def __init__(self, **kwargs):
-        id = kwargs.pop("id", None)
-        if id is not None:
-            id = six.moves.intern(id)
-        condition = kwargs.pop("condition", True)
-        depends_on = frozenset(kwargs.pop("depends_on", []))
-        RecordWithoutPickling.__init__(self,
-                                       id=id,
-                                       condition=condition,
-                                       depends_on=depends_on,
-                                       **kwargs)
-
-    def _condition_printing_suffix(self):
-        if self.condition is True:
-            return ""
-        return " if " + str(self.condition)
-
-    def get_assignees(self):
-        """Returns a :class:`frozenset` of variables being written by this
-        instruction.
-        """
-        raise NotImplementedError()
-
-    def get_read_variables(self):
-        """Returns a :class:`frozenset` of variables being read by this
-        instruction.
-        """
-        return get_variables(self.condition)
-
-    def map_expressions(self, mapper):
-        """Returns a new copy of *self* with all expressions
-        replaced by ``mapepr(expr)`` for every
-        :class:`pymbolic.primitives.Expression`
-        contained in *self*.
-        """
-        raise NotImplementedError()
+class Instruction(InstructionBase):
+    def get_dependency_mapper(self, include_calls="descend_args"):
+        from dagrt.expression import ExtendedDependencyMapper
+        return ExtendedDependencyMapper(
+            include_subscripts=False,
+            include_lookups=False,
+            include_calls=include_calls)
 
 
 class Nop(Instruction):
@@ -247,6 +200,98 @@ class Nop(Instruction):
 
 class AssignmentBase(Instruction):
     pass
+
+
+class AssignExpression(Instruction, AssignExpressionBase):
+    """
+    .. attribute:: loops
+
+        A list of triples *(identifier, start, end)* that the assignment
+        should be carried out inside of these loops.
+        No ordering of loop iterations is implied.
+        The loops will typically be nested outer-to-inner, but a target
+        may validly use any order it likes.
+    """
+
+    def __init__(self, assignee=None, assignee_subscript=None, expression=None,
+            loops=[], **kwargs):
+
+        if "lhs" not in kwargs:
+            if assignee is None:
+                raise TypeError("assignee is a required argument")
+            if assignee_subscript is None:
+                raise TypeError("assignee is a required argument")
+
+            from pymbolic import var
+            lhs = var(assignee)
+
+            if assignee_subscript:
+                if not isinstance(assignee_subscript, tuple):
+                    raise TypeError("assignee_subscript must be a tuple")
+
+                lhs = lhs[assignee_subscript]
+                if len(assignee_subscript) > 1:
+                    raise ValueError(
+                            "assignee subscript may have a length of at most one")
+        else:
+            lhs = kwargs.pop("lhs")
+
+        if "rhs" not in kwargs:
+            if expression is None:
+                raise TypeError("assignee is a required argument")
+            rhs = expression
+        else:
+            rhs = kwargs.pop("rhs")
+
+        super(AssignExpression, self).__init__(
+                lhs=lhs,
+                rhs=rhs,
+                loops=loops,
+                **kwargs)
+
+    @property
+    def assignee(self):
+        from pymbolic.primitives import Variable, Subscript
+        if isinstance(self.lhs, Variable):
+            return self.lhs.name
+        elif isinstance(self.lhs, Subscript):
+            assert isinstance(self.lhs.aggregate, Variable)
+            return self.lhs.aggregate.name
+        else:
+            raise TypeError("unexpected type of LHS")
+
+    @property
+    def assignee_subscript(self):
+        from pymbolic.primitives import Variable, Subscript
+        if isinstance(self.lhs, Variable):
+            return ()
+        elif isinstance(self.lhs, Subscript):
+            return self.lhs.index
+        else:
+            raise TypeError("unexpected type of LHS")
+
+    @property
+    def expression(self):
+        return self.rhs
+
+    def map_expressions(self, mapper):
+        return super(AssignExpression, self).map_expressions(mapper).copy(
+                loops=[
+                    (ident, mapper(start), mapper(end))
+                    for ident, start, end in self.loops])
+
+    def __str__(self):
+        result = super(AssignExpression, self).__str__()
+
+        for ident, start, end in self.loops:
+            result += " [{ident}={start}..{end}]".format(
+                    ident=ident,
+                    start=start,
+                    end=end)
+
+        return result
+
+    exec_method = "exec_AssignExpression"
 
 
 class AssignSolved(AssignmentBase):
@@ -325,79 +370,6 @@ class AssignSolved(AssignmentBase):
                 lines.append(param_name + ": " + str(param_value))
         lines.append(self._condition_printing_suffix())
         return "\n".join(lines)
-
-
-class AssignExpression(AssignmentBase):
-    """
-    .. attribute:: assignee
-    .. attribute:: assignee_subscript
-
-        The subscript in :attr:`assignee` which is being assigned.
-        A tuple, which may be empty, to indicate 'no subscript'.
-
-    .. attribute:: expression
-    .. attribute:: loops
-
-        A list of triples *(identifier, start, end)* that the assignment
-        should be carried out inside of these loops.
-        No ordering of loop iterations is implied.
-        The loops will typically be nested outer-to-inner, but a target
-        may validly use any order it likes.
-
-    """
-    def __init__(self, assignee, assignee_subscript, expression, loops=[], **kwargs):
-        assert isinstance(assignee_subscript, tuple)
-
-        if len(assignee_subscript) > 1:
-            raise ValueError("assignee subscript may have a length of at most one")
-
-        Instruction.__init__(self,
-                assignee=assignee,
-                assignee_subscript=assignee_subscript,
-                expression=expression,
-                loops=loops,
-                **kwargs)
-
-    def get_assignees(self):
-        return frozenset([self.assignee])
-
-    def get_read_variables(self):
-        result = super(AssignExpression, self).get_read_variables()
-        result = (get_variables(self.expression)
-                | get_variables(self.assignee_subscript))
-
-        for ident, start, end in self.loops:
-            result = result | (get_variables(start) | get_variables(end))
-
-        return result
-
-    def map_expressions(self, mapper):
-        return self.copy(
-                expression=mapper(self.expression),
-                condition=mapper(self.condition),
-                loops=[
-                    (ident, mapper(start), mapper(end))
-                    for ident, start, end in self.loops])
-
-    def __str__(self):
-        assignee = self.assignee
-        if self.assignee_subscript:
-            assignee += "[%s]" % ", ".join(str(ax) for ax in self.assignee_subscript)
-
-        result = "{assignee} <- {expr}{cond}".format(
-            assignee=assignee,
-            expr=str(self.expression),
-            cond=self._condition_printing_suffix())
-
-        for ident, start, end in self.loops:
-            result += " [{ident}={start}..{end}]".format(
-                    ident=ident,
-                    start=start,
-                    end=end)
-
-        return result
-
-    exec_method = "exec_AssignExpression"
 
 
 class AssignFunctionCall(AssignmentBase):
@@ -1193,106 +1165,26 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
     dependencies among kernel instructions.
     """
 
-    lines = []
-    dep_graph = {}
+    from pymbolic.imperative.utils import get_dot_dependency_graph
 
-    # maps (oriented) edge onto annotation string
-    annotation_dep_graph = {}
+    def addtional_lines_hook():
+        for i, (name, state) in enumerate(six.iteritems(code.states)):
+            yield "subgraph cluster_%d { label=\"%s\"" % (i, name)
+            for dep in state.depends_on:
+                yield dep
+            yield "}"
 
-    for insn in code.instructions:
-        if use_insn_ids:
-            insn_label = insn.id
-            tooltip = str(insn)
-        else:
-            insn_label = str(insn)
-            tooltip = insn.id
-
-        lines.append("\"%s\" [label=\"%s\",shape=\"box\",tooltip=\"%s\"];"
-                % (
-                    insn.id,
-                    repr(insn_label)[1:-1],
-                    repr(tooltip)[1:-1],
-                    ))
-        for dep in insn.depends_on:
-            dep_graph.setdefault(insn.id, set()).add(dep)
-
-        if 0:
-            for dep in insn.then_depends_on:
-                annotation_dep_graph[(insn.id, dep)] = "then"
-            for dep in insn.else_depends_on:
-                annotation_dep_graph[(insn.id, dep)] = "else"
-
-    # {{{ O(n^3) (i.e. slow) transitive reduction
-
-    # first, compute transitive closure by fixed point iteration
-    while True:
-        changed_something = False
-
-        for insn_1 in dep_graph:
-            for insn_2 in dep_graph.get(insn_1, set()).copy():
-                for insn_3 in dep_graph.get(insn_2, set()).copy():
-                    if insn_3 not in dep_graph.get(insn_1, set()):
-                        changed_something = True
-                        dep_graph[insn_1].add(insn_3)
-
-        if not changed_something:
-            break
-
-    for insn_1 in dep_graph:
-        for insn_2 in dep_graph.get(insn_1, set()).copy():
-            for insn_3 in dep_graph.get(insn_2, set()).copy():
-                if insn_3 in dep_graph.get(insn_1, set()):
-                    dep_graph[insn_1].remove(insn_3)
-
-    # }}}
-
-    for insn_1 in dep_graph:
-        for insn_2 in dep_graph.get(insn_1, set()):
-            lines.append("%s -> %s" % (insn_2, insn_1))
-
-    for (insn_1, insn_2), annot in six.iteritems(annotation_dep_graph):
-            lines.append(
-                    "%s -> %s  [label=\"%s\", style=dashed]"
-                    % (insn_2, insn_1, annot))
-
-    for i, (name, state) in enumerate(six.iteritems(code.states)):
-        lines.append("subgraph cluster_%d { label=\"%s\"" % (i, name))
-        for dep in state.depends_on:
-            lines.append(dep)
-        lines.append("}")
-
-    return "digraph dagrt_code {\n%s\n}" % (
-            "\n".join(lines)
-            )
+    return get_dot_dependency_graph(
+            code.instructions, use_insn_ids=use_insn_ids,
+            addtional_lines_hook=addtional_lines_hook)
 
 
 def show_dependency_graph(*args, **kwargs):
     """Show the dependency graph generated by :func:`get_dot_dependency_graph`
     in a browser. Accepts the same arguments as that function.
     """
-
-    dot = get_dot_dependency_graph(*args, **kwargs)
-
-    from tempfile import mkdtemp
-    temp_dir = mkdtemp(prefix="tmp_dagrt_dot")
-
-    dot_file_name = "dagrt.dot"
-
-    from os.path import join
-    with open(join(temp_dir, dot_file_name), "w") as dotf:
-        dotf.write(dot)
-
-    svg_file_name = "dagrt.svg"
-    from subprocess import check_call
-    check_call(["dot", "-Tsvg", "-o", svg_file_name, dot_file_name],
-            cwd=temp_dir)
-
-    full_svg_file_name = join(temp_dir, svg_file_name)
-    logger.info("show_dot_dependency_graph: svg written to '%s'"
-            % full_svg_file_name)
-
-    from webbrowser import open as browser_open
-    browser_open("file://" + full_svg_file_name)
+    from pymbolic.imperative.utils import show_dot
+    show_dot(get_dot_dependency_graph(*args, **kwargs))
 
 # }}}
 

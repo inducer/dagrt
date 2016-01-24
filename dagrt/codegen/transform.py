@@ -64,10 +64,14 @@ def eliminate_self_dependencies(dag):
             new_instructions.append(new_tmp_insn)
 
         from pymbolic import substitute
+        old_lhs = insn.lhs
         new_insn = (insn
                 .map_expressions(
                     lambda expr: substitute(expr, dict(substs)))
-                .copy(depends_on=frozenset(tmp_insn_ids)))
+                .copy(
+                    # lhs will be rewritten, but we don't want that.
+                    lhs=old_lhs,
+                    depends_on=insn.depends_on | frozenset(tmp_insn_ids)))
 
         new_instructions.append(new_insn)
 
@@ -247,6 +251,9 @@ def isolate_function_calls(dag):
                         lambda expr: fci(
                             expr, insn.condition, insn.depends_on, new_deps))
                     .copy(depends_on=insn.depends_on | frozenset(new_deps)))
+            from pymbolic.primitives import Call, CallWithKwargs
+            assert not isinstance(new_instructions[-1].rhs,
+                    (Call, CallWithKwargs))
         else:
             new_instructions.append(insn)
 
