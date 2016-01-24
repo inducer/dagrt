@@ -36,7 +36,7 @@ def eliminate_self_dependencies(dag):
 
     new_instructions = []
     for insn in sorted(dag.instructions, key=lambda insn: insn.id):
-        read_and_written = insn.get_read_variables() & insn.get_assignees()
+        read_and_written = insn.get_read_variables() & insn.get_written_variables()
 
         if not read_and_written:
             new_instructions.append(insn)

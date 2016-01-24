@@ -182,10 +182,10 @@ class Instruction(InstructionBase):
 
 class Nop(Instruction):
 
-    def get_assignees(self):
+    def get_written_variables(self):
         return frozenset([])
 
-    get_read_variables = get_assignees
+    get_read_variables = get_written_variables
 
     def map_expressions(self, mapper):
         return self.copy(condition=mapper(self.condition))
@@ -335,7 +335,7 @@ class AssignSolved(AssignmentBase):
 
     exec_method = six.moves.intern("exec_AssignSolved")
 
-    def get_assignees(self):
+    def get_written_variables(self):
         return frozenset(self.assignees)
 
     def get_read_variables(self):
@@ -416,7 +416,7 @@ class AssignFunctionCall(AssignmentBase):
                 kw_parameters=kw_parameters,
                 **kwargs)
 
-    def get_assignees(self):
+    def get_written_variables(self):
         return frozenset(self.assignees)
 
     def get_read_variables(self):
@@ -475,7 +475,7 @@ class YieldState(Instruction):
     .. attribute:: expression
     """
 
-    def get_assignees(self):
+    def get_written_variables(self):
         return frozenset()
 
     def get_read_variables(self):
@@ -518,7 +518,7 @@ class Raise(Instruction):
                 error_message=error_message,
                 **kwargs)
 
-    def get_assignees(self):
+    def get_written_variables(self):
         return frozenset()
 
     def map_expressions(self, mapper):
@@ -545,7 +545,7 @@ class StateTransition(Instruction):
     def __init__(self, next_state, **kwargs):
         Instruction.__init__(self, next_state=next_state, **kwargs)
 
-    def get_assignees(self):
+    def get_written_variables(self):
         return frozenset()
 
     def map_expressions(self, mapper):
@@ -562,7 +562,7 @@ class FailStep(Instruction):
     """
     """
 
-    def get_assignees(self):
+    def get_written_variables(self):
         return frozenset()
 
     def map_expressions(self, mapper):
@@ -656,7 +656,7 @@ class DAGCode(RecordWithoutPickling):
     def existing_var_names(self):
         result = set()
         for insn in self.instructions:
-            result.update(insn.get_assignees())
+            result.update(insn.get_written_variables())
             result.update(insn.get_read_variables())
 
         return result
@@ -1018,7 +1018,7 @@ class CodeBuilder(object):
 
         # Verify that assignees are not being places after uses of the
         # assignees in this context.
-        for assignee in inst.get_assignees():
+        for assignee in inst.get_written_variables():
             # Warn about potential ordering of assignments that may
             # be unexpected by the user.
             if assignee in context.used_variables:
@@ -1040,7 +1040,7 @@ class CodeBuilder(object):
             if used_variable in context.definition_map:
                 dependencies.update(context.definition_map[used_variable])
 
-        for used_variable in inst.get_assignees():
+        for used_variable in inst.get_written_variables():
             # Make second (indexed) writes depend on initialization
             for def_inst_id in context.definition_map.get(used_variable, []):
                 def_inst = self._instruction_map[def_inst_id]
@@ -1052,11 +1052,11 @@ class CodeBuilder(object):
         # Add the condition to the instruction.
         # Update context and global information.
         context.context_instruction_ids.add(inst_id)
-        for assignee in inst.get_assignees():
+        for assignee in inst.get_written_variables():
             context.definition_map.setdefault(assignee, set()).add(inst_id)
 
         context.used_variables |= inst.get_read_variables()
-        self._all_var_names |= inst.get_assignees()
+        self._all_var_names |= inst.get_written_variables()
         self._instruction_map[inst_id] = \
             inst.copy(id=inst_id, depends_on=list(dependencies),
                       condition=self._get_active_condition())

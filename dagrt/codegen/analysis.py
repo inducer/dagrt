@@ -117,7 +117,7 @@ def verify_single_definition_cond_rule(instructions, errors):
     cond_variables = {}
 
     for instruction in instructions:
-        for varname in instruction.get_assignees():
+        for varname in instruction.get_written_variables():
             if not varname.startswith("<cond>"):
                 continue
             if varname not in cond_variables:
