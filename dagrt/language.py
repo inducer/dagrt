@@ -26,7 +26,7 @@ THE SOFTWARE.
 """
 
 from pytools import RecordWithoutPickling, memoize_method
-from pymbolic.imperative.instructions import (
+from pymbolic.imperative.instruction import (
         ConditionalInstruction as InstructionBase,
         ConditionalAssignment as AssignExpressionBase)
 

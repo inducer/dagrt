@@ -42,7 +42,7 @@ def main():
           install_requires=[
               "numpy>=1.5",
               "pytools>=2014.1",
-              "pymbolic>=2014.1",
+              "pymbolic>=2016.2",
               "pytest>=2.3",
               "mako",
               "six",
