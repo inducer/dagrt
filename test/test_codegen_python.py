@@ -48,7 +48,7 @@ def test_basic_codegen():
                     expression=0, component_id='<state>',
         depends_on=[]))
     cbuild.commit()
-    code = DAGCode.create_with_init_and_step(
+    code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -82,7 +82,7 @@ def test_basic_conditional_codegen():
             expression=var('<state>y'), component_id='<state>',
         depends_on=['branch']))
     cbuild.commit()
-    code = DAGCode.create_with_init_and_step(
+    code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -116,7 +116,7 @@ def test_basic_assign_rhs_codegen():
             depends_on=['assign_rhs2'])
         )
     cbuild.commit()
-    code = DAGCode.create_with_init_and_step(
+    code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -146,7 +146,7 @@ def test_basic_raise_codegen():
 
     cbuild.add_and_get_ids(Raise(TimeStepUnderflow, "underflow", id="raise"))
     cbuild.commit()
-    code = DAGCode.create_with_init_and_step(
+    code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=["raise"])
     codegen = PythonCodeGenerator(class_name="Method")
@@ -171,7 +171,7 @@ def test_basic_fail_step_codegen():
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(FailStep(id="fail"))
     cbuild.commit()
-    code = DAGCode.create_with_init_and_step(
+    code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=["fail"])
     codegen = PythonCodeGenerator(class_name="Method")
@@ -202,7 +202,7 @@ def test_local_name_distinctness():
             expression=var('y^') + var('y*'),
             component_id='y', depends_on=['assign_y^', 'assign_y*']))
     cbuild.commit()
-    code = DAGCode.create_with_init_and_step(
+    code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -229,7 +229,7 @@ def test_global_name_distinctness():
             expression=var('<p>y^') + var('<p>y*'),
             component_id='y', depends_on=['assign_y^', 'assign_y*']))
     cbuild.commit()
-    code = DAGCode.create_with_init_and_step(
+    code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -250,7 +250,7 @@ def test_function_name_distinctness():
             expression=var('<func>y^')() + var('<func>y*')(),
             component_id='y'))
     cbuild.commit()
-    code = DAGCode.create_with_init_and_step(
+    code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
@@ -274,12 +274,13 @@ def test_state_transitions(python_method_impl):
         builder_2.yield_state(var("<state>x"), 'x', 0, 'final')
 
     code = DAGCode(
-        instructions=builder_1.instructions | builder_2.instructions,
         states={
-            "state_1": ExecutionState(builder_1.state_dependencies,
-                                           next_state="state_1"),
-            "state_2": ExecutionState(builder_2.state_dependencies,
-                                           next_state="state_2")
+            "state_1": ExecutionState(
+                builder_1.state_dependencies, next_state="state_1",
+                instructions=builder_1.instructions),
+            "state_2": ExecutionState(
+                builder_2.state_dependencies, next_state="state_2",
+                instructions=builder_2.instructions)
         },
         initial_state="state_1")
     from utils import execute_and_return_single_result

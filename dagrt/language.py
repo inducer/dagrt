@@ -590,21 +590,30 @@ class ExecutionState(RecordWithoutPickling):
 
         name of the next state after this one, if no other state
         is specified by the user.
+
+    .. attribute:: instructions
+
+        is a list of Instruction instances, in no particular
+        order. Only instructions referred to by :attr:`depends_on`
+        or the transitive closure of their dependency relations
+        will actually be executed.
     """
 
-    def __init__(self, depends_on, next_state):
+    def __init__(self, depends_on, next_state, instructions):
         super(ExecutionState, self).__init__(
                 depends_on=depends_on,
-                next_state=next_state)
+                next_state=next_state,
+                instructions=instructions)
+
+    @property
+    @memoize_method
+    def id_to_insn(self):
+        return dict((insn.id, insn)
+                for insn in self.instructions)
 
 
 class DAGCode(RecordWithoutPickling):
     """
-    .. attribute:: instructions
-
-        is a list of Instruction instances, in no particular
-        order
-
     .. attribute:: states
 
         is a map from time integrator state names to :class:`ExecutionState`
@@ -617,47 +626,47 @@ class DAGCode(RecordWithoutPickling):
 
     @classmethod
     def create_with_steady_state(cls, dep_on, instructions):
-        states = {'main': ExecutionState(dep_on, next_state='main')}
-        return cls(instructions, states, 'main')
+        states = {'main': ExecutionState(
+            dep_on, next_state='main', instructions=instructions)}
+        return cls(states, 'main')
 
     @classmethod
-    def create_with_init_and_step(cls, initialization_dep_on,
+    def _create_with_init_and_step(cls, initialization_dep_on,
                                   step_dep_on, instructions):
         states = {}
         states['initialization'] = ExecutionState(
                 initialization_dep_on,
-                next_state='primary')
+                next_state='primary',
+                instructions=instructions)
 
         states['primary'] = ExecutionState(
                 step_dep_on,
-                next_state='primary')
+                next_state='primary',
+                instructions=instructions)
 
-        return cls(instructions, states, 'initialization')
+        return cls(states, 'initialization')
 
-    def __init__(self, instructions, states, initial_state):
+    def __init__(self, states, initial_state):
         assert not isinstance(states, list)
-        RecordWithoutPickling.__init__(self, instructions=instructions,
+        RecordWithoutPickling.__init__(self,
                                        states=states,
                                        initial_state=initial_state)
-
-    @property
-    @memoize_method
-    def id_to_insn(self):
-        return dict((insn.id, insn)
-                for insn in self.instructions)
 
     # {{{ identifier wrangling
 
     def get_insn_id_generator(self):
         from pytools import UniqueNameGenerator
         return UniqueNameGenerator(
-                set(insn.id for insn in self.instructions))
+                set(insn.id
+                    for state in six.itervalues(self.states)
+                    for insn in state.instructions))
 
     def existing_var_names(self):
         result = set()
-        for insn in self.instructions:
-            result.update(insn.get_written_variables())
-            result.update(insn.get_read_variables())
+        for state in six.itervalues(self.states):
+            for insn in state.instructions:
+                result.update(insn.get_written_variables())
+                result.update(insn.get_read_variables())
 
         return result
 
@@ -674,8 +683,8 @@ class DAGCode(RecordWithoutPickling):
 
             for root_id in state.depends_on:
                 lines.extend(_stringify_instructions(
-                    [self.id_to_insn[root_id]],
-                    self.id_to_insn, prefix="    "))
+                    [state.id_to_insn[root_id]],
+                    state.id_to_insn, prefix="    "))
 
             lines.append("    -> (next state) %s" % state.next_state)
             lines.append("")
@@ -703,7 +712,7 @@ class ExecutionController(object):
         self.plan_id_set.clear()
         self.executed_ids.clear()
 
-    def update_plan(self, execute_ids):
+    def update_plan(self, state, execute_ids):
         """Update the plan with the minimal list of instruction ids to execute
         so that the instruction IDs in execute_ids will be executed before any
         others and such that all their dependencies are satisfied.
@@ -711,7 +720,7 @@ class ExecutionController(object):
 
         early_plan = []
 
-        id_to_insn = self.code.id_to_insn
+        id_to_insn = state.id_to_insn
 
         def add_with_deps(insn):
             insn_id = insn.id
@@ -739,8 +748,8 @@ class ExecutionController(object):
         self.plan = early_plan + self.plan
         self.plan_id_set.update(early_plan)
 
-    def __call__(self, target):
-        id_to_insn = self.code.id_to_insn
+    def __call__(self, state, target):
+        id_to_insn = state.id_to_insn
 
         while self.plan:
             insn_id = self.plan.pop(0)
@@ -763,7 +772,7 @@ class ExecutionController(object):
                     yield event
 
                 if new_deps is not None:
-                    self.update_plan(new_deps)
+                    self.update_plan(state, new_deps)
 
 # }}}
 
@@ -1153,7 +1162,8 @@ class CodeBuilder(object):
         :arg next_state: The name of the default next state
         """
         return ExecutionState(
-                depends_on=self.state_dependencies, next_state=next_state)
+                depends_on=self.state_dependencies, next_state=next_state,
+                instructions=self.instructions)
 
 # }}}
 
@@ -1174,8 +1184,12 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
                 yield dep
             yield "}"
 
+    instructions = [
+            insn if use_insn_ids else insn.copy(id=state_name+"_"+insn.id)
+            for state_name, state in six.iteritems(code.states)
+            for insn in state.instructions]
     return get_dot_dependency_graph(
-            code.instructions, use_insn_ids=use_insn_ids,
+            instructions, use_insn_ids=use_insn_ids,
             addtional_lines_hook=addtional_lines_hook)
 
 

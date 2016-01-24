@@ -164,8 +164,8 @@ class NumpyInterpreter(object):
             self.exec_controller.reset()
             cur_state = self.code.states[self.next_state]
             self.next_state = cur_state.next_state
-            self.exec_controller.update_plan(cur_state.depends_on)
-            for event in self.exec_controller(self):
+            self.exec_controller.update_plan(cur_state, cur_state.depends_on)
+            for event in self.exec_controller(cur_state, self):
                 yield event
 
         finally:

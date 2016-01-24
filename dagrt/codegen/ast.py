@@ -130,22 +130,24 @@ def get_instructions_in_ast(ast):
             yield inst
 
 
-def create_ast_from_state(code, state):
+def create_ast_from_state(code, state_name):
     """
     Return an AST representation of the instructions corresponding to the state
     named `state` as found in the :class:`DAGCode` instance `code`.
     """
 
+    state = code.states[state_name]
+
     # Construct a topological order of the instructions.
     stack = []
-    instruction_map = dict((inst.id, inst) for inst in code.instructions)
+    instruction_map = dict((inst.id, inst) for inst in state.instructions)
     visiting = set()
     visited = set()
     topological_order = []
 
     # TODO: Clump nodes together in the topological order based on conditionals.
 
-    stack.extend(sorted(code.states[state].depends_on))
+    stack.extend(sorted(state.depends_on))
     while stack:
         instruction = stack[-1]
         if instruction in visited:

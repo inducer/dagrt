@@ -22,6 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import six
 from pymbolic.mapper import Collector
 from dagrt.language import YieldState, StateTransition, AssignFunctionCall
 
@@ -33,7 +34,7 @@ def _quote(string):
     return "\"{0}\"".format(string)
 
 
-def verify_state_transitions(instructions, states, errors):
+def verify_state_transitions(states, errors):
     """
     Ensure that states referenced by StateTransition exist.
 
@@ -42,16 +43,17 @@ def verify_state_transitions(instructions, states, errors):
     :arg errors: An error list to which new errors get appended
     """
     state_names = [key for key in states.keys()]
-    for inst in instructions:
-        if not isinstance(inst, StateTransition):
-            continue
-        if inst.next_state not in state_names:
-            errors.append(
-                "State \"{0}\" referenced by instruction \"{1}\" not found"
-                .format(inst.next_state, inst))
+    for state in six.itervalues(states):
+        for inst in state.instructions:
+            if not isinstance(inst, StateTransition):
+                continue
+            if inst.next_state not in state_names:
+                errors.append(
+                    "State \"{0}\" referenced by instruction \"{1}:{2}\" not found"
+                    .format(inst.next_state, state, inst))
 
 
-def verify_all_dependencies_exist(instructions, states, errors):
+def verify_all_dependencies_exist(states, errors):
     """
     Ensure that all instruction dependencies exist.
 
@@ -59,18 +61,20 @@ def verify_all_dependencies_exist(instructions, states, errors):
     :arg states: A map from state names to states
     :arg errors: An error list to which new errors get appended
     """
-    ids = set(inst.id for inst in instructions)
+    ids = set(inst.id
+            for state in six.itervalues(states)
+            for inst in state.instructions)
 
     # Check instructions
-    for inst in instructions:
-        deps = set(inst.depends_on)
-        if not deps <= ids:
-            errors.extend(
-                ["Dependency \"{0}\" referenced by instruction \"{1}\" not found"
-                 .format(dep_name, inst) for dep_name in deps - ids])
+    for state in six.itervalues(states):
+        for inst in state.instructions:
+            deps = set(inst.depends_on)
+            if not deps <= ids:
+                errors.extend(
+                    ["Dependency \"{0}\" referenced by instruction \"{1}\" not found"
+                     .format(dep_name, inst) for dep_name in deps - ids])
 
     # Check states.
-    import six
     for state_name, state in six.iteritems(states):
         deps = set(state.depends_on)
         if not deps <= ids:
@@ -149,10 +153,15 @@ def verify_code(code):
     try:
         # Wrap in a try block, since some verifier passes may fail due to badly
         # malformed code.
-        verify_all_dependencies_exist(code.instructions, code.states, errors)
-        verify_no_circular_dependencies(code.instructions, errors)
-        verify_state_transitions(code.instructions, code.states, errors)
-        verify_single_definition_cond_rule(code.instructions, errors)
+        verify_all_dependencies_exist(code.states, errors)
+        for state in six.itervalues(code.states):
+            verify_no_circular_dependencies(state.instructions, errors)
+
+        verify_state_transitions(code.states, errors)
+
+        for state in six.itervalues(code.states):
+            verify_single_definition_cond_rule(state.instructions, errors)
+
     except Exception as e:
         # Ensure there is at least one error to report.
         if len(errors) == 0:
@@ -196,12 +205,13 @@ def collect_function_names_from_dag(dag, no_expressions=False):
     def mapper(expr):
         result.update(fnc(expr))
         return expr
-    for insn in dag.instructions:
-        if isinstance(insn, AssignFunctionCall):
-            result.add(insn.function_id)
+    for state in six.itervalues(dag.states):
+        for insn in state.instructions:
+            if isinstance(insn, AssignFunctionCall):
+                result.add(insn.function_id)
 
-        if not no_expressions:
-            insn.map_expressions(mapper)
+            if not no_expressions:
+                insn.map_expressions(mapper)
 
     return result
 
@@ -213,9 +223,10 @@ def collect_function_names_from_dag(dag, no_expressions=False):
 def collect_time_ids_from_dag(dag):
     result = set()
 
-    for insn in dag.instructions:
-        if isinstance(insn, YieldState):
-            result.add(insn.time_id)
+    for state in six.itervalues(dag.states):
+        for insn in state.instructions:
+            if isinstance(insn, YieldState):
+                result.add(insn.time_id)
 
     return result
 
@@ -227,9 +238,10 @@ def collect_time_ids_from_dag(dag):
 def collect_ode_component_names_from_dag(dag):
     result = set()
 
-    for insn in dag.instructions:
-        if isinstance(insn, YieldState):
-            result.add(insn.component_id)
+    for state in six.itervalues(dag.states):
+        for insn in state.instructions:
+            if isinstance(insn, YieldState):
+                result.add(insn.component_id)
 
     return result
 

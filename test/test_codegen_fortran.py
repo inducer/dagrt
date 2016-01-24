@@ -52,7 +52,7 @@ def test_basic_codegen():
                     expression=0, component_id='state',
         depends_on=[]))
     cbuild.commit()
-    code = DAGCode.create_with_init_and_step(
+    code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     codegen = f.CodeGenerator("simple",

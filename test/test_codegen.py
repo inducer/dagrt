@@ -56,7 +56,7 @@ def test_circular_dependency_detection():
             expression=var('<state>y'), component_id='<state>',
         depends_on=['assign']))
     cbuild.commit()
-    code = DAGCode.create_with_init_and_step(
+    code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     try:
@@ -77,7 +77,7 @@ def test_missing_dependency_detection():
             expression=var('<state>y'), component_id='<state>',
             depends_on=['assign'])
         ])
-    code = DAGCode.create_with_init_and_step(
+    code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=instructions, step_dep_on=['return'])
     try:
@@ -127,7 +127,7 @@ def test_cond_detection():
             component_id='<state>',
             depends_on=['assign2']))
     cbuild.commit()
-    code = DAGCode.create_with_init_and_step(
+    code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
     try:
