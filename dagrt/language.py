@@ -28,7 +28,8 @@ THE SOFTWARE.
 from pytools import RecordWithoutPickling, memoize_method
 from pymbolic.imperative.instruction import (
         ConditionalInstruction as InstructionBase,
-        ConditionalAssignment as AssignExpressionBase)
+        ConditionalAssignment as AssignExpressionBase,
+        Nop as NopBase)
 
 from dagrt.utils import get_variables
 from contextlib import contextmanager
@@ -180,19 +181,7 @@ class Instruction(InstructionBase):
             include_calls=include_calls)
 
 
-class Nop(Instruction):
-
-    def get_written_variables(self):
-        return frozenset([])
-
-    get_read_variables = get_written_variables
-
-    def map_expressions(self, mapper):
-        return self.copy(condition=mapper(self.condition))
-
-    def __str__(self):
-        return 'nop'
-
+class Nop(NopBase):
     exec_method = six.moves.intern("exec_Nop")
 
 
