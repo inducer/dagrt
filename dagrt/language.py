@@ -38,7 +38,6 @@ import logging
 import six
 import six.moves
 
-
 logger = logging.getLogger(__name__)
 
 # {{{ instructions
@@ -263,11 +262,13 @@ class AssignExpression(Instruction, AssignExpressionBase):
     def expression(self):
         return self.rhs
 
-    def map_expressions(self, mapper):
-        return super(AssignExpression, self).map_expressions(mapper).copy(
-                loops=[
-                    (ident, mapper(start), mapper(end))
-                    for ident, start, end in self.loops])
+    def map_expressions(self, mapper, include_lhs=True):
+        return (super(AssignExpression, self)
+                .map_expressions(mapper, include_lhs=include_lhs)
+                .copy(
+                    loops=[
+                        (ident, mapper(start), mapper(end))
+                        for ident, start, end in self.loops]))
 
     def __str__(self):
         result = super(AssignExpression, self).__str__()
@@ -344,16 +345,21 @@ class AssignSolved(AssignmentBase):
                                  in self.other_params.values()))
         return variables
 
-    def map_expressions(self, mapper):
+    def map_expressions(self, mapper, include_lhs=True):
         from pymbolic.primitives import Variable
 
-        lhss = tuple(mapper(Variable(assignee)) for assignee in self.assignees)
-        assert all(isinstance(lhs, Variable) for lhs in lhss)
+        if include_lhs:
+            lhss = tuple(mapper(Variable(assignee)) for assignee in self.assignees)
+            assert all(isinstance(lhs, Variable) for lhs in lhss)
+            assignees = tuple(lhs.name for lhs in lhss)
+        else:
+            assignees = self.assignees
 
-        return self.copy(
-                assignees=tuple(lhs.name for lhs in lhss),
-                condition=mapper(self.condition),
-                expressions=mapper(self.expressions))
+        return (super(AssignSolved, self)
+                .map_expressions(mapper, include_lhs=include_lhs)
+                .copy(
+                    assignees=assignees,
+                    expressions=mapper(self.expressions)))
 
     def __str__(self):
         lines = []
@@ -435,20 +441,25 @@ class AssignFunctionCall(AssignmentBase):
                 parameters=self.parameters,
                 kw_parameters=self.kw_parameters)
 
-    def map_expressions(self, mapper):
+    def map_expressions(self, mapper, include_lhs=True):
         from pymbolic.primitives import CallWithKwargs, Variable
         mapped_expr = mapper(self.as_expression())
         assert isinstance(mapped_expr, CallWithKwargs)
 
-        lhss = tuple(mapper(Variable(assignee)) for assignee in self.assignees)
-        assert all(isinstance(lhs, Variable) for lhs in lhss)
+        if include_lhs:
+            lhss = tuple(mapper(Variable(assignee)) for assignee in self.assignees)
+            assert all(isinstance(lhs, Variable) for lhs in lhss)
+            assignees = tuple(lhs.name for lhs in lhss)
+        else:
+            assignees = self.assignees
 
-        return self.copy(
-                assignees=tuple(lhs.name for lhs in lhss),
-                condition=mapper(self.condition),
-                function_id=mapped_expr.function.name,
-                parameters=mapped_expr.parameters,
-                kw_parameters=mapped_expr.kw_parameters)
+        return (super(AssignFunctionCall, self)
+                .map_expressions(mapper, include_lhs=include_lhs)
+                .copy(
+                    assignees=assignees,
+                    function_id=mapped_expr.function.name,
+                    parameters=mapped_expr.parameters,
+                    kw_parameters=mapped_expr.kw_parameters))
 
     def __str__(self):
         pars = list(str(p) for p in self.parameters) + [
@@ -489,10 +500,10 @@ class YieldState(Instruction):
                 | get_variables(self.expression)
                 | get_variables(self.time))
 
-    def map_expressions(self, mapper):
-        return self.copy(
-                expression=mapper(self.expression),
-                condition=mapper(self.condition))
+    def map_expressions(self, mapper, include_lhs=True):
+        return (super(YieldState, self)
+                .map_expressions(mapper, include_lhs=include_lhs)
+                .copy(expression=mapper(self.expression)))
 
     def __str__(self):
         return ("Ret {expr} at {time_id} with t={time} as {component_id}{cond}"
@@ -526,9 +537,6 @@ class Raise(Instruction):
     def get_written_variables(self):
         return frozenset()
 
-    def map_expressions(self, mapper):
-        return self.copy(condition=mapper(self.condition))
-
     def __str__(self):
         error = self.error_condition.__name__
         if self.error_message:
@@ -553,9 +561,6 @@ class StateTransition(Instruction):
     def get_written_variables(self):
         return frozenset()
 
-    def map_expressions(self, mapper):
-        return self.copy(condition=mapper(self.condition))
-
     def __str__(self):
         return "Transition to {state}{cond}".format(state=self.next_state,
             cond=self._condition_printing_suffix())
@@ -569,9 +574,6 @@ class FailStep(Instruction):
 
     def get_written_variables(self):
         return frozenset()
-
-    def map_expressions(self, mapper):
-        return self.copy(condition=mapper(self.condition))
 
     def __str__(self):
         return "FailStep{cond}".format(cond=self._condition_printing_suffix())

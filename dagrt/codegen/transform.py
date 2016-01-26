@@ -67,13 +67,12 @@ def eliminate_self_dependencies(dag):
                 new_instructions.append(new_tmp_insn)
 
             from pymbolic import substitute
-            old_lhs = insn.lhs
             new_insn = (insn
                     .map_expressions(
-                        lambda expr: substitute(expr, dict(substs)))
+                        lambda expr: substitute(expr, dict(substs)),
+                        include_lhs=False)
                     .copy(
                         # lhs will be rewritten, but we don't want that.
-                        lhs=old_lhs,
                         depends_on=insn.depends_on | frozenset(tmp_insn_ids)))
 
             new_instructions.append(new_insn)
