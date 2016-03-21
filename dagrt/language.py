@@ -1192,7 +1192,7 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
             yield "}"
 
     instructions = [
-            insn if use_insn_ids else insn.copy(id=state_name+"_"+insn.id)
+            insn if use_insn_ids else insn.copy(id=insn.id)
             for state_name, state in six.iteritems(code.states)
             for insn in state.instructions]
     return get_dot_dependency_graph(
