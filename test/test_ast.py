@@ -1,17 +1,4 @@
 #! /usr/bin/env python
-import sys
-
-from pymbolic import var
-
-from pymbolic.primitives import LogicalNot
-
-from dagrt.codegen.ast import (IfThen, IfThenElse, Block, InstructionWrapper,
-                               create_ast_from_state, simplify_ast)
-from dagrt.language import Instruction, DAGCode
-
-import pytest
-
-
 __copyright__ = "Copyright (C) 2015 Matt Wala"
 
 __license__ = """
@@ -33,6 +20,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
+
+import sys
+
+from pymbolic import var
+
+from pymbolic.primitives import LogicalNot
+
+from dagrt.codegen.ast import (IfThen, IfThenElse, Block, InstructionWrapper,
+                               create_ast_from_state, simplify_ast)
+from dagrt.language import Instruction, DAGCode
+
+import pytest
 
 
 def test_create_ast():
@@ -124,6 +123,57 @@ _p = var("<cond>p")
 ])
 def test_simplify(in_ast, out_ast):
     assert simplify_ast(in_ast) == out_ast
+
+
+# {{{ parser
+
+def test_parser():
+    from dagrt.expression import parse
+    parse("(2*a[1]*b[1]+2*a[0]*b[0])*(hankel_1(-1,sqrt(a[1]**2+a[0]**2)*k) "
+            "-hankel_1(1,sqrt(a[1]**2+a[0]**2)*k))*k /(4*sqrt(a[1]**2+a[0]**2)) "
+            "+hankel_1(0,sqrt(a[1]**2+a[0]**2)*k)")
+    print(repr(parse("d4knl0")))
+    print(repr(parse("0.")))
+    print(repr(parse("0.e1")))
+    assert parse("0.e1") == 0
+    assert parse("1e-12") == 1e-12
+    print(repr(parse("a >= 1")))
+    print(repr(parse("a <= 1")))
+
+    print(repr(parse("g[i,k]+2.0*h[i,k]")))
+    print(repr(parse("g[i,k]+(+2.0)*h[i,k]")))
+    print(repr(parse("a - b - c")))
+    print(repr(parse("-a - -b - -c")))
+    print(repr(parse("- - - a - - - - b - - - - - c")))
+
+    print(repr(parse("~(a ^ b)")))
+    print(repr(parse("(a | b) | ~(~a & ~b)")))
+
+    print(repr(parse("3 << 1")))
+    print(repr(parse("1 >> 3")))
+
+    print(parse("3::1"))
+
+    import pymbolic.primitives as prim
+    assert parse("e1") == prim.Variable("e1")
+    assert parse("d1") == prim.Variable("d1")
+
+    from pymbolic import variables
+    f, x, y, z = variables("f x y z")
+    assert parse("f((x,y),z)") == f((x, y), z)
+    assert parse("f((x,),z)") == f((x,), z)
+    assert parse("f(x,(y,z),z)") == f(x, (y, z), z)
+
+    assert parse("f(x,(y,z),z, name=15)") == f(x, (y, z), z, name=15)
+    assert parse("f(x,(y,z),z, name=15, name2=17)") == f(
+            x, (y, z), z, name=15, name2=17)
+
+    assert parse("<func>yoink") == var("<func>yoink")
+    assert parse("-<  func  >  yoink") == -var("<func>yoink")
+    print(repr(parse("<func>yoink < <p>x")))
+    print(repr(parse("<func>yoink < - <p>x")))
+
+# }}}
 
 
 if __name__ == "__main__":

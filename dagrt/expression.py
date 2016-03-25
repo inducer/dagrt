@@ -30,7 +30,7 @@ from pymbolic.mapper.dependency import DependencyMapper
 from pymbolic.mapper import CombineMapper, IdentityMapper
 from pymbolic.mapper.unifier import UnidirectionalUnifier
 from pymbolic.primitives import Variable, is_constant
-from pymbolic.parser import Parser
+from pymbolic.parser import Parser, _less, _greater, _identifier
 from pymbolic.primitives import If as IfThenElse # noqa
 
 import logging
@@ -304,6 +304,23 @@ def _hack_lex_table(lex_table):
 
 
 class _ExtendedParser(Parser):
+    def parse_terminal(self, pstate):
+        import pymbolic.primitives as primitives
+
+        next_tag = pstate.next_tag()
+        if next_tag is _less:
+            # tagged identifier: <func>something
+            identifier = pstate.next_str_and_advance()
+            pstate.expect(_identifier)
+            identifier += pstate.next_str_and_advance()
+            pstate.expect(_greater)
+            identifier += pstate.next_str_and_advance()
+            pstate.expect(_identifier)
+            identifier += pstate.next_str_and_advance()
+            return primitives.Variable(identifier)
+        else:
+            return super(_ExtendedParser, self).parse_terminal(pstate)
+
     lex_table = _hack_lex_table(Parser.lex_table)
 
 
