@@ -85,6 +85,58 @@ def test_get_variables_with_function_symbols():
         frozenset(['f', 'x'])
 
 
+# {{{ parser
+
+def test_parser():
+    from pymbolic import var
+    from dagrt.expression import parse
+    parse("(2*a[1]*b[1]+2*a[0]*b[0])*(hankel_1(-1,sqrt(a[1]**2+a[0]**2)*k) "
+            "-hankel_1(1,sqrt(a[1]**2+a[0]**2)*k))*k /(4*sqrt(a[1]**2+a[0]**2)) "
+            "+hankel_1(0,sqrt(a[1]**2+a[0]**2)*k)")
+    print(repr(parse("d4knl0")))
+    print(repr(parse("0.")))
+    print(repr(parse("0.e1")))
+    assert parse("0.e1") == 0
+    assert parse("1e-12") == 1e-12
+    print(repr(parse("a >= 1")))
+    print(repr(parse("a <= 1")))
+
+    print(repr(parse("g[i,k]+2.0*h[i,k]")))
+    print(repr(parse("g[i,k]+(+2.0)*h[i,k]")))
+    print(repr(parse("a - b - c")))
+    print(repr(parse("-a - -b - -c")))
+    print(repr(parse("- - - a - - - - b - - - - - c")))
+
+    print(repr(parse("~(a ^ b)")))
+    print(repr(parse("(a | b) | ~(~a & ~b)")))
+
+    print(repr(parse("3 << 1")))
+    print(repr(parse("1 >> 3")))
+
+    print(parse("3::1"))
+
+    import pymbolic.primitives as prim
+    assert parse("e1") == prim.Variable("e1")
+    assert parse("d1") == prim.Variable("d1")
+
+    from pymbolic import variables
+    f, x, y, z = variables("f x y z")
+    assert parse("f((x,y),z)") == f((x, y), z)
+    assert parse("f((x,),z)") == f((x,), z)
+    assert parse("f(x,(y,z),z)") == f(x, (y, z), z)
+
+    assert parse("f(x,(y,z),z, name=15)") == f(x, (y, z), z, name=15)
+    assert parse("f(x,(y,z),z, name=15, name2=17)") == f(
+            x, (y, z), z, name=15, name2=17)
+
+    assert parse("<func>yoink") == var("<func>yoink")
+    assert parse("-<  func  >  yoink") == -var("<func>yoink")
+    print(repr(parse("<func>yoink < <p>x")))
+    print(repr(parse("<func>yoink < - <p>x")))
+
+# }}}
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
