@@ -61,12 +61,6 @@ def test_match():
     assert subst["t"] == tt
 
 
-def test_parse():
-    from pymbolic import var
-    from dagrt.expression import parse
-    assert parse("1 + `<dt>`") == 1 + var("<dt>")
-
-
 def test_get_variables():
     from pymbolic import var
     f = var('f')
