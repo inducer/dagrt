@@ -233,21 +233,19 @@ def collapse_constants(expression, free_variables, assign_func, new_var_func):
 
 
 class _UnidirectionalUnifierWithFunctionCalls(UnidirectionalUnifier):
-    """This class extends the unification mapper to handle terms with
-    function calls. The function symbols are assumed to be constants.
+    """
+    This class extends the unification mapper to handle terms with function
+    calls.
     """
 
     def map_call(self, expr, other, urecs):
-
         if not isinstance(expr, type(other)):
-            return []
-
-        if expr.function != other.function:
             return []
 
         expr_parameters = expr.parameters
         other_parameters = other.parameters
 
+        # Unify parameters
         if len(expr_parameters) != len(other_parameters):
             return []
 
@@ -269,13 +267,18 @@ class _UnidirectionalUnifierWithFunctionCalls(UnidirectionalUnifier):
         for expr_param, other_param in zip(expr_parameters, other_parameters):
             urecs = self.rec(expr_param, other_param, urecs)
 
+        # Unify function symbols
+        urecs = self.rec(expr.function, other.function, urecs)
+
         return urecs
 
     map_call_with_kwargs = map_call
 
 
-def match(template, expression, free_variable_names):
-    """Attempt to match the free variables found in `template` to terms in
+def match(template, expression, free_variable_names=None,
+          bound_variable_names=None):
+    """
+    Attempt to match the free variables found in `template` to terms in
     `expression`, modulo associativity and commutativity.
 
     This implements a one-way unification algorithm, matching free
@@ -283,10 +286,25 @@ def match(template, expression, free_variable_names):
 
     Return a map from variable names in `free_variable_names` to
     expressions.
-
     """
+    if isinstance(template, str):
+        template = parse(template)
+    if isinstance(expression, str):
+        expression = parse(expression)
+    if bound_variable_names is None:
+        bound_variable_names = set()
+    if free_variable_names is None:
+        from dagrt.utils import get_variables
+        free_variable_names = get_variables(
+            template, include_function_symbols=True)
+        free_variable_names -= set(bound_variable_names)
     unifier = _UnidirectionalUnifierWithFunctionCalls(free_variable_names)
     records = unifier(template, expression)
+    if len(records) > 1:
+        from warnings import warn
+        warn("Matching\n\"{expr}\"\nto\n\"{template}\"\n"
+             "is ambiguous - using first match".format(
+                 expr=expression, template=template))
     if not records:
         raise ValueError("Cannot unify expressions.")
     return dict((key.name, val) for key, val in records[0].equations)

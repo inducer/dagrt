@@ -43,22 +43,46 @@ def test_collapse_constants():
     collapse_constants(expr, [y], assign_func, new_var_func)
 
 
-def test_match():
+def declare(*varnames):
     from pymbolic import var
-    f = var("f")
-    y = var("y")
-    h = var("h")
-    t = var("t")
-    hh = var("hh")
-    tt = var("tt")
+    return [var(name) for name in varnames]
+
+
+def test_match():
+    f, y, h, t, yy, hh, tt = declare("f", "y", "h", "t", "yy", "hh", "tt")
     lhs = y - h * f(t, y)
-    rhs = - hh * f(tt, y) + y
+    rhs = - hh * f(tt, yy) + yy
 
     from dagrt.expression import match
-    subst = match(lhs, rhs, ["t", "h"])
-    assert len(subst) == 2
+    subst = match(lhs, rhs, ["t", "h", "y"])
+    assert len(subst) == 3
     assert subst["h"] == hh
     assert subst["t"] == tt
+    assert subst["y"] == yy
+
+
+def test_match_strings():
+    from dagrt.expression import match
+    from pymbolic import var
+    subst = match("a+b*a", "a+b*a")
+    assert len(subst) == 2
+    assert subst["a"] == var("a")
+    assert subst["b"] == var("b")
+
+
+def test_match_functions():
+    lhsvars = ["f", "u", "s", "c", "t"]
+    f, u, s, c, t = declare(*lhsvars)
+    ff, uu, ss, cc, tt = declare("ff", "uu", "ss", "cc", "tt")
+    rhsvars = [ff, uu, ss, cc, tt]
+    lhs = u - f(t=t, y=s+c*u)
+    rhs = uu - ff(t=tt, y=ss+cc*uu)
+
+    from dagrt.expression import match
+    subst = match(lhs, rhs, lhsvars)
+    assert len(subst) == len(lhsvars)
+    for var, matchval in zip(lhsvars, rhsvars):
+        assert subst[var] == matchval
 
 
 def test_get_variables():
