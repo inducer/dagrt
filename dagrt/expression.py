@@ -324,20 +324,6 @@ class _ExtendedParser(Parser):
     lex_table = _hack_lex_table(Parser.lex_table)
 
 
-class _RenameVariableMapper(IdentityMapper):
-
-    def __init__(self, rename_func):
-        self.rename_func = rename_func
-
-    def map_variable(self, expr):
-        renamed = self.rename_func(expr.name)
-        if renamed is None:
-            return expr
-        else:
-            from pymbolic import var
-            return var(renamed)
-
-
 def parse(expr):
     """Return a pymbolic expression constructed from the string. Values
     between backticks ("`") are parsed as variable names.
