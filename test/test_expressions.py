@@ -85,6 +85,17 @@ def test_match_functions():
         assert subst[var] == matchval
 
 
+def test_match_modulo_identity():
+    a, b, c = declare("a", "b", "c")
+    from dagrt.expression import match
+
+    subst = match(c*a + b*a, c*a + a, ["b"])
+    assert subst["b"] == 1
+
+    subst = match((c+a) * (b+a), (c+a) * a, ["b"])
+    assert subst["b"] == 0
+
+
 def test_get_variables():
     from pymbolic import var
     f = var('f')
