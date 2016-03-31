@@ -282,10 +282,13 @@ class _ExtendedUnifier(UnidirectionalUnifier):
         """
         :arg mapper: mapper to call once done
         :arg id_element: identity element to add
+
+        Currently this is restricted to the case that "expr" is a binary
+        expression and "other" is a single value.
         """
         # Only apply this when other is a single element and expr is multiple
         # elements.
-        if len(expr.children) == 1 or hasattr(other, "children"):
+        if len(expr.children) != 2 or hasattr(other, "children"):
             return mapper(expr, other, urecs)
 
         variables = set(
