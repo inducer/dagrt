@@ -232,22 +232,24 @@ def collapse_constants(expression, free_variables, assign_func, new_var_func):
     return new_expression
 
 
-class _UnidirectionalUnifierWithFunctionCalls(UnidirectionalUnifier):
-    """This class extends the unification mapper to handle terms with
-    function calls. The function symbols are assumed to be constants.
+class _ExtendedUnifier(UnidirectionalUnifier):
+    """
+    This class extends the unification mapper as follows:
+       - Handles terms with function calls with keyword arguments
+       - Supports unifying function symbols
+       - Limited support for unification modulo identity in
+         binary addition or multiplication
+         (i.e. allows (x*c, c) to be unified with x=1)
     """
 
     def map_call(self, expr, other, urecs):
-
         if not isinstance(expr, type(other)):
-            return []
-
-        if expr.function != other.function:
             return []
 
         expr_parameters = expr.parameters
         other_parameters = other.parameters
 
+        # Unify parameters
         if len(expr_parameters) != len(other_parameters):
             return []
 
@@ -269,13 +271,56 @@ class _UnidirectionalUnifierWithFunctionCalls(UnidirectionalUnifier):
         for expr_param, other_param in zip(expr_parameters, other_parameters):
             urecs = self.rec(expr_param, other_param, urecs)
 
+        # Unify function symbols
+        urecs = self.rec(expr.function, other.function, urecs)
+
         return urecs
 
     map_call_with_kwargs = map_call
 
+    def map_modulo_identity(self, expr, other, urecs, mapper, id_element):
+        """
+        :arg mapper: mapper to call once done
+        :arg id_element: identity element to add
 
-def match(template, expression, free_variable_names):
-    """Attempt to match the free variables found in `template` to terms in
+        Currently this is restricted to the case that "expr" is a binary
+        expression and "other" is a single value.
+        """
+        # Only apply this when other is a single element and expr is multiple
+        # elements.
+        if len(expr.children) != 2 or hasattr(other, "children"):
+            return mapper(expr, other, urecs)
+
+        variables = set(
+            term for term in expr.children
+            if isinstance(term, Variable) and
+            term.name in self.lhs_mapping_candidates)
+
+        from pymbolic.mapper.unifier import unify_many
+
+        # Try matching each free variable in the expression with the identity
+        # element.
+        new_urecs = []
+        new_other = type(expr)((id_element, other))
+        for variable in variables:
+            urec = self.unification_record_from_equation(variable, id_element)
+            new_urecs.extend(mapper(expr, new_other, unify_many(urecs, urec)))
+
+        return new_urecs
+
+    def map_sum(self, expr, other, urecs):
+        mapper = super(_ExtendedUnifier, self).map_sum
+        return self.map_modulo_identity(expr, other, urecs, mapper, 0)
+
+    def map_product(self, expr, other, urecs):
+        mapper = super(_ExtendedUnifier, self).map_product
+        return self.map_modulo_identity(expr, other, urecs, mapper, 1)
+
+
+def match(template, expression, free_variable_names=None,
+          bound_variable_names=None):
+    """
+    Attempt to match the free variables found in `template` to terms in
     `expression`, modulo associativity and commutativity.
 
     This implements a one-way unification algorithm, matching free
@@ -283,10 +328,25 @@ def match(template, expression, free_variable_names):
 
     Return a map from variable names in `free_variable_names` to
     expressions.
-
     """
-    unifier = _UnidirectionalUnifierWithFunctionCalls(free_variable_names)
+    if isinstance(template, str):
+        template = parse(template)
+    if isinstance(expression, str):
+        expression = parse(expression)
+    if bound_variable_names is None:
+        bound_variable_names = set()
+    if free_variable_names is None:
+        from dagrt.utils import get_variables
+        free_variable_names = get_variables(
+            template, include_function_symbols=True)
+        free_variable_names -= set(bound_variable_names)
+    unifier = _ExtendedUnifier(free_variable_names)
     records = unifier(template, expression)
+    if len(records) > 1:
+        from warnings import warn
+        warn("Matching\n\"{expr}\"\nto\n\"{template}\"\n"
+             "is ambiguous - using first match".format(
+                 expr=expression, template=template))
     if not records:
         raise ValueError("Cannot unify expressions.")
     return dict((key.name, val) for key, val in records[0].equations)
@@ -322,20 +382,6 @@ class _ExtendedParser(Parser):
             return super(_ExtendedParser, self).parse_terminal(pstate)
 
     lex_table = _hack_lex_table(Parser.lex_table)
-
-
-class _RenameVariableMapper(IdentityMapper):
-
-    def __init__(self, rename_func):
-        self.rename_func = rename_func
-
-    def map_variable(self, expr):
-        renamed = self.rename_func(expr.name)
-        if renamed is None:
-            return expr
-        else:
-            from pymbolic import var
-            return var(renamed)
 
 
 def parse(expr):
