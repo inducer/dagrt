@@ -684,6 +684,46 @@ class InitializationEmitter(TypeVisitor):
 # {{{ code generator
 
 class CodeGenerator(StructuredCodeGenerator):
+    """
+    Generates a Fortran module of name *module_name*, which defines a type
+    *dagrt_state_type* to hold the current state of the time integrator
+    along with several functions::
+
+        initialize(EXTRA_ARGUMENTS, dagrt_state, ...)
+        run(EXTRA_ARGUMENTS, dagrt_state)
+        shutdown(EXTRA_ARGUMENTS, dagrt_state)
+        print_profile(dagrt_state)
+
+    *dagrt_state* is of type *dagrt_state_type`, and *EXTRA_ARGUMENTS* above matches
+    *extra_arguments* as passed to the constructor.
+
+    The ``...`` arguments to ``initialize`` are optional and must be passed by
+    keyword.  The following keywords arguments are available:
+
+    * *dagrt_dt*: The initial time step size
+    * *dagrt_t*: The initial time
+    * *state_STATE*: The initial value for the leap variable ``<state>STATE``
+
+    .. rubric:: Profiling information
+
+    The following attributes are available and allowed for read access in
+    *dagrt_state_type* while outside of *run*:
+
+    * *dagrt_state_STATE_count*
+    * *dagrt_state_STATE_failures*
+    * *dagrt_state_STATE_time*
+
+    * *dagrt_func_FUNC_count*
+    * *dagrt_func_FUNC_time*
+
+    In all of the above, upper case denotes a "metavariable"--e.g. *STATE* is
+    the name of a state, or *FUNC* is  the name of a function. The name of a
+    function will typically be ``<func>something``, for which *FUNC* will be
+    ``func_something``.  As a result, the profile field counting the number of
+    invocations of the function ``<func>something`` will be named
+    *dagrt_func_func_something*.
+    """
+
     language = "fortran"
 
     # {{{ constructor
