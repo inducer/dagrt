@@ -503,7 +503,8 @@ class YieldState(Instruction):
     def map_expressions(self, mapper, include_lhs=True):
         return (super(YieldState, self)
                 .map_expressions(mapper, include_lhs=include_lhs)
-                .copy(expression=mapper(self.expression)))
+                .copy(expression=mapper(self.expression),
+                      time=mapper(self.time)))
 
     def __str__(self):
         return ("Ret {expr} at {time_id} with t={time} as {component_id}{cond}"
