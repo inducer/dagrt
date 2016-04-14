@@ -199,7 +199,18 @@ def create_ast_from_state(code, state_name):
 
 def simplify_ast(ast):
     """Return an optimized copy of the AST `ast`."""
-    return ASTPostSimplifyMapper()(ASTSimplifyMapper()(ASTPreSimplifyMapper()(ast)))
+    from six.moves import reduce
+
+    def apply_pass(ast, pass_):
+        return pass_(ast)
+
+    passes = (
+        ASTPreSimplifyMapper(),
+        ASTSimplifyMapper(),
+        ASTPostSimplifyMapper(),
+    )
+
+    return reduce(apply_pass, passes, ast)
 
 
 class ASTIdentityMapper(IdentityMapper):
