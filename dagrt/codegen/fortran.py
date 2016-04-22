@@ -829,6 +829,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emitters = [self.module_emitter]
 
         self.current_function = None
+        self.used = False
 
     # }}}
 
@@ -886,6 +887,11 @@ class CodeGenerator(StructuredCodeGenerator):
     # {{{ main entrypoint
 
     def __call__(self, dag):
+        if self.used:
+            raise RuntimeError("fortran code generator may not be "
+                    "used more than once")
+        self.used = True
+
         from .analysis import verify_code
         verify_code(dag)
 
