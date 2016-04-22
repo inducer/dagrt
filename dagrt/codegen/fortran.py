@@ -216,14 +216,11 @@ class CallCode(object):
 
         self.extra_args = extra_args
 
-    def __call__(self, results, function, arg_strings_dict, arg_kinds_dict,
+    def __call__(self, results, function, args, arg_kinds,
             code_generator):
         from dagrt.codegen.utils import (
                 remove_common_indentation,
                 remove_redundant_blank_lines)
-
-        args = function.resolve_args(arg_strings_dict)
-        arg_kinds = function.resolve_args(arg_kinds_dict)
 
         def add_declaration(decl):
             code_generator.declaration_emitter(decl)
@@ -821,6 +818,8 @@ class CodeGenerator(StructuredCodeGenerator):
         self.expr_mapper = FortranExpressionMapper(
                 self.name_manager)
 
+        self.function_and_arg_kinds_to_fortran_name = {}
+
         # FIXME: Should make extra arguments known to
         # name manager
 
@@ -1089,8 +1088,11 @@ class CodeGenerator(StructuredCodeGenerator):
         component_ids = collect_ode_component_names_from_dag(dag)
 
         for i, comp_id in enumerate(sorted(component_ids)):
+            comp_sym_name = self.component_name_to_component_sym(comp_id)
+            self.emit("integer {comp_sym_name}".format(
+                comp_sym_name=comp_sym_name))
             self.emit("parameter ({comp_sym_name} = {i})".format(
-                comp_sym_name=self.component_name_to_component_sym(comp_id),
+                comp_sym_name=comp_sym_name,
                 i=i))
 
         self.emit('')
@@ -1243,6 +1245,10 @@ class CodeGenerator(StructuredCodeGenerator):
         # }}}
 
     def finish_emit(self, dag):
+        for (function_id, arg_kinds), fortran_name in six.iteritems(
+                self.function_and_arg_kinds_to_fortran_name):
+            self.emit_dagrt_function(fortran_name, function_id, arg_kinds)
+
         self.emit_initialize(dag)
         self.emit_shutdown()
         self.emit_run_step(dag)
@@ -1741,6 +1747,89 @@ class CodeGenerator(StructuredCodeGenerator):
 
     # }}}
 
+    # {{{ emit_dagrt_function
+
+    def emit_dagrt_function(self, fortran_name, function_id, arg_kinds):
+        function = self.function_registry[function_id]
+
+        arg_kinds_dict = dict(zip(function.arg_names, arg_kinds))
+
+        result_kinds = function.get_result_kinds(arg_kinds_dict, check=True)
+
+        result_names = [self.name_manager.make_unique_fortran_name("res%d" % (i + 1))
+                for i in range(len(result_kinds))]
+        args = (
+            list(self.extra_arguments)
+            + ["dagrt_state"]
+            + list(function.arg_names)
+            + result_names)
+
+        self.emit_def_begin(fortran_name, args)
+
+        self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
+        self.declaration_emitter('')
+
+        for name, arg_kind in zip(function.arg_names, arg_kinds):
+            if arg_kind is None:
+                # We may encounter None as an arg_kind, for arguments of
+                # state update notification.
+                self.declaration_emitter("integer "+name)
+            else:
+                self.emit_variable_decl(name, arg_kind, is_argument=True)
+
+        for name, res_kind in zip(result_names, result_kinds):
+            self.emit_variable_decl(name, res_kind, is_argument=True)
+
+        self.emit("")
+
+        # {{{ instrumentation
+
+        if self.emit_instrumentation:
+            self.emit(
+                    "dagrt_state%dagrt_func_{func}_count "
+                    "= dagrt_state%dagrt_func_{func}_count + 1"
+                    .format(func=make_identifier_from_name(function_id)))
+
+            timer_start_var = self.name_manager.make_unique_fortran_name(
+                "timer_start")
+            self.declaration_emitter("real*8 " + timer_start_var)
+
+            self.emit(
+                    "{timer_start_var} = {timing_function}()"
+                    .format(
+                        timer_start_var=timer_start_var,
+                        timing_function=self.timing_function))
+
+        # }}}
+
+        func_codegen = function.get_codegen(self.language)
+
+        func_codegen(
+                results=result_names,
+                function=function,
+                args=function.arg_names,
+                arg_kinds=arg_kinds,
+                code_generator=self)
+
+        # {{{ instrumentation
+
+        if self.emit_instrumentation:
+            self.emit(
+                    "dagrt_state%dagrt_func_{func}_time "
+                    "= dagrt_state%dagrt_func_{func}_time "
+                    "+ ({timing_function}() - {timer_start_var})"
+                    .format(
+                        func=make_identifier_from_name(function_id),
+                        timing_function=self.timing_function,
+                        timer_start_var=timer_start_var,
+                        ))
+
+        # }}}
+
+        self.emit_def_end(fortran_name)
+
+        self.current_function = None
+
     # {{{ called by superclass
 
     def emit_def_begin(self, function_name, argument_names, state_id=None,
@@ -1854,6 +1943,8 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit("! }}}")
         self.emit("")
 
+    # {{{ emit_inst_AssignExpression
+
     def emit_inst_AssignExpression(self, inst):
         start_em = self.emitter
 
@@ -1879,34 +1970,15 @@ class CodeGenerator(StructuredCodeGenerator):
 
         assert start_em is self.emitter
 
+    # }}}
+
+    # {{{ emit_inst_AssignFunctionCall
+
     def emit_inst_AssignFunctionCall(self, inst):
         self.emit_trace("func call {results} = {expr}..."
                 .format(
                     results=", ".join(inst.assignees),
                     expr=str(inst.as_expression())[:50]))
-
-        # {{{ instrumentation
-
-        if self.emit_instrumentation:
-            self.emit(
-                    "dagrt_state%dagrt_func_{func}_count "
-                    "= dagrt_state%dagrt_func_{func}_count + 1"
-                    .format(func=make_identifier_from_name(inst.function_id)))
-
-            timer_start_var = self.name_manager.make_unique_fortran_name(
-                "timer_start")
-            self.declaration_emitter("real*8 " + timer_start_var)
-
-            self.emit(
-                    "{timer_start_var} = {timing_function}()"
-                    .format(
-                        timer_start_var=timer_start_var,
-                        timing_function=self.timing_function))
-
-        # }}}
-
-        function = self.function_registry[inst.function_id]
-        codegen = function.get_codegen(self.language)
 
         arg_strs_dict = {}
         arg_kinds_dict = {}
@@ -1947,30 +2019,33 @@ class CodeGenerator(StructuredCodeGenerator):
             assert var(assignee_sym) not in DependencyMapper()(
                     inst.as_expression())
 
-        assignee_fortran_names = tuple(
-                self.name_manager[assignee_sym] for a in inst.assignees)
+        assignee_fortran_names = [
+                self.name_manager[assignee_sym] for a in inst.assignees]
 
-        codegen(
-                results=assignee_fortran_names,
-                function=function,
-                arg_strings_dict=arg_strs_dict,
-                arg_kinds_dict=arg_kinds_dict,
-                code_generator=self)
+        function = self.function_registry[inst.function_id]
 
-        # {{{ instrumentation
+        arg_kinds = function.resolve_args(arg_kinds_dict)
 
-        if self.emit_instrumentation:
-            self.emit(
-                    "dagrt_state%dagrt_func_{func}_time "
-                    "= dagrt_state%dagrt_func_{func}_time "
-                    "+ ({timing_function}() - {timer_start_var})"
-                    .format(
-                        func=make_identifier_from_name(inst.function_id),
-                        timing_function=self.timing_function,
-                        timer_start_var=timer_start_var,
-                        ))
+        key = (inst.function_id, arg_kinds)
 
-        # }}}
+        try:
+            fortran_func_name = self.function_and_arg_kinds_to_fortran_name[key]
+        except KeyError:
+            fortran_func_name = self.name_manager.make_unique_fortran_name(
+                    inst.function_id)
+            self.function_and_arg_kinds_to_fortran_name[key] = fortran_func_name
+
+        self.emit("call {fortran_func_name}({args})"
+                .format(
+                    fortran_func_name=fortran_func_name,
+                    args=", ".join(
+                        list(self.extra_arguments)
+                        + ["dagrt_state"]
+                        + list(function.resolve_args(arg_strs_dict))
+                        + assignee_fortran_names
+                        )))
+
+    # }}}
 
     def emit_return(self):
         self.emit("goto 999")
@@ -2052,12 +2127,12 @@ class Norm2Computer(TypeVisitorWithResult):
                     expr=fortran_expr))
 
 
-def codegen_builtin_norm_2(results, function, arg_strings_dict, arg_kinds_dict,
+def codegen_builtin_norm_2(results, function, args, arg_kinds,
         code_generator):
     result, = results
 
     from dagrt.codegen.data import Scalar, UserType, Array
-    x_kind = arg_kinds_dict[0]
+    x_kind = arg_kinds[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
             ftype = BuiltinType("real*8")
@@ -2068,7 +2143,7 @@ def codegen_builtin_norm_2(results, function, arg_strings_dict, arg_kinds_dict,
 
     elif isinstance(x_kind, Array):
         code_generator.emit("{result} = norm2({arg})".format(
-            result=result, arg=arg_strings_dict[0]))
+            result=result, arg=args[0]))
         return
 
     else:
@@ -2077,7 +2152,7 @@ def codegen_builtin_norm_2(results, function, arg_strings_dict, arg_kinds_dict,
     code_generator.emit("{result} = 0".format(result=result))
     code_generator.emit("")
 
-    Norm2Computer(code_generator, result)(ftype, arg_strings_dict[0], {})
+    Norm2Computer(code_generator, result)(ftype, args[0], {})
 
     code_generator.emit("")
     code_generator.emit("{result} = sqrt({result})".format(result=result))
@@ -2096,12 +2171,12 @@ class LenComputer(TypeVisitorWithResult):
                     expr=fortran_expr))
 
 
-def codegen_builtin_len(results, function, arg_strings_dict, arg_kinds_dict,
+def codegen_builtin_len(results, function, args, arg_kinds,
         code_generator):
     result, = results
 
     from dagrt.codegen.data import Scalar, Array, UserType
-    x_kind = arg_kinds_dict[0]
+    x_kind = arg_kinds[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
             ftype = BuiltinType("real*8")
@@ -2112,7 +2187,7 @@ def codegen_builtin_len(results, function, arg_strings_dict, arg_kinds_dict,
     elif isinstance(x_kind, Array):
         code_generator.emit("{result} = size({arg})".format(
             result=result,
-            arg=arg_strings_dict[0]))
+            arg=args[0]))
         return
     else:
         raise TypeError("unsupported kind for norm_2 argument: %s" % x_kind)
@@ -2120,7 +2195,7 @@ def codegen_builtin_len(results, function, arg_strings_dict, arg_kinds_dict,
     code_generator.emit("{result} = 0".format(result=result))
     code_generator.emit("")
 
-    LenComputer(code_generator, result)(ftype, arg_strings_dict[0], {})
+    LenComputer(code_generator, result)(ftype, args[0], {})
     code_generator.emit("")
 
 
@@ -2133,12 +2208,12 @@ class IsNaNComputer(TypeVisitorWithResult):
                     expr=fortran_expr))
 
 
-def codegen_builtin_isnan(results, function, arg_strings_dict, arg_kinds_dict,
+def codegen_builtin_isnan(results, function, args, arg_kinds,
         code_generator):
     result, = results
 
     from dagrt.codegen.data import Scalar, UserType
-    x_kind = arg_kinds_dict[0]
+    x_kind = arg_kinds[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
             ftype = BuiltinType("real*8")
@@ -2152,7 +2227,7 @@ def codegen_builtin_isnan(results, function, arg_strings_dict, arg_kinds_dict,
     code_generator.emit("{result} = .false.".format(result=result))
     code_generator.emit("")
 
-    IsNaNComputer(code_generator, result)(ftype, arg_strings_dict[0], {})
+    IsNaNComputer(code_generator, result)(ftype, args[0], {})
     code_generator.emit("")
 
 
