@@ -82,7 +82,7 @@ class FortranNameManager(object):
         return self.function_map.get_or_make_name_for_key(var)
 
     def make_unique_fortran_name(self, prefix):
-        return self.local_map.get_mapped_identifier_without_key("lpfor_"+prefix)
+        return self.local_map.get_mapped_identifier_without_key("drtfor_"+prefix)
 
     def is_known_fortran_name(self, name):
         return self.name_generator.is_name_conflicting(name)
