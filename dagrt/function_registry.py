@@ -1,9 +1,5 @@
 from __future__ import division, with_statement
 
-from pytools import RecordWithoutPickling
-from dagrt.codegen.data import (
-        UserType, Integer, Boolean, Scalar, Array, UnableToInferKind)
-
 __copyright__ = """
 Copyright (C) 2013 Andreas Kloeckner
 Copyright (C) 2014 Matt Wala
@@ -29,6 +25,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+
+from pytools import RecordWithoutPickling
+from dagrt.codegen.data import (
+        UserType, Integer, Boolean, Scalar, Array, UnableToInferKind)
 
 NoneType = type(None)
 
@@ -194,8 +194,8 @@ class _NormBase(Function):
     def get_result_kinds(self, arg_kinds, check):
         x_kind, = self.resolve_args(arg_kinds)
 
-        if check and not isinstance(x_kind, (NoneType, UserType)):
-            raise TypeError("argument 'x' of 'norm' is not an ODE component")
+        if check and not isinstance(x_kind, (NoneType, Array, UserType)):
+            raise TypeError("argument 'x' of 'norm' is not a user type")
 
         return (Scalar(is_real_valued=True),)
 
@@ -228,10 +228,10 @@ class _DotProduct(Function):
     def get_result_kinds(self, arg_kinds, check):
         x_kind, y_kind = self.resolve_args(arg_kinds)
 
-        if check and not isinstance(x_kind, (NoneType, UserType)):
-            raise TypeError("argument 'x' of 'dot_product' is not an ODE component")
-        if check and not isinstance(y_kind, (NoneType, UserType)):
-            raise TypeError("argument 'y' of 'dot_product' is not an ODE component")
+        if check and not isinstance(x_kind, (NoneType, Array, UserType)):
+            raise TypeError("argument 'x' of 'dot_product' is not a user type")
+        if check and not isinstance(y_kind, (NoneType, Array, UserType)):
+            raise TypeError("argument 'y' of 'dot_product' is not a user type")
 
         return (Scalar(is_real_valued=False),)
 
@@ -247,8 +247,8 @@ class _Len(Function):
     def get_result_kinds(self, arg_kinds, check):
         x_kind, = self.resolve_args(arg_kinds)
 
-        if check and not isinstance(x_kind, (NoneType, UserType)):
-            raise TypeError("argument 'x' of 'len' is not an ODE component")
+        if check and not isinstance(x_kind, (NoneType, Array, UserType)):
+            raise TypeError("argument 'x' of 'len' is not a user type")
 
         return (Scalar(is_real_valued=True),)
 
@@ -265,7 +265,7 @@ class _IsNaN(Function):
         x_kind, = self.resolve_args(arg_kinds)
 
         if check and not isinstance(x_kind, (NoneType, UserType)):
-            raise TypeError("argument 'x' of 'len' is not an ODE component")
+            raise TypeError("argument 'x' of 'len' is not a user type")
 
         return (Boolean(),)
 
@@ -397,7 +397,7 @@ class _Print(Function):
             raise TypeError(
                     "argument of 'print' is not an integer, array, or scalar")
 
-        return (Integer(),)
+        return ()
 
 
 class _PythonBuiltinFunctionCodeGenerator(object):
@@ -497,15 +497,15 @@ class _ODERightHandSide(Function):
             raise TypeError("argument 't' of '%s' is not a scalar"
                     % self.identifier)
 
-        for arg_name, arg_kind_passed, input_component_id in zip(
+        for arg_name, arg_kind_passed, input_usertype_id in zip(
                 self.arg_names[1:], arg_kinds[1:], self.input_type_ids):
             if arg_kind_passed is None and not check:
                 pass
             elif check and not (isinstance(arg_kind_passed, UserType)
-                    and arg_kind_passed.component_id == input_component_id):
+                    and arg_kind_passed.identifier == input_usertype_id):
                 raise TypeError("argument '%s' of '%s' is not a user type "
                         "with identifier '%s'"
-                        % (arg_name, self.identifier, input_component_id))
+                        % (arg_name, self.identifier, input_usertype_id))
 
         return (UserType(self.output_type_id),)
 
