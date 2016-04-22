@@ -487,10 +487,11 @@ def _replace_indices(index_expr_map, s):
 
 
 class _ArrayLoopManager(object):
-    def __init__(self, array_type):
+    def __init__(self, array_type, code_generator):
         self.array_type = array_type
+        self.code_generator = code_generator
 
-    def enter(self, code_generator, index_expr_map):
+    def enter(self, code_generator, index_expr_map, allow_parallel_do):
         atype = self.array_type
 
         index_expr_map = index_expr_map.copy()
@@ -500,9 +501,13 @@ class _ArrayLoopManager(object):
             for iname in atype.index_vars]
 
         self.emitters = []
-        for i, (dim, index_name) in enumerate(
+        for iloop, (dim, index_name) in enumerate(
                 reversed(list(zip(atype.dimension, f_index_names)))):
             code_generator.declaration_emitter('integer %s' % index_name)
+
+            pdp = None
+            if iloop + 1 == len(atype.dimension):
+                pdp = self.code_generator.parallel_do_preamble
 
             start, stop = atype.parse_dimension(dim)
 
@@ -511,7 +516,8 @@ class _ArrayLoopManager(object):
                     "%s, %s" % (
                         _replace_indices(index_expr_map, start),
                         _replace_indices(index_expr_map, stop)),
-                    code_generator)
+                    code_generator,
+                    parallel_do_preamble=pdp)
             self.emitters.append(em)
             em.__enter__()
 
@@ -555,9 +561,10 @@ class TypeVisitor(object):
                 and not fortran_type.element_type.is_allocatable()):
             return
 
-        alm = _ArrayLoopManager(fortran_type)
+        alm = _ArrayLoopManager(fortran_type, self.code_generator)
         index_expr_map, _, f_index_names = \
-                alm.enter(self.code_generator, index_expr_map)
+                alm.enter(self.code_generator, index_expr_map,
+                        allow_parallel_do=False)
 
         self.rec(fortran_type.element_type,
                 "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
@@ -598,9 +605,11 @@ class AssignmentEmitter(TypeVisitor):
 
     def visit_ArrayType(self, fortran_type, fortran_expr, index_expr_map,
             rhs_expr):
-        alm = _ArrayLoopManager(fortran_type)
+        alm = _ArrayLoopManager(fortran_type, self.code_generator)
         index_expr_map, array_subscript_appender, f_index_names = \
-                alm.enter(self.code_generator, index_expr_map)
+                alm.enter(self.code_generator, index_expr_map,
+                        allow_parallel_do=isinstance(
+                            fortran_type.element_type, BuiltinType))
 
         self.rec(fortran_type.element_type,
                 "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
