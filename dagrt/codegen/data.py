@@ -64,6 +64,9 @@ class SymbolKind(RecordWithoutPickling):
                 type(self).__name__,
                 ", ".join(repr(arg) for arg in self.__getinitargs__()))
 
+    def __hash__(self):
+        return hash((type(self), self.__getinitargs__()))
+
 
 class Boolean(SymbolKind):
     pass
