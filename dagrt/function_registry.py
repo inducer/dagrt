@@ -247,7 +247,7 @@ class _Len(Function):
     def get_result_kinds(self, arg_kinds, check):
         x_kind, = self.resolve_args(arg_kinds)
 
-        if check and not isinstance(x_kind, (NoneType, Array, UserType)):
+        if check and not isinstance(x_kind, (NoneType, Scalar, Array, UserType)):
             raise TypeError("argument 'x' of 'len' is not a user type")
 
         return (Scalar(is_real_valued=True),)
@@ -264,8 +264,8 @@ class _IsNaN(Function):
     def get_result_kinds(self, arg_kinds, check):
         x_kind, = self.resolve_args(arg_kinds)
 
-        if check and not isinstance(x_kind, (NoneType, UserType)):
-            raise TypeError("argument 'x' of 'len' is not a user type")
+        if check and not isinstance(x_kind, (NoneType, Scalar, Array, UserType)):
+            raise TypeError("argument 'x' of 'isnan' is not a user type")
 
         return (Boolean(),)
 
