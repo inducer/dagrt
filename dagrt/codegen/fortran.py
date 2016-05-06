@@ -506,7 +506,7 @@ class _ArrayLoopManager(object):
             code_generator.declaration_emitter('integer %s' % index_name)
 
             pdp = None
-            if iloop + 1 == len(atype.dimension):
+            if allow_parallel_do and iloop + 1 == len(atype.dimension):
                 pdp = self.code_generator.parallel_do_preamble
 
             start, stop = atype.parse_dimension(dim)
