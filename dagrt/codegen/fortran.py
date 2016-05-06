@@ -203,7 +203,12 @@ class FortranTypeEmitter(FortranSubblockEmitter):
 # }}}
 
 
+# {{{ code generation for function calls
+
 class CallCode(object):
+    """Encapsulation for a Fortran code template embodying a dagrt-level function call.
+    """
+
     def __init__(self, template, extra_args=None):
         """
         :arg extra_args: a dictionary of names that should be made available
@@ -267,6 +272,8 @@ class CallCode(object):
         for l in lines:
             code_generator.emit(l)
 
+# }}}
+
 
 # {{{ expression modifiers
 
@@ -310,12 +317,12 @@ class ArraySubscriptAppender(UserTypeReferenceTransformer):
         self.subscript = subscript
 
     def transform(self, expr):
-        return expr.index(self.subscript)
+        return expr[self.subscript]
 
 # }}}
 
 
-# {{{ types
+# {{{ fortran 'vector-ish' types
 
 class TypeBase(object):
     """
@@ -491,45 +498,46 @@ class _ArrayLoopManager(object):
         self.array_type = array_type
         self.code_generator = code_generator
 
-    def enter(self, code_generator, index_expr_map, allow_parallel_do):
+        self.f_index_names = [
+            code_generator.name_manager.make_unique_fortran_name(iname)
+            for iname in array_type.index_vars]
+
+    def enter(self, index_expr_map, allow_parallel_do):
         atype = self.array_type
 
-        index_expr_map = index_expr_map.copy()
-
-        f_index_names = [
-            code_generator.name_manager.make_unique_fortran_name(iname)
-            for iname in atype.index_vars]
+        cg = self.code_generator
 
         self.emitters = []
         for iloop, (dim, index_name) in enumerate(
-                reversed(list(zip(atype.dimension, f_index_names)))):
-            code_generator.declaration_emitter('integer %s' % index_name)
+                reversed(list(zip(atype.dimension, self.f_index_names)))):
+            cg.declaration_emitter('integer %s' % index_name)
 
             pdp = None
             if allow_parallel_do and iloop + 1 == len(atype.dimension):
-                pdp = self.code_generator.parallel_do_preamble
+                pdp = cg.parallel_do_preamble
 
             start, stop = atype.parse_dimension(dim)
 
             em = FortranDoEmitter(
-                    code_generator.emitter, index_name,
+                    cg.emitter, index_name,
                     "%s, %s" % (
                         _replace_indices(index_expr_map, start),
                         _replace_indices(index_expr_map, stop)),
-                    code_generator,
+                    cg,
                     parallel_do_preamble=pdp)
             self.emitters.append(em)
             em.__enter__()
 
-        index_expr_map.update(zip(atype.index_vars, f_index_names))
+    def update_index_expr_map(self, index_expr_map):
+        index_expr_map.update(zip(self.array_type.index_vars, self.f_index_names))
 
+    def array_subscript_appender(self):
         from pymbolic import var
 
-        asa = ArraySubscriptAppender(
-                code_generator.sym_kind_table, code_generator.current_function,
-                tuple(var("<target>"+v) for v in f_index_names))
-
-        return index_expr_map, asa, f_index_names
+        return ArraySubscriptAppender(
+                self.code_generator.sym_kind_table,
+                self.code_generator.current_function,
+                tuple(var("<target>"+v) for v in self.f_index_names))
 
     def leave(self):
         while self.emitters:
@@ -587,12 +595,13 @@ class CodeGeneratingTypeVisitor(TypeVisitor):
             return
 
         alm = _ArrayLoopManager(fortran_type, self.code_generator)
-        index_expr_map, _, f_index_names = \
-                alm.enter(self.code_generator, index_expr_map,
-                        allow_parallel_do=False)
+        alm.enter(index_expr_map, allow_parallel_do=False)
+
+        index_expr_map = index_expr_map.copy()
+        alm.update_index_expr_map(index_expr_map)
 
         self.rec(fortran_type.element_type,
-                "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
+                "%s(%s)" % (fortran_expr, ", ".join(alm.f_index_names)),
                 index_expr_map, *args)
 
         alm.leave()
@@ -633,6 +642,9 @@ class AssignmentEmitter(CodeGeneratingTypeVisitor):
         el_is_primitive = isinstance(fortran_type.element_type, BuiltinType)
 
         cg = self.code_generator
+
+        alm = _ArrayLoopManager(fortran_type, cg)
+
         if el_is_primitive:
             lhs_fortran_name = cg.name_manager.make_unique_fortran_name("loop_lhs")
 
@@ -647,17 +659,20 @@ class AssignmentEmitter(CodeGeneratingTypeVisitor):
                         name=lhs_fortran_name,
                         expr=fortran_expr))
 
+            transformer = alm.array_subscript_appender()
+
         else:
             lhs_fortran_name = fortran_expr
+            transformer = alm.array_subscript_appender()
 
-        alm = _ArrayLoopManager(fortran_type, cg)
-        index_expr_map, array_subscript_appender, f_index_names = \
-                alm.enter(cg, index_expr_map,
-                        allow_parallel_do=el_is_primitive)
+        alm.enter(index_expr_map,
+                allow_parallel_do=el_is_primitive)
+        index_expr_map = index_expr_map.copy()
+        alm.update_index_expr_map(index_expr_map)
 
         self.rec(fortran_type.element_type,
-                "%s(%s)" % (lhs_fortran_name, ", ".join(f_index_names)),
-                index_expr_map, array_subscript_appender(rhs_expr))
+                "%s(%s)" % (lhs_fortran_name, ", ".join(alm.f_index_names)),
+                index_expr_map, transformer(rhs_expr))
 
         alm.leave()
 
