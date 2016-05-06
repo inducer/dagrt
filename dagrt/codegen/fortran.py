@@ -542,14 +542,39 @@ class _ArrayLoopManager(object):
 class TypeVisitor(object):
     recurse_only_if_allocatable = False
 
-    def __init__(self, code_generator):
-        self.code_generator = code_generator
-
-    def rec(self, fortran_type, fortran_expr, index_expr_map, *args):
+    def rec(self, fortran_type, *args):
         return getattr(self, "visit_"+type(fortran_type).__name__)(
-                fortran_type, fortran_expr, index_expr_map, *args)
+                fortran_type, *args)
 
     __call__ = rec
+
+
+class DeclarationGenerator(TypeVisitor):
+    def __init__(self, use_deferred_shape):
+        self.use_deferred_shape = use_deferred_shape
+
+    def visit_BuiltinType(self, fortran_type):
+        return (fortran_type.type_name,)
+
+    def visit_ArrayType(self, fortran_type):
+        if self.use_deferred_shape:
+            dim_spec = ", ".join(":" for s in fortran_type.dimension)
+        else:
+            dim_spec = ", ".join(fortran_type.dimension)
+
+        return self.rec(fortran_type.element_type) + (
+                "dimension(%s)" % dim_spec,)
+
+    def visit_PointerType(self, fortran_type):
+        return self.rec(fortran_type.pointee_type) + ("pointer",)
+
+    def visit_StructureType(self, fortran_type):
+        return ("type(%s)" % fortran_type.type_name,)
+
+
+class CodeGeneratingTypeVisitor(TypeVisitor):
+    def __init__(self, code_generator):
+        self.code_generator = code_generator
 
     def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map,
             *args):
@@ -594,7 +619,7 @@ class TypeVisitor(object):
                     *args)
 
 
-class AssignmentEmitter(TypeVisitor):
+class AssignmentEmitter(CodeGeneratingTypeVisitor):
     def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map,
             rhs_expr):
         self.code_generator.emit(
@@ -605,14 +630,33 @@ class AssignmentEmitter(TypeVisitor):
 
     def visit_ArrayType(self, fortran_type, fortran_expr, index_expr_map,
             rhs_expr):
-        alm = _ArrayLoopManager(fortran_type, self.code_generator)
+        el_is_primitive = isinstance(fortran_type.element_type, BuiltinType)
+
+        cg = self.code_generator
+        if el_is_primitive:
+            lhs_fortran_name = cg.name_manager.make_unique_fortran_name("loop_lhs")
+
+            dg = DeclarationGenerator(use_deferred_shape=True)
+            cg.declaration_emitter(
+                    ", ".join(dg(fortran_type) + ("pointer",))
+                    + " :: " + lhs_fortran_name)
+
+            cg.emit(
+                    "{name} => {expr}"
+                    .format(
+                        name=lhs_fortran_name,
+                        expr=fortran_expr))
+
+        else:
+            lhs_fortran_name = fortran_expr
+
+        alm = _ArrayLoopManager(fortran_type, cg)
         index_expr_map, array_subscript_appender, f_index_names = \
-                alm.enter(self.code_generator, index_expr_map,
-                        allow_parallel_do=isinstance(
-                            fortran_type.element_type, BuiltinType))
+                alm.enter(cg, index_expr_map,
+                        allow_parallel_do=el_is_primitive)
 
         self.rec(fortran_type.element_type,
-                "%s(%s)" % (fortran_expr, ", ".join(f_index_names)),
+                "%s(%s)" % (lhs_fortran_name, ", ".join(f_index_names)),
                 index_expr_map, array_subscript_appender(rhs_expr))
 
         alm.leave()
@@ -631,7 +675,7 @@ class AssignmentEmitter(TypeVisitor):
                     sla(rhs_expr))
 
 
-class AllocationEmitter(TypeVisitor):
+class AllocationEmitter(CodeGeneratingTypeVisitor):
     recurse_only_if_allocatable = True
 
     def visit_PointerType(self, fortran_type, fortran_expr, index_expr_map):
@@ -659,7 +703,7 @@ class AllocationEmitter(TypeVisitor):
             self.rec(pointee_type, fortran_expr, index_expr_map)
 
 
-class DeallocationEmitter(TypeVisitor):
+class DeallocationEmitter(CodeGeneratingTypeVisitor):
     recurse_only_if_allocatable = True
 
     def __init__(self, code_generator, deinitializer):
@@ -678,7 +722,7 @@ class DeallocationEmitter(TypeVisitor):
         code_generator.emit_traceable("nullify(%s)" % fortran_expr)
 
 
-class InitializationEmitter(TypeVisitor):
+class InitializationEmitter(CodeGeneratingTypeVisitor):
     recurse_only_if_allocatable = True
 
     def visit_PointerType(self, fortran_type, fortran_expr, index_expr_map):
