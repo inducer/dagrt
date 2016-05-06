@@ -1845,6 +1845,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.current_function = None
 
+    # }}}
+
     # {{{ called by superclass
 
     def emit_def_begin(self, function_name, argument_names, state_id=None,
