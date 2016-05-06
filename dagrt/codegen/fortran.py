@@ -2173,7 +2173,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
 # {{{ built-in functions
 
-class TypeVisitorWithResult(TypeVisitor):
+class TypeVisitorWithResult(CodeGeneratingTypeVisitor):
     def __init__(self, code_generator, result_expr):
         super(TypeVisitorWithResult, self).__init__(code_generator)
         self.result_expr = result_expr
