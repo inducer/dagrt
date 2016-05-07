@@ -278,15 +278,15 @@ class CallCode(object):
 # {{{ expression modifiers
 
 class UserTypeReferenceTransformer(IdentityMapper):
-    def __init__(self, sym_kind_table, current_function):
-        self.sym_kind_table = sym_kind_table
-        self.current_function = current_function
+    def __init__(self, code_generator):
+        self.code_generator = code_generator
 
     def find_sym_kind(self, expr):
         if isinstance(expr, (Subscript, Lookup)):
             return self.find_sym_kind(expr.aggregate)
         elif isinstance(expr, Variable):
-            return self.sym_kind_table.get(self.current_function, expr.name)
+            return self.code_generator.sym_kind_table.get(
+                    self.code_generator.current_function, expr.name)
         else:
             raise TypeError("unsupported object")
 
@@ -301,9 +301,8 @@ class UserTypeReferenceTransformer(IdentityMapper):
 
 
 class StructureLookupAppender(UserTypeReferenceTransformer):
-    def __init__(self, sym_kind_table, current_function, component):
-        super(StructureLookupAppender, self).__init__(
-                sym_kind_table, current_function)
+    def __init__(self, code_generator, component):
+        super(StructureLookupAppender, self).__init__(code_generator)
         self.component = component
 
     def transform(self, expr):
@@ -311,9 +310,8 @@ class StructureLookupAppender(UserTypeReferenceTransformer):
 
 
 class ArraySubscriptAppender(UserTypeReferenceTransformer):
-    def __init__(self, sym_kind_table, current_function, subscript):
-        super(ArraySubscriptAppender, self).__init__(
-                sym_kind_table, current_function)
+    def __init__(self, code_generator, subscript):
+        super(ArraySubscriptAppender, self).__init__(code_generator)
         self.subscript = subscript
 
     def transform(self, expr):
@@ -531,13 +529,9 @@ class _ArrayLoopManager(object):
     def update_index_expr_map(self, index_expr_map):
         index_expr_map.update(zip(self.array_type.index_vars, self.f_index_names))
 
-    def array_subscript_appender(self):
+    def get_loop_subscript(self):
         from pymbolic import var
-
-        return ArraySubscriptAppender(
-                self.code_generator.sym_kind_table,
-                self.code_generator.current_function,
-                tuple(var("<target>"+v) for v in self.f_index_names))
+        return tuple(var("<target>"+v) for v in self.f_index_names)
 
     def leave(self):
         while self.emitters:
@@ -628,6 +622,40 @@ class CodeGeneratingTypeVisitor(TypeVisitor):
                     *args)
 
 
+class PointerAliasCreatingArraySubscriptAppender(ArraySubscriptAppender):
+    """Used to hoist array base subexpressions out of assignments."""
+
+    def __init__(self, code_generator, subscript, fortran_type):
+        super(PointerAliasCreatingArraySubscriptAppender, self).__init__(
+                code_generator, subscript)
+        self.expr_to_alias = {}
+        self.fortran_type = fortran_type
+
+    def transform(self, expr):
+        try:
+            expr_fortran_name = self.expr_to_alias[expr]
+        except KeyError:
+            expr_fortran_name = (
+                    self.code_generator.name_manager.make_unique_fortran_name(
+                        "hoisted"))
+
+            dg = DeclarationGenerator(use_deferred_shape=True)
+            self.code_generator.declaration_emitter(
+                    ", ".join(dg(self.fortran_type) + ("pointer",))
+                    + " :: " + expr_fortran_name)
+
+            self.code_generator.emit(
+                    "{name} => {expr}"
+                    .format(
+                        name=expr_fortran_name,
+                        expr=self.code_generator.expr(expr)))
+
+            self.expr_to_alias[expr] = expr_fortran_name
+
+        from pymbolic import var
+        return var("<target>"+expr_fortran_name)[self.subscript]
+
+
 class AssignmentEmitter(CodeGeneratingTypeVisitor):
     def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map,
             rhs_expr):
@@ -646,7 +674,7 @@ class AssignmentEmitter(CodeGeneratingTypeVisitor):
         alm = _ArrayLoopManager(fortran_type, cg)
 
         if el_is_primitive:
-            lhs_fortran_name = cg.name_manager.make_unique_fortran_name("loop_lhs")
+            lhs_fortran_name = cg.name_manager.make_unique_fortran_name("hoisted")
 
             dg = DeclarationGenerator(use_deferred_shape=True)
             cg.declaration_emitter(
@@ -659,11 +687,21 @@ class AssignmentEmitter(CodeGeneratingTypeVisitor):
                         name=lhs_fortran_name,
                         expr=fortran_expr))
 
-            transformer = alm.array_subscript_appender()
+            transformer = PointerAliasCreatingArraySubscriptAppender(
+                    self.code_generator, alm.get_loop_subscript(),
+                    fortran_type=fortran_type)
+
+            # This generates a number of variable declarations
+            # and assignments, so it must happen before we
+            # enter the loop.
+            rhs_expr = transformer(rhs_expr)
 
         else:
             lhs_fortran_name = fortran_expr
-            transformer = alm.array_subscript_appender()
+            transformer = ArraySubscriptAppender(
+                    self.code_generator, alm.get_loop_subscript())
+
+            rhs_expr = transformer(rhs_expr)
 
         alm.enter(index_expr_map,
                 allow_parallel_do=el_is_primitive)
@@ -672,17 +710,14 @@ class AssignmentEmitter(CodeGeneratingTypeVisitor):
 
         self.rec(fortran_type.element_type,
                 "%s(%s)" % (lhs_fortran_name, ", ".join(alm.f_index_names)),
-                index_expr_map, transformer(rhs_expr))
+                index_expr_map, rhs_expr)
 
         alm.leave()
 
     def visit_StructureType(self, fortran_type, fortran_expr, index_expr_map,
             rhs_expr):
         for member_name, member_type in fortran_type.members:
-            sla = StructureLookupAppender(
-                    self.code_generator.sym_kind_table,
-                    self.code_generator.current_function,
-                    member_name)
+            sla = StructureLookupAppender(self.code_generator, member_name)
 
             self.rec(member_type,
                     fortran_expr+"%"+member_name,
