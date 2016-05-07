@@ -951,10 +951,10 @@ class CodeGenerator(StructuredCodeGenerator):
         return sorted(result)
 
     def get_alloc_check_name(self, utype_id):
-        return "leap_alloc_check_"+make_identifier_from_name(utype_id)
+        return "dagrt_alloc_check_"+make_identifier_from_name(utype_id)
 
     def get_var_deinit_name(self, utype_id):
-        return "leap_deinit_"+make_identifier_from_name(utype_id)
+        return "dagrt_deinit_"+make_identifier_from_name(utype_id)
 
     @staticmethod
     def state_name_to_state_sym(state_name):
