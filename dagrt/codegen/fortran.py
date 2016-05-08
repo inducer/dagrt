@@ -82,7 +82,7 @@ class FortranNameManager(object):
         return self.function_map.get_or_make_name_for_key(var)
 
     def make_unique_fortran_name(self, prefix):
-        return self.local_map.get_mapped_identifier_without_key("drtfor_"+prefix)
+        return self.local_map.get_mapped_identifier_without_key("drtf_"+prefix)
 
     def is_known_fortran_name(self, name):
         return self.name_generator.is_name_conflicting(name)
@@ -544,9 +544,9 @@ class _ArrayLoopManager(object):
 class TypeVisitor(object):
     recurse_only_if_allocatable = False
 
-    def rec(self, fortran_type, *args):
+    def rec(self, fortran_type, *args, **kwargs):
         return getattr(self, "visit_"+type(fortran_type).__name__)(
-                fortran_type, *args)
+                fortran_type, *args, **kwargs)
 
     __call__ = rec
 
@@ -578,12 +578,12 @@ class CodeGeneratingTypeVisitor(TypeVisitor):
     def __init__(self, code_generator):
         self.code_generator = code_generator
 
-    def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map,
-            *args):
+    def visit_BuiltinType(self, fortran_type, fortran_expr_str, index_expr_map,
+            *args, **kwargs):
         pass
 
-    def visit_ArrayType(self, fortran_type, fortran_expr, index_expr_map,
-            *args):
+    def visit_ArrayType(self, fortran_type, fortran_expr_str, index_expr_map,
+            *args, **kwargs):
         if (self.recurse_only_if_allocatable
                 and not fortran_type.element_type.is_allocatable()):
             return
@@ -595,31 +595,31 @@ class CodeGeneratingTypeVisitor(TypeVisitor):
         alm.update_index_expr_map(index_expr_map)
 
         self.rec(fortran_type.element_type,
-                "%s(%s)" % (fortran_expr, ", ".join(alm.f_index_names)),
-                index_expr_map, *args)
+                "%s(%s)" % (fortran_expr_str, ", ".join(alm.f_index_names)),
+                index_expr_map, *args, **kwargs)
 
         alm.leave()
 
-    def visit_PointerType(self, fortran_type, fortran_expr, index_expr_map,
-            *args):
+    def visit_PointerType(self, fortran_type, fortran_expr_str, index_expr_map,
+            *args, **kwargs):
         if (self.recurse_only_if_allocatable
                 and not fortran_type.pointee_type.is_allocatable()):
             return
 
-        self.rec(fortran_type.pointee_type, fortran_expr, index_expr_map,
-                *args)
+        self.rec(fortran_type.pointee_type, fortran_expr_str, index_expr_map,
+                *args, **kwargs)
 
-    def visit_StructureType(self, fortran_type, fortran_expr, index_expr_map,
-            *args):
+    def visit_StructureType(self, fortran_type, fortran_expr_str, index_expr_map,
+            *args, **kwargs):
         for member_name, member_type in fortran_type.members:
             if (self.recurse_only_if_allocatable
                     and not member_type.is_allocatable()):
                 continue
 
             self.rec(member_type,
-                    fortran_expr+"%"+member_name,
+                    fortran_expr_str+"%"+member_name,
                     index_expr_map,
-                    *args)
+                    *args, **kwargs)
 
 
 class PointerAliasCreatingArraySubscriptAppender(ArraySubscriptAppender):
@@ -657,23 +657,23 @@ class PointerAliasCreatingArraySubscriptAppender(ArraySubscriptAppender):
 
 
 class AssignmentEmitter(CodeGeneratingTypeVisitor):
-    def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map,
-            rhs_expr):
+    def visit_BuiltinType(self, fortran_type, fortran_expr_str, index_expr_map,
+            rhs_expr, is_rhs_target):
         self.code_generator.emit(
                 "{name} = {expr}"
                 .format(
-                    name=fortran_expr,
+                    name=fortran_expr_str,
                     expr=self.code_generator.expr(rhs_expr)))
 
-    def visit_ArrayType(self, fortran_type, fortran_expr, index_expr_map,
-            rhs_expr):
+    def visit_ArrayType(self, fortran_type, fortran_expr_str, index_expr_map,
+            rhs_expr, is_rhs_target):
         el_is_primitive = isinstance(fortran_type.element_type, BuiltinType)
 
         cg = self.code_generator
 
         alm = _ArrayLoopManager(fortran_type, cg)
 
-        if el_is_primitive:
+        if el_is_primitive and is_rhs_target:
             lhs_fortran_name = cg.name_manager.make_unique_fortran_name("hoisted")
 
             dg = DeclarationGenerator(use_deferred_shape=True)
@@ -685,7 +685,7 @@ class AssignmentEmitter(CodeGeneratingTypeVisitor):
                     "{name} => {expr}"
                     .format(
                         name=lhs_fortran_name,
-                        expr=fortran_expr))
+                        expr=fortran_expr_str))
 
             transformer = PointerAliasCreatingArraySubscriptAppender(
                     self.code_generator, alm.get_loop_subscript(),
@@ -697,7 +697,7 @@ class AssignmentEmitter(CodeGeneratingTypeVisitor):
             rhs_expr = transformer(rhs_expr)
 
         else:
-            lhs_fortran_name = fortran_expr
+            lhs_fortran_name = fortran_expr_str
             transformer = ArraySubscriptAppender(
                     self.code_generator, alm.get_loop_subscript())
 
@@ -710,25 +710,35 @@ class AssignmentEmitter(CodeGeneratingTypeVisitor):
 
         self.rec(fortran_type.element_type,
                 "%s(%s)" % (lhs_fortran_name, ", ".join(alm.f_index_names)),
-                index_expr_map, rhs_expr)
+                index_expr_map, rhs_expr, is_rhs_target=is_rhs_target)
 
         alm.leave()
 
-    def visit_StructureType(self, fortran_type, fortran_expr, index_expr_map,
-            rhs_expr):
+    def visit_PointerType(self, fortran_type, fortran_expr_str, index_expr_map,
+            rhs_expr, is_rhs_target):
+        if (self.recurse_only_if_allocatable
+                and not fortran_type.pointee_type.is_allocatable()):
+            return
+
+        self.rec(fortran_type.pointee_type, fortran_expr_str, index_expr_map,
+                rhs_expr, is_rhs_target=is_rhs_target)
+
+    def visit_StructureType(self, fortran_type, fortran_expr_str, index_expr_map,
+            rhs_expr, is_rhs_target):
         for member_name, member_type in fortran_type.members:
             sla = StructureLookupAppender(self.code_generator, member_name)
 
             self.rec(member_type,
-                    fortran_expr+"%"+member_name,
+                    fortran_expr_str+"%"+member_name,
                     index_expr_map,
-                    sla(rhs_expr))
+                    sla(rhs_expr),
+                    is_rhs_target=is_rhs_target)
 
 
 class AllocationEmitter(CodeGeneratingTypeVisitor):
     recurse_only_if_allocatable = True
 
-    def visit_PointerType(self, fortran_type, fortran_expr, index_expr_map):
+    def visit_PointerType(self, fortran_type, fortran_expr_str, index_expr_map):
         pointee_type = fortran_type.pointee_type
         code_generator = self.code_generator
 
@@ -740,17 +750,17 @@ class AllocationEmitter(CodeGeneratingTypeVisitor):
 
         code_generator.emit_traceable(
                 'allocate({name}{dimension}, stat=dagrt_ierr)'.format(
-                    name=fortran_expr,
+                    name=fortran_expr_str,
                     dimension=_replace_indices(index_expr_map, dimension)))
         with FortranIfEmitter(
                 code_generator.emitter, 'dagrt_ierr.ne.0', code_generator):
             code_generator.emit(
                     "write(dagrt_stderr,*) 'failed to allocate {name}'".format(
-                        name=fortran_expr))
+                        name=fortran_expr_str))
             code_generator.emit("stop")
 
         if pointee_type.is_allocatable():
-            self.rec(pointee_type, fortran_expr, index_expr_map)
+            self.rec(pointee_type, fortran_expr_str, index_expr_map)
 
 
 class DeallocationEmitter(CodeGeneratingTypeVisitor):
@@ -760,23 +770,23 @@ class DeallocationEmitter(CodeGeneratingTypeVisitor):
         super(DeallocationEmitter, self).__init__(code_generator)
         self.deinitializer = deinitializer
 
-    def visit_PointerType(self, fortran_type, fortran_expr, index_expr_map):
+    def visit_PointerType(self, fortran_type, fortran_expr_str, index_expr_map):
         pointee_type = fortran_type.pointee_type
         code_generator = self.code_generator
 
         if pointee_type.is_allocatable():
-            self.rec(pointee_type, fortran_expr, index_expr_map)
-        self.deinitializer(pointee_type, fortran_expr, index_expr_map)
+            self.rec(pointee_type, fortran_expr_str, index_expr_map)
+        self.deinitializer(pointee_type, fortran_expr_str, index_expr_map)
 
-        code_generator.emit_traceable('deallocate({id})'.format(id=fortran_expr))
-        code_generator.emit_traceable("nullify(%s)" % fortran_expr)
+        code_generator.emit_traceable('deallocate({id})'.format(id=fortran_expr_str))
+        code_generator.emit_traceable("nullify(%s)" % fortran_expr_str)
 
 
 class InitializationEmitter(CodeGeneratingTypeVisitor):
     recurse_only_if_allocatable = True
 
-    def visit_PointerType(self, fortran_type, fortran_expr, index_expr_map):
-        self.code_generator.emit_traceable("nullify(%s)" % fortran_expr)
+    def visit_PointerType(self, fortran_type, fortran_expr_str, index_expr_map):
+        self.code_generator.emit_traceable("nullify(%s)" % fortran_expr_str)
 
 # }}}
 
@@ -1548,7 +1558,9 @@ class CodeGenerator(StructuredCodeGenerator):
                             expr=self.expr(expr)))
             else:
                 ftype = self.get_fortran_type_for_user_type(sym_kind.identifier)
-                AssignmentEmitter(self)(ftype, assignee_fortran_name, {}, expr)
+                AssignmentEmitter(self)(
+                        ftype, assignee_fortran_name, {}, expr,
+                        is_rhs_target=True)
 
         self.emit('')
 
@@ -1662,7 +1674,10 @@ class CodeGenerator(StructuredCodeGenerator):
 
                     from pymbolic import var
                     AssignmentEmitter(self)(ftype, tgt_fortran_name, {},
-                            var("<target>"+fortran_name))
+                            var("<target>"+fortran_name),
+                            # Arguments are just passed arrays which aren't allowed
+                            # as pointees.
+                            is_rhs_target=False)
 
         # {{{ instrumentation
 
@@ -2230,12 +2245,12 @@ class TypeVisitorWithResult(CodeGeneratingTypeVisitor):
 
 
 class Norm2Computer(TypeVisitorWithResult):
-    def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map):
+    def visit_BuiltinType(self, fortran_type, fortran_expr_str, index_expr_map):
         self.code_generator.emit(
                 "{result} = {result} + abs({expr})**2"
                 .format(
                     result=self.result_expr,
-                    expr=fortran_expr))
+                    expr=fortran_expr_str))
 
 
 def codegen_builtin_norm_2(results, function, args, arg_kinds,
@@ -2274,12 +2289,12 @@ class LenComputer(TypeVisitorWithResult):
     # FIXME: This could be made *way* more efficient by handling
     # arrays of built-in types directly.
 
-    def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map):
+    def visit_BuiltinType(self, fortran_type, fortran_expr_str, index_expr_map):
         self.code_generator.emit(
                 "{result} = {result} + 1"
                 .format(
                     result=self.result_expr,
-                    expr=fortran_expr))
+                    expr=fortran_expr_str))
 
 
 def codegen_builtin_len(results, function, args, arg_kinds,
@@ -2311,12 +2326,12 @@ def codegen_builtin_len(results, function, args, arg_kinds,
 
 
 class IsNaNComputer(TypeVisitorWithResult):
-    def visit_BuiltinType(self, fortran_type, fortran_expr, index_expr_map):
+    def visit_BuiltinType(self, fortran_type, fortran_expr_str, index_expr_map):
         self.code_generator.emit(
                 "{result} = {result} .or. (({expr}).ne.({expr}))"
                 .format(
                     result=self.result_expr,
-                    expr=fortran_expr))
+                    expr=fortran_expr_str))
 
 
 def codegen_builtin_isnan(results, function, args, arg_kinds,
