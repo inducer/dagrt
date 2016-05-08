@@ -434,8 +434,18 @@ class ArrayType(TypeBase):
 
 
 class PointerType(TypeBase):
-    def __init__(self, pointee_type):
+    """
+    .. attribute:: pointee_type
+    .. attribute:: is_synthetic
+
+        A :class:`bool` flag indicating whether this pointer declaration
+        is genuinely part of the user type (False) or 'synthetically' inserted
+        by the code generator (True).
+    """
+
+    def __init__(self, pointee_type, is_synthetic=False):
         self.pointee_type = pointee_type
+        self.is_synthetic = is_synthetic
 
         if not isinstance(pointee_type, TypeBase):
             raise TypeError("pointee_type should be a subclass of TypeBase")
@@ -721,7 +731,7 @@ class AssignmentEmitter(CodeGeneratingTypeVisitor):
             return
 
         self.rec(fortran_type.pointee_type, fortran_expr_str, index_expr_map,
-                rhs_expr, is_rhs_target=is_rhs_target)
+                rhs_expr, is_rhs_target=True and not fortran_type.is_synthetic)
 
     def visit_StructureType(self, fortran_type, fortran_expr_str, index_expr_map,
             rhs_expr, is_rhs_target):
@@ -1385,7 +1395,7 @@ class CodeGenerator(StructuredCodeGenerator):
     def get_fortran_type_for_user_type(self, type_identifier, is_argument=False):
         ftype = self.user_type_map[type_identifier]
         if not is_argument:
-            ftype = PointerType(ftype)
+            ftype = PointerType(ftype, is_synthetic=True)
 
         return ftype
 
@@ -1675,9 +1685,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     from pymbolic import var
                     AssignmentEmitter(self)(ftype, tgt_fortran_name, {},
                             var("<target>"+fortran_name),
-                            # Arguments are just passed arrays which aren't allowed
-                            # as pointees.
-                            is_rhs_target=False)
+                            is_rhs_target=True)
 
         # {{{ instrumentation
 
