@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 from __future__ import division, with_statement
 
+import pytest
 import sys
 
 from dagrt.language import AssignExpression, YieldState
@@ -59,12 +60,8 @@ def test_circular_dependency_detection():
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
-    try:
+    with pytest.raises(CodeGenerationError):
         verify_code(code)
-    except CodeGenerationError:
-        pass
-    else:
-        assert False
 
 
 def test_missing_dependency_detection():
@@ -80,12 +77,8 @@ def test_missing_dependency_detection():
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=instructions, step_dep_on=['return'])
-    try:
+    with pytest.raises(CodeGenerationError):
         verify_code(code)
-    except CodeGenerationError:
-        pass
-    else:
-        assert False
 
 
 def test_missing_state_detection():
@@ -97,12 +90,8 @@ def test_missing_state_detection():
 
     code = DAGCode.create_with_steady_state(
         dep_on=cb.state_dependencies, instructions=cb.instructions)
-    try:
+    with pytest.raises(CodeGenerationError):
         verify_code(code)
-    except CodeGenerationError:
-        pass
-    else:
-        assert False
 
 
 def test_cond_detection():
@@ -130,12 +119,8 @@ def test_cond_detection():
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
             instructions=cbuild.instructions, step_dep_on=['return'])
-    try:
+    with pytest.raises(CodeGenerationError):
         verify_code(code)
-    except CodeGenerationError:
-        pass
-    else:
-        assert False
 
 
 def test_python_line_wrapping():
