@@ -1,3 +1,3 @@
 #! /bin/sh
 
-rsync --progress --verbose --archive --delete _build/html/* doc-upload:doc/leap
+rsync --progress --verbose --archive --delete _build/html/* doc-upload:doc/dagrt
