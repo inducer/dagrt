@@ -297,7 +297,7 @@ class CodeGenerator(StructuredCodeGenerator):
             if not component_id.startswith('<state>'):
                 continue
             component_id = component_id[7:]
-            emit('{component} = context["{component_id}"]'.format(
+            emit('{component} = context.get("{component_id}")'.format(
                 component=component, component_id=component_id))
 
         emit("self.next_state = "+repr(dag.initial_state))
