@@ -455,6 +455,7 @@ def _make_bfr():
 
     return bfr
 
+
 base_function_registry = _make_bfr()
 
 # }}}
