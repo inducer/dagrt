@@ -27,7 +27,6 @@ THE SOFTWARE.
 """
 
 
-
 # {{{ fortran
 
 class FortranExpressionMapper(StringifyMapper):

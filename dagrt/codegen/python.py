@@ -42,6 +42,7 @@ def pad_python(line, width):
     line += '\\'
     return line
 
+
 wrap_line = partial(wrap_line_base, pad_func=pad_python)
 
 _inner_class_code = '''from collections import namedtuple
