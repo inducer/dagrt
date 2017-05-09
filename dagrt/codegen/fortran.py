@@ -522,7 +522,7 @@ class _ArrayLoopManager(object):
 
         self.emitters = []
         for iloop, (dim, index_name, dim_name) in enumerate(
-                reversed(list(zip(atype.dimension, self.f_index_names, 
+                reversed(list(zip(atype.dimension, self.f_index_names,
                     self.f_dim_names)))):
             cg.declaration_emitter('integer %s' % index_name)
             cg.declaration_emitter('integer %s' % dim_name)
