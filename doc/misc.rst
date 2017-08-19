@@ -27,7 +27,7 @@ Version 2014.1
 .. note::
 
     This version is currently under development. You can get snapshots from
-    PyOpenCL's `git repository <https://github.com/pyopencl/pyopencl>`_
+    dagrt's `git repository <https://github.com/inducer/dagrt>`_
 
 * Initial public release
 
