@@ -1054,10 +1054,6 @@ class CodeGenerator(StructuredCodeGenerator):
         from .analysis import collect_ode_component_names_from_dag
         component_ids = collect_ode_component_names_from_dag(dag)
 
-        if not component_ids <= set(self.user_type_map):
-            raise RuntimeError("User type missing from user type map: %r"
-                    % (component_ids - set(self.user_type_map)))
-
         from dagrt.codegen.data import Scalar, UserType
         for comp_id in component_ids:
             self.sym_kind_table.set(
@@ -2527,6 +2523,72 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
 
         deallocate(${lu_temp})
         deallocate(${ipiv})
+
+        """)
+
+
+builtin_lls = CallCode(UTIL_MACROS + """
+        <%
+        b_rows = declare_new("integer", "b_rows")
+        res_size = declare_new("integer", "res_size")
+
+        %>
+
+        ${b_rows} = int(${a_cols})
+        ${res_size} = int(${a_cols})
+
+        <%
+        if a_kind != b_kind:
+            raise TypeError("lls requires both arguments "
+                "to have same kind")
+
+        ltr = get_lapack_letter(a_kind)
+
+        lls_temp = declare_new(
+                kind_to_fortran(a_kind)+", dimension(:), allocatable"
+                , "lls_temp")
+        work = declare_new(
+                kind_to_fortran(a_kind)+", dimension(:), allocatable"
+                , "work")
+        s = declare_new(
+                kind_to_fortran(a_kind)+", dimension(:), allocatable"
+                , "s")
+        info = declare_new("integer", "info")
+        lwork = declare_new("integer", "lwork")
+        rank = declare_new("integer", "rank")
+        rcond = declare_new("real", "rcond")
+        %>
+
+        allocate(${lls_temp}(0:size(${a})-1))
+
+        ${lls_temp} = ${a}
+        ${rcond} = -1
+        ${lwork} = 3*min(int(${a_rows}), int(${a_cols})) + max(2*min(int(${a_rows}), int(${a_cols})), max(int(${a_rows}), int(${a_cols})), int(${b_rows}))
+
+        if (allocated(${result})) then
+            deallocate(${result})
+        endif
+
+        allocate(${result}(0:${res_size}-1))
+        allocate(${s}(0:${res_size}-1))
+        allocate(${work}(0:${lwork}-1))
+
+        ${result} = ${b}
+
+        call ${ltr}gelss(int(${a_rows}), int(${a_cols}), &
+            int(${b_cols}), ${lls_temp}, int(${a_rows}), ${result}, &
+            int(${b_rows}), ${s}, ${rcond}, ${rank}, &
+            ${work}, ${lwork}, ${info})
+
+        if (${info}.ne.0) then
+            write(dagrt_stderr,*) &
+                'gelss on ${a} failed with info=', ${info}
+            stop
+        endif
+
+        deallocate(${lls_temp})
+        deallocate(${s})
+        deallocate(${work})
 
         """)
 
