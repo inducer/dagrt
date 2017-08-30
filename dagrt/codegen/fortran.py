@@ -2534,7 +2534,7 @@ builtin_lls = CallCode(UTIL_MACROS + """
 
         %>
 
-        ${b_rows} = int(${a_cols})
+        ${check_matrix(b, b_cols, b_rows, "linear_solve")}
         ${res_size} = int(${a_cols})
 
         <%
@@ -2563,7 +2563,7 @@ builtin_lls = CallCode(UTIL_MACROS + """
 
         ${lls_temp} = ${a}
         ${rcond} = -1
-        ${lwork} = 3*min(int(${a_rows}), int(${a_cols})) + max(2*min(int(${a_rows}), int(${a_cols})), max(int(${a_rows}), int(${a_cols})), int(${b_rows}))
+        ${lwork} = 3*min(int(${a_rows}), int(${a_cols})) + max(2*min(int(${a_rows}), int(${a_cols})), max(int(${a_rows}), int(${a_cols})), 1)
 
         if (allocated(${result})) then
             deallocate(${result})
@@ -2573,11 +2573,11 @@ builtin_lls = CallCode(UTIL_MACROS + """
         allocate(${s}(0:${res_size}-1))
         allocate(${work}(0:${lwork}-1))
 
-        ${result} = ${b}
+        ${result}(0:int(${b_rows})-1) = ${b}
 
         call ${ltr}gelss(int(${a_rows}), int(${a_cols}), &
             int(${b_cols}), ${lls_temp}, int(${a_rows}), ${result}, &
-            int(${b_rows}), ${s}, ${rcond}, ${rank}, &
+            int(${a_cols}), ${s}, ${rcond}, ${rank}, &
             ${work}, ${lwork}, ${info})
 
         if (${info}.ne.0) then
