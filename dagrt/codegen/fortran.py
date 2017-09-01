@@ -2527,7 +2527,7 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
         """)
 
 
-builtin_lls = CallCode(UTIL_MACROS + """
+builtin_lstsq = CallCode(UTIL_MACROS + """
         <%
         b_rows = declare_new("integer", "b_rows")
         res_size = declare_new("integer", "res_size")
@@ -2539,12 +2539,12 @@ builtin_lls = CallCode(UTIL_MACROS + """
 
         <%
         if a_kind != b_kind:
-            raise TypeError("lls requires both arguments "
+            raise TypeError("lstsq requires both arguments "
                 "to have same kind")
 
         ltr = get_lapack_letter(a_kind)
 
-        lls_temp = declare_new(
+        lss_temp = declare_new(
                 kind_to_fortran(a_kind)+", dimension(:), allocatable"
                 , "lls_temp")
         work = declare_new(
@@ -2559,9 +2559,9 @@ builtin_lls = CallCode(UTIL_MACROS + """
         rcond = declare_new("real", "rcond")
         %>
 
-        allocate(${lls_temp}(0:size(${a})-1))
+        allocate(${lss_temp}(0:size(${a})-1))
 
-        ${lls_temp} = ${a}
+        ${lss_temp} = ${a}
         ${rcond} = -1
         ${lwork} = 3*min(int(${a_rows}), int(${a_cols})) + max(2*min(int(${a_rows}), int(${a_cols})), max(int(${a_rows}), int(${a_cols})), 1)
 
@@ -2576,7 +2576,7 @@ builtin_lls = CallCode(UTIL_MACROS + """
         ${result}(0:int(${b_rows})-1) = ${b}
 
         call ${ltr}gelss(int(${a_rows}), int(${a_cols}), &
-            int(${b_cols}), ${lls_temp}, int(${a_rows}), ${result}, &
+            int(${b_cols}), ${lss_temp}, int(${a_rows}), ${result}, &
             int(${a_cols}), ${s}, ${rcond}, ${rank}, &
             ${work}, ${lwork}, ${info})
 
@@ -2586,7 +2586,7 @@ builtin_lls = CallCode(UTIL_MACROS + """
             stop
         endif
 
-        deallocate(${lls_temp})
+        deallocate(${lss_temp})
         deallocate(${s})
         deallocate(${work})
 

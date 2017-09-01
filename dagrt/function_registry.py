@@ -354,12 +354,12 @@ class _LinearSolve(Function):
 
 
 class _LeastSquares(Function):
-    """``lls(a, b, a_cols, a_rows, b_cols)`` returns a 1D array containing the
+    """``lstsq(a, b, a_cols, a_rows, b_cols)`` returns a 1D array containing the
     matrix resulting from a linear least squares analysis
     """
 
     result_names = ("result",)
-    identifier = "<builtin>lls"
+    identifier = "<builtin>lstsq"
     arg_names = ("a", "b", "a_cols", "a_rows", "b_cols")
     default_dict = {}
 
@@ -368,18 +368,18 @@ class _LeastSquares(Function):
 
         if a_kind is None or b_kind is None:
             raise UnableToInferKind(
-                    "lls needs to know both arguments to infer result kind")
+                    "lstsq needs to know both arguments to infer result kind")
 
         if check and not isinstance(a_kind, Array):
-            raise TypeError("argument 'a' of 'lls' is not an array")
+            raise TypeError("argument 'a' of 'lstsq' is not an array")
         if check and not isinstance(b_kind, Array):
-            raise TypeError("argument 'a' of 'lls' is not an array")
+            raise TypeError("argument 'a' of 'lstsq' is not an array")
         if check and not isinstance(a_cols_kind, Scalar):
-            raise TypeError("argument 'a_cols' of 'lls' is not a scalar")
+            raise TypeError("argument 'a_cols' of 'lstsq' is not a scalar")
         if check and not isinstance(a_rows_kind, Scalar):
-            raise TypeError("argument 'a_rows' of 'lls' is not a scalar")
+            raise TypeError("argument 'a_rows' of 'lstsq' is not a scalar")
         if check and not isinstance(b_cols_kind, Scalar):
-            raise TypeError("argument 'b_cols' of 'lls' is not a scalar")
+            raise TypeError("argument 'b_cols' of 'lstsq' is not a scalar")
 
         is_real_valued = a_kind.is_real_valued and b_kind.is_real_valued
 
@@ -458,7 +458,7 @@ def _make_bfr():
             (_Array(), "self._builtin_array({args})"),
             (_MatMul(), "self._builtin_matmul({args})"),
             (_LinearSolve(), "self._builtin_linear_solve({args})"),
-            (_LeastSquares(), "self._builtin_lls({args})"),
+            (_LeastSquares(), "self._builtin_lstsq({args})"),
             (_Print(), "self._builtin_print({args})"),
             (_SVD(), "self._builtin_svd({args})"),
             ]:
@@ -485,7 +485,7 @@ def _make_bfr():
     bfr = bfr.register_codegen(_LinearSolve.identifier, "fortran",
             f.builtin_linear_solve)
     bfr = bfr.register_codegen(_LeastSquares.identifier, "fortran",
-            f.builtin_lls)
+            f.builtin_lstsq)
     bfr = bfr.register_codegen(_Print.identifier, "fortran",
             f.builtin_print)
 

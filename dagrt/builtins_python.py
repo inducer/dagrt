@@ -103,14 +103,14 @@ def builtin_linear_solve(a, b, a_cols, b_cols):
     return res_mat.reshape(-1, order="F")
 
 
-def builtin_lls(a, b, a_cols, a_rows, b_cols):
+def builtin_lstsq(a, b, a_cols, a_rows, b_cols):
     import numpy as np
     if a_cols != np.floor(a_cols):
-        raise ValueError("lls() argument a_cols is not an integer")
+        raise ValueError("lstsq() argument a_cols is not an integer")
     if a_rows != np.floor(a_rows):
-        raise ValueError("lls() argument a_rows is not an integer")
+        raise ValueError("lstsq() argument a_rows is not an integer")
     if b_cols != np.floor(b_cols):
-        raise ValueError("lls() argument b_cols is not an integer")
+        raise ValueError("lstsq() argument b_cols is not an integer")
     a_cols = int(a_cols)
     a_rows = int(a_rows)
     b_cols = int(b_cols)
@@ -152,7 +152,7 @@ builtins = {
         "<builtin>array": builtin_array,
         "<builtin>matmul": builtin_matmul,
         "<builtin>linear_solve": builtin_linear_solve,
-        "<builtin>lls": builtin_lls,
+        "<builtin>lstsq": builtin_lstsq,
         "<builtin>svd": builtin_svd,
         "<builtin>print": builtin_print,
         }
