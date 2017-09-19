@@ -2151,7 +2151,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     inst.as_expression())
 
         assignee_fortran_names = [
-                self.name_manager[assignee_sym] for a in inst.assignees]
+                self.name_manager[assignee_sym] for assignee_sym in inst.assignees]
 
         function = self.function_registry[inst.function_id]
 
