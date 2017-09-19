@@ -47,6 +47,7 @@ def pad_fortran(line, width):
     line += '&'
     return line
 
+
 wrap_line = partial(wrap_line_base, pad_func=pad_fortran)
 
 
@@ -2588,7 +2589,11 @@ builtin_svd = CallCode(UTIL_MACROS + """
         ${ldvt} = min(int(${a_rows}),int(${a_rows}))
 
         ${a_temp} = ${a}
-        ${lwork} = max(1,3*min(int(${a_rows}), int(${a_cols})) + max(int(${a_rows}), int(${a_cols})), 5*min(int(${a_rows}), int(${a_cols})))
+        ${lwork} = max(1, &
+                3*min(int(${a_rows}), &
+                int(${a_cols})) + max(int(${a_rows}), &
+                int(${a_cols})), &
+                5*min(int(${a_rows}), int(${a_cols})))
 
         if (allocated(${sigma})) then
             deallocate(${sigma})
@@ -2653,7 +2658,12 @@ builtin_lstsq = CallCode(UTIL_MACROS + """
 
         ${lss_temp} = ${a}
         ${rcond} = -1
-        ${lwork} = 3*min(int(${a_rows}), int(${a_cols})) + max(2*min(int(${a_rows}), int(${a_cols})), max(int(${a_rows}), int(${a_cols})), 1)
+        ${lwork} = 3*min( &
+                int(${a_rows}), &
+                int(${a_cols})) + max(2*min(int(${a_rows}), &
+                int(${a_cols})), &
+                max(int(${a_rows}), &
+                int(${a_cols})), 1)
 
         if (allocated(${result})) then
             deallocate(${result})
