@@ -85,6 +85,19 @@ def builtin_matmul(a, b, a_cols, b_cols):
     return res_mat.reshape(-1, order="F")
 
 
+def builtin_transpose(a, a_cols):
+    import numpy as np
+    if a_cols != np.floor(a_cols):
+        raise ValueError("transpose() argument a_cols is not an integer")
+    a_cols = int(a_cols)
+
+    a_mat = a.reshape(-1, a_cols, order="F")
+
+    res_mat = np.transpose(a_mat)
+
+    return res_mat.reshape(-1, order="F")
+
+
 def builtin_linear_solve(a, b, a_cols, b_cols):
     import numpy as np
     if a_cols != np.floor(a_cols):
@@ -151,6 +164,7 @@ builtins = {
         "<builtin>dot_product": builtin_dot_product,
         "<builtin>array": builtin_array,
         "<builtin>matmul": builtin_matmul,
+        "<builtin>transpose": builtin_transpose,
         "<builtin>linear_solve": builtin_linear_solve,
         "<builtin>lstsq": builtin_lstsq,
         "<builtin>svd": builtin_svd,

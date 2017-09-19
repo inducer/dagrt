@@ -321,6 +321,33 @@ class _MatMul(Function):
         return (Array(is_real_valued),)
 
 
+class _Transpose(Function):
+    """``transpose(a, a_cols)`` returns a 1D array containing the
+    matrix resulting from transposing the array a
+    """
+
+    result_names = ("result",)
+    identifier = "<builtin>transpose"
+    arg_names = ("a", "a_cols")
+    default_dict = {}
+
+    def get_result_kinds(self, arg_kinds, check):
+        a_kind, a_cols_kind = self.resolve_args(arg_kinds)
+
+        if a_kind is None:
+            raise UnableToInferKind(
+                    "transpose needs to know both arguments to infer result kind")
+
+        if check and not isinstance(a_kind, Array):
+            raise TypeError("argument 'a' of 'transpose' is not an array")
+        if check and not isinstance(a_cols_kind, Scalar):
+            raise TypeError("argument 'a_cols' of 'transpose' is not a scalar")
+
+        is_real_valued = a_kind.is_real_valued
+
+        return (Array(is_real_valued),)
+
+
 class _LinearSolve(Function):
     """``linear_solve(a, b, a_cols, b_cols)`` returns a 1D array containing the
     matrix resulting from multiplying the matrix inverse of a by b (both interpreted
@@ -387,7 +414,7 @@ class _LeastSquares(Function):
 
 
 class _SVD(Function):
-    """``linear_solve(a, a_cols)`` returns a 2D array ``u``, a 1D array ``sigma``, and
+    """``SVD(a, a_cols)`` returns a 2D array ``u``, a 1D array ``sigma``, and
     a 2D array ``vt``, representing the (reduced) SVD of ``a``.
     """
 
@@ -404,9 +431,9 @@ class _SVD(Function):
                     "svd needs to know its argument to infer result kind")
 
         if check and not isinstance(a_kind, Array):
-            raise TypeError("argument 'a' of 'linear_solve' is not an array")
+            raise TypeError("argument 'a' of 'svd' is not an array")
         if check and not isinstance(a_cols_kind, Scalar):
-            raise TypeError("argument 'a_cols' of 'linear_solve' is not a scalar")
+            raise TypeError("argument 'a_cols' of 'svd' is not a scalar")
 
         is_real_valued = a_kind.is_real_valued
 
@@ -457,6 +484,7 @@ def _make_bfr():
             (_IsNaN(), "{numpy}.isnan({args})"),
             (_Array(), "self._builtin_array({args})"),
             (_MatMul(), "self._builtin_matmul({args})"),
+            (_Transpose(), "self._builtin_transpose({args})"),
             (_LinearSolve(), "self._builtin_linear_solve({args})"),
             (_LeastSquares(), "self._builtin_lstsq({args})"),
             (_Print(), "self._builtin_print({args})"),
@@ -482,10 +510,14 @@ def _make_bfr():
             f.builtin_array)
     bfr = bfr.register_codegen(_MatMul.identifier, "fortran",
             f.builtin_matmul)
+    bfr = bfr.register_codegen(_Transpose.identifier, "fortran",
+            f.builtin_transpose)
     bfr = bfr.register_codegen(_LinearSolve.identifier, "fortran",
             f.builtin_linear_solve)
     bfr = bfr.register_codegen(_LeastSquares.identifier, "fortran",
             f.builtin_lstsq)
+    bfr = bfr.register_codegen(_SVD.identifier, "fortran",
+            f.builtin_svd)
     bfr = bfr.register_codegen(_Print.identifier, "fortran",
             f.builtin_print)
 
