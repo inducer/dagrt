@@ -423,6 +423,7 @@ def test_svd(python_method_impl):
 
     assert la.norm(result) < 1e-10
 
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])
