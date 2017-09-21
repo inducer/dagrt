@@ -511,15 +511,21 @@ class _ArrayLoopManager(object):
             code_generator.name_manager.make_unique_fortran_name(iname)
             for iname in array_type.index_vars]
 
+        self.f_dim_names = [
+            code_generator.name_manager.make_unique_fortran_name(iname[-6:])
+            for iname in array_type.dimension]
+
     def enter(self, index_expr_map, allow_parallel_do):
         atype = self.array_type
 
         cg = self.code_generator
 
         self.emitters = []
-        for iloop, (dim, index_name) in enumerate(
-                reversed(list(zip(atype.dimension, self.f_index_names)))):
+        for iloop, (dim, index_name, dim_name) in enumerate(
+                reversed(list(zip(atype.dimension, self.f_index_names,
+                    self.f_dim_names)))):
             cg.declaration_emitter('integer %s' % index_name)
+            cg.declaration_emitter('integer %s' % dim_name)
 
             pdp = None
             if allow_parallel_do and iloop + 1 == len(atype.dimension):
@@ -527,11 +533,17 @@ class _ArrayLoopManager(object):
 
             start, stop = atype.parse_dimension(dim)
 
+            self.code_generator.emit(
+                    "{name} = {expr}"
+                    .format(
+                        name=dim_name,
+                        expr=_replace_indices(index_expr_map, stop)))
+
             em = FortranDoEmitter(
                     cg.emitter, index_name,
                     "%s, %s" % (
                         _replace_indices(index_expr_map, start),
-                        _replace_indices(index_expr_map, stop)),
+                        _replace_indices(index_expr_map, dim_name)),
                     cg,
                     parallel_do_preamble=pdp)
             self.emitters.append(em)

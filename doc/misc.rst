@@ -27,7 +27,7 @@ Version 2014.1
 .. note::
 
     This version is currently under development. You can get snapshots from
-    PyOpenCL's `git repository <https://github.com/pyopencl/pyopencl>`_
+    dagrt's `git repository <https://github.com/inducer/dagrt>`_
 
 * Initial public release
 
@@ -69,3 +69,15 @@ Frequently Asked Questions
 
 The FAQ is maintained collaboratively on the
 `Wiki FAQ page <http://wiki.tiker.net/Leap/FrequentlyAskedQuestions>`_.
+
+Acknowledgments
+===============
+
+Andreas Klöckner's work on :mod:`dagrt` was supported in part by
+
+* the Department of Energy, National Nuclear Security Administration, under Award Number DE-NA0002374,
+* the US National Science Foundation under grant number CCF-1524433.
+
+AK also gratefully acknowledges a hardware gift from Nvidia Corporation.  The
+views and opinions expressed herein do not necessarily reflect those of the
+funding agencies.
