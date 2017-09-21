@@ -380,39 +380,6 @@ class _LinearSolve(Function):
         return (Array(is_real_valued),)
 
 
-class _LeastSquares(Function):
-    """``lstsq(a, b, a_cols, a_rows, b_cols)`` returns a 1D array containing the
-    matrix resulting from a linear least squares analysis
-    """
-
-    result_names = ("result",)
-    identifier = "<builtin>lstsq"
-    arg_names = ("a", "b", "a_cols", "a_rows", "b_cols")
-    default_dict = {}
-
-    def get_result_kinds(self, arg_kinds, check):
-        a_kind, b_kind, a_cols_kind, a_rows_kind, b_cols_kind = self.resolve_args(arg_kinds)
-
-        if a_kind is None or b_kind is None:
-            raise UnableToInferKind(
-                    "lstsq needs to know both arguments to infer result kind")
-
-        if check and not isinstance(a_kind, Array):
-            raise TypeError("argument 'a' of 'lstsq' is not an array")
-        if check and not isinstance(b_kind, Array):
-            raise TypeError("argument 'a' of 'lstsq' is not an array")
-        if check and not isinstance(a_cols_kind, Scalar):
-            raise TypeError("argument 'a_cols' of 'lstsq' is not a scalar")
-        if check and not isinstance(a_rows_kind, Scalar):
-            raise TypeError("argument 'a_rows' of 'lstsq' is not a scalar")
-        if check and not isinstance(b_cols_kind, Scalar):
-            raise TypeError("argument 'b_cols' of 'lstsq' is not a scalar")
-
-        is_real_valued = a_kind.is_real_valued and b_kind.is_real_valued
-
-        return (Array(is_real_valued),)
-
-
 class _SVD(Function):
     """``SVD(a, a_cols)`` returns a 2D array ``u``, a 1D array ``sigma``, and
     a 2D array ``vt``, representing the (reduced) SVD of ``a``.
@@ -486,7 +453,6 @@ def _make_bfr():
             (_MatMul(), "self._builtin_matmul({args})"),
             (_Transpose(), "self._builtin_transpose({args})"),
             (_LinearSolve(), "self._builtin_linear_solve({args})"),
-            (_LeastSquares(), "self._builtin_lstsq({args})"),
             (_Print(), "self._builtin_print({args})"),
             (_SVD(), "self._builtin_svd({args})"),
             ]:
@@ -514,14 +480,13 @@ def _make_bfr():
             f.builtin_transpose)
     bfr = bfr.register_codegen(_LinearSolve.identifier, "fortran",
             f.builtin_linear_solve)
-    bfr = bfr.register_codegen(_LeastSquares.identifier, "fortran",
-            f.builtin_lstsq)
     bfr = bfr.register_codegen(_SVD.identifier, "fortran",
             f.builtin_svd)
     bfr = bfr.register_codegen(_Print.identifier, "fortran",
             f.builtin_print)
 
     return bfr
+
 
 base_function_registry = _make_bfr()
 
