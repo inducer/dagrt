@@ -1055,6 +1055,10 @@ class CodeGenerator(StructuredCodeGenerator):
         from .analysis import collect_ode_component_names_from_dag
         component_ids = collect_ode_component_names_from_dag(dag)
 
+        if not component_ids <= set(self.user_type_map):
+            raise RuntimeError("User type missing from user type map: %r"
+                    % (component_ids - set(self.user_type_map)))
+
         from dagrt.codegen.data import Scalar, UserType
         for comp_id in component_ids:
             self.sym_kind_table.set(
