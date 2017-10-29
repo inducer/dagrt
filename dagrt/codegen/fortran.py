@@ -1090,13 +1090,13 @@ class CodeGenerator(StructuredCodeGenerator):
         code = self.get_code()
 
         new_lines = []
-        for l in code.split("\n"):
-            if l.lstrip().startswith("#"):
-                hashmark_pos = l.find("#")
+        for ln in code.split("\n"):
+            if ln.lstrip().startswith("#"):
+                hashmark_pos = ln.find("#")
                 assert hashmark_pos >= 0
-                l = "#" + l[:hashmark_pos] + l[hashmark_pos+1:]
+                ln = "#" + ln[:hashmark_pos] + ln[hashmark_pos+1:]
 
-            new_lines.append(l)
+            new_lines.append(ln)
 
         return "\n".join(new_lines)
 

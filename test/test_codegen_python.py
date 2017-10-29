@@ -162,7 +162,7 @@ def test_basic_raise_codegen():
             assert False
     except method.TimeStepUnderflow:
         pass
-    except:
+    except Exception:
         assert False
 
 

@@ -150,7 +150,7 @@ class SymbolKindTable(object):
             if tbl[name] != kind:
                 try:
                     kind = unify(kind, tbl[name])
-                except:
+                except Exception:
                     print(
                         "trying to derive 'kind' for '%s' in "
                         "'%s': '%s' vs '%s'"
