@@ -2167,7 +2167,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     inst.as_expression())
 
         assignee_fortran_names = [
-                self.name_manager[assignee_sym] for a in inst.assignees]
+                self.name_manager[assignee_sym] for assignee_sym in inst.assignees]
 
         function = self.function_registry[inst.function_id]
 
@@ -2417,7 +2417,7 @@ UTIL_MACROS = """
         if (${rows_var} * int(${cols_var}) .ne. size(${mat_array})) then
             write(dagrt_stderr,*) &
                 'size of argument ' // &
-                '${mat_array}' // &
+                '${mat_array} ' // &
                 'to ${func_name} ' // &
                 'not divisible by ' // &
                 '${cols_var}'
@@ -2479,6 +2479,31 @@ builtin_matmul = CallCode(UTIL_MACROS + """
                     reshape(${b}, (/${b_rows}, int(${b_cols})/))), &
                 (/${res_size}/))
         """)
+
+
+builtin_transpose = CallCode(UTIL_MACROS + """
+        <%
+        a_rows = declare_new("integer", "a_rows")
+        res_size = declare_new("integer", "res_size")
+        %>
+
+        ${check_matrix(a, a_cols, a_rows, "transpose")}
+
+        ${a_rows} = size(${a}) / int(${a_cols})
+        ${res_size} = ${a_rows} * int(${a_cols})
+
+        if (allocated(${result})) then
+            deallocate(${result})
+        endif
+
+        allocate(${result}(0:${res_size}-1))
+
+        ${result} = reshape( &
+                transpose( &
+                    reshape(${a}, (/${a_rows}, int(${a_cols})/))), &
+                (/${res_size}/))
+        """)
+
 
 builtin_linear_solve = CallCode(UTIL_MACROS + """
         <%
@@ -2542,6 +2567,74 @@ builtin_linear_solve = CallCode(UTIL_MACROS + """
         deallocate(${ipiv})
 
         """)
+
+
+builtin_svd = CallCode(UTIL_MACROS + """
+        <%
+        sigma_size = declare_new("integer", "res_size")
+        a_rows = declare_new("integer", "a_rows")
+
+        %>
+
+        ${check_matrix(a, a_cols, a_rows, "svd")}
+        ${sigma_size} = min(int(${a_cols}),int(${a_rows}))
+
+        <%
+        ltr = get_lapack_letter(a_kind)
+
+        a_temp = declare_new(
+                kind_to_fortran(a_kind)+", dimension(:), allocatable"
+                , "a_temp")
+        work = declare_new(
+                kind_to_fortran(a_kind)+", dimension(:), allocatable"
+                , "work")
+        info = declare_new("integer", "info")
+        lwork = declare_new("integer", "lwork")
+        lda = declare_new("integer", "lda")
+        ldu = declare_new("integer", "ldu")
+        ldvt = declare_new("integer", "ldvt")
+        jobu = declare_new("character*1", "jobu")
+        jobvt = declare_new("character*1", "jobvt")
+        %>
+
+        allocate(${a_temp}(0:size(${a})-1))
+        ${jobu} = "S"
+        ${jobvt} = "S"
+        ${lda} = max(1,int(${a_rows}))
+        ${ldu} = int(${a_rows})
+        ${ldvt} = min(int(${a_rows}),int(${a_rows}))
+
+        ${a_temp} = ${a}
+        ${lwork} = max(1, &
+                3*min(int(${a_rows}), &
+                int(${a_cols})) + max(int(${a_rows}), &
+                int(${a_cols})), &
+                5*min(int(${a_rows}), int(${a_cols})))
+
+        if (allocated(${sigma})) then
+            deallocate(${sigma})
+        endif
+
+        allocate(${sigma}(0:${sigma_size}-1))
+        allocate(${work}(0:${lwork}-1))
+        allocate(${u}(0:int(${a_rows}*${a_rows})-1))
+        allocate(${vt}(0:int(${a_rows}*${a_cols})-1))
+
+        call ${ltr}gesvd(${jobu}, ${jobvt}, &
+            int(${a_rows}), int(${a_cols}), ${a_temp}, ${lda}, ${sigma}, &
+            ${u}, ${ldu}, ${vt}, ${ldvt}, ${work}, ${lwork}, ${info})
+
+        if (${info}.ne.0) then
+            write(dagrt_stderr,*) &
+                'gesvd on ${a} failed with info=', ${info}
+            stop
+        endif
+
+        deallocate(${a_temp})
+        deallocate(${work})
+
+        """)
+
 
 builtin_print = CallCode(UTIL_MACROS + """
         write(*,*) ${arg}
