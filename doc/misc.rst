@@ -1,9 +1,9 @@
 Installation
 ============
 
-This command should install :mod:`leap`::
+This command should install :mod:`dagrt`::
 
-    pip install leap
+    pip install dagrt
 
 You may need to run this with :command:`sudo`.
 If you don't already have `pip <https://pypi.python.org/pypi/pip>`_,
@@ -34,7 +34,7 @@ Version 2014.1
 License
 =======
 
-Leap is licensed to you under the MIT/X Consortium license:
+:mod:`dagrt` is licensed to you under the MIT/X Consortium license:
 
 Copyright (c) 2009-13 Andreas Klöckner and Matt Wala.
 
@@ -59,8 +59,8 @@ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 
-Citing Leap
-===========
+Citing :mod:`dagrt`
+===================
 
 TBD
 

@@ -835,7 +835,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
     * *dagrt_dt*: The initial time step size
     * *dagrt_t*: The initial time
-    * *state_STATE*: The initial value for the leap variable ``<state>STATE``
+    * *state_STATE*: The initial value for the :mod:`dagrt` variable ``<state>STATE``
 
     .. rubric:: Profiling information
 

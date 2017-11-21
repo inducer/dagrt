@@ -1,4 +1,4 @@
-Welcome to leap's documentation!
+Welcome to dagrt's documentation!
 ================================
 
 TODO: Insert example here.
