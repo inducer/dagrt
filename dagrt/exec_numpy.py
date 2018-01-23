@@ -31,6 +31,10 @@ class FailStepException(Exception):
     pass
 
 
+class ExitStepException(Exception):
+    pass
+
+
 class TransitionEvent(Exception):
 
     def __init__(self, next_state):
@@ -148,6 +152,10 @@ class NumpyInterpreter(object):
                 yield StepFailed(t=self.context["<t>"])
                 continue
 
+            except ExitStepException:
+                yield StepFailed(t=self.context["<t>"])
+                continue
+
             except TransitionEvent as evt:
                 self.next_state = evt.next_state
 
@@ -260,6 +268,9 @@ class NumpyInterpreter(object):
 
     def exec_FailStep(self, insn):
         raise FailStepException()
+
+    def exec_ExitStep(self, insn):
+        raise ExitStepException()
 
     def exec_Nop(self, insn):
         pass

@@ -2247,6 +2247,9 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.emit("goto 999")
 
+    def emit_inst_ExitStep(self, inst):
+        self.emit("goto 999")
+
     def emit_inst_StateTransition(self, inst):
         self.emit(
                 'dagrt_state%dagrt_next_state = '

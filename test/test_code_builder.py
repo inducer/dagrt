@@ -143,6 +143,25 @@ def test_CodeBuilder_nested_condition_with_else_not_taken(python_method_impl):
     assert result == 3
 
 
+def test_CodeBuilder_exit_step(python_method_impl):
+    with CodeBuilder() as builder1:
+        builder1("<p>x", 1)
+        builder1.exit_step()
+        builder1.fence()
+        builder1("<p>x", 2)
+
+    with CodeBuilder() as builder2:
+        builder2.yield_state(var('<p>x'), 'x', 0, 'final')
+
+    code = DAGCode({
+        "state1": builder1.as_execution_state("state2"),
+        "state2": builder2.as_execution_state("state2")
+        }, "state1")
+
+    result = execute_and_return_single_result(python_method_impl, code)
+    assert result == 1
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])
