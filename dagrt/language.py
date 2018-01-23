@@ -107,19 +107,16 @@ Assignment Instructions
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autoclass:: AssignSolved
-
 .. autoclass:: AssignExpression
-
 .. autoclass:: AssignFunctionCall
 
 State Instructions
 ^^^^^^^^^^^^^^^^^^
 
 .. autoclass:: YieldState
-
 .. autoclass:: Raise
-
 .. autoclass:: FailStep
+.. autoclass:: ExitStep
 
 Code Container
 ~~~~~~~~~~~~~~
@@ -131,7 +128,6 @@ Visualization
 ~~~~~~~~~~~~~
 
 .. autofunction:: get_dot_dependency_graph
-
 .. autofunction:: show_dependency_graph
 
 Code Creation
@@ -570,7 +566,8 @@ class StateTransition(Instruction):
 
 
 class FailStep(Instruction):
-    """
+    """Exits the current step with a failure indication to the controlling
+    program. Execution resumes with the next step as normal.
     """
 
     def get_written_variables(self):
@@ -581,6 +578,18 @@ class FailStep(Instruction):
 
     exec_method = six.moves.intern("exec_FailStep")
 
+
+class ExitStep(Instruction):
+    """Exits the current step. Execution resumes with the next step as normal.
+    """
+
+    def get_written_variables(self):
+        return frozenset()
+
+    def __str__(self):
+        return "ExitStep{cond}".format(cond=self._condition_printing_suffix())
+
+    exec_method = six.moves.intern("exec_ExitStep")
 
 # }}}
 
@@ -809,6 +818,7 @@ class CodeBuilder(object):
     .. automethod:: assign_solved_1
     .. automethod:: yield_state
     .. automethod:: fail_step
+    .. automethod:: exit_step
     .. automethod:: raise_
     .. automethod:: state_transition
     .. automethod:: __enter__
@@ -1138,6 +1148,10 @@ class CodeBuilder(object):
     def fail_step(self):
         self.fence()
         self._add_inst_to_context(FailStep())
+
+    def exit_step(self):
+        self.fence()
+        self._add_inst_to_context(ExitStep())
 
     def raise_(self, error):
         self.fence()

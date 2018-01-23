@@ -91,6 +91,10 @@ class FailStepException(RuntimeError):
     pass
 
 
+class ExitStepException(RuntimeError):
+    pass
+
+
 class TransitionEvent(Exception):
 
     def __init__(self, next_state):
@@ -326,6 +330,9 @@ class CodeGenerator(StructuredCodeGenerator):
                     yield self.StepFailed(t=self.t)
                     continue
 
+                except self.ExitStepException:
+                    continue
+
                 except self.TransitionEvent as evt:
                     self.next_state = evt.next_state
 
@@ -464,6 +471,11 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def emit_inst_FailStep(self, inst):
         self._emit('raise self.FailStepException()')
+        if not self._has_yield_inst:
+            self._emit('yield')
+
+    def emit_inst_ExitStep(self, inst):
+        self._emit('raise self.ExitStepException()')
         if not self._has_yield_inst:
             self._emit('yield')
 
