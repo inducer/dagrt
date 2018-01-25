@@ -101,6 +101,14 @@ class TransitionEvent(Exception):
         self.next_state = next_state
 
 
+class StepError(Exception):
+    def __init__(self, condition, message):
+        self.condition = condition
+        self.messagew = message
+
+        Exception.__init__(self, "%s: %s" % (condition, message))
+
+
 class _function_symbol_container(object):
     pass
 '''
@@ -463,9 +471,9 @@ class CodeGenerator(StructuredCodeGenerator):
                        state_component=self._expr(inst.expression)))
 
     def emit_inst_Raise(self, inst):
-        self._emit('raise self.{condition}("{message}")'.format(
-                   condition=inst.error_condition.__name__,
-                   message=inst.error_message))
+        self._emit('raise self.StepError({condition}, {message})'.format(
+                   condition=repr(inst.error_condition.__name__),
+                   message=repr(inst.error_message)))
         if not self._has_yield_inst:
             self._emit('yield')
 
