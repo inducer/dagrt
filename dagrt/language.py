@@ -1153,9 +1153,9 @@ class CodeBuilder(object):
         self.fence()
         self._add_inst_to_context(ExitStep())
 
-    def raise_(self, error):
+    def raise_(self, error_condition, error_message=None):
         self.fence()
-        self._add_inst_to_context(Raise(error))
+        self._add_inst_to_context(Raise(error_condition, error_message))
 
     def state_transition(self, next_state):
         self.fence()
