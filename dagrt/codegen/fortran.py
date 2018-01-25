@@ -2232,10 +2232,13 @@ class CodeGenerator(StructuredCodeGenerator):
                             inst.component_id)),)))
 
     def emit_inst_Raise(self, inst):
+        # FIXME: Reenable emitting full error message
+        # TBD: Quoting of quotes, extra-long lines
+        if inst.error_message:
+            self.emit("! " + inst.error_message)
+
         self.emit("write (dagrt_stderr,*) "
-                "'{condition}: {message}'".format(
-                    condition=inst.error_condition.__name__,
-                    message=inst.error_message))
+                "'{condition}'".format(condition=inst.error_condition.__name__))
         self.emit("stop")
 
     def emit_inst_FailStep(self, inst):

@@ -891,17 +891,24 @@ class CodeBuilder(object):
     @contextmanager
     def if_(self, *condition_arg):
         """Create a new block that is conditionally executed."""
+        from dagrt.expression import parse
+
         if len(condition_arg) == 1:
             condition = condition_arg[0]
-
-            from dagrt.expression import parse
 
             if isinstance(condition, str):
                 condition = parse(condition)
 
         elif len(condition_arg) == 3:
+            lhs, cond, rhs = condition_arg
+
+            if isinstance(lhs, str):
+                lhs = parse(lhs)
+            if isinstance(rhs, str):
+                rhs = parse(lhs)
+
             from pymbolic.primitives import Comparison
-            condition = Comparison(*condition_arg)
+            condition = Comparison(lhs, cond, rhs)
         else:
             raise ValueError("Unrecognized condition expression")
 
@@ -1153,9 +1160,9 @@ class CodeBuilder(object):
         self.fence()
         self._add_inst_to_context(ExitStep())
 
-    def raise_(self, error):
+    def raise_(self, error_condition, error_message=None):
         self.fence()
-        self._add_inst_to_context(Raise(error))
+        self._add_inst_to_context(Raise(error_condition, error_message))
 
     def state_transition(self, next_state):
         self.fence()
