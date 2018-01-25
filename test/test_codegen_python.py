@@ -162,8 +162,8 @@ def test_basic_raise_codegen():
             assert False
     except method.TimeStepUnderflow:
         pass
-    except Exception:
-        assert False
+    except Exception as e:
+        assert isinstance(e, Method.StepError) and e.condition == "TimeStepUnderflow"
 
 
 def test_basic_fail_step_codegen():
