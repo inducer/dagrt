@@ -375,8 +375,9 @@ class _ExtendedParser(Parser):
             identifier += pstate.next_str_and_advance()
             pstate.expect(_greater)
             identifier += pstate.next_str_and_advance()
-            pstate.expect(_identifier)
-            identifier += pstate.next_str_and_advance()
+            if pstate.is_next(_identifier):
+                identifier += pstate.next_str_and_advance()
+
             return primitives.Variable(identifier)
         else:
             return super(_ExtendedParser, self).parse_terminal(pstate)
