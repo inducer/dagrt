@@ -37,8 +37,8 @@ class ExitStepException(Exception):
 
 class TransitionEvent(Exception):
 
-    def __init__(self, next_state):
-        self.next_state = next_state
+    def __init__(self, next_phase):
+        self.next_phase = next_phase
 
 
 # {{{ events returned from NumpyInterpreter.run()
@@ -58,7 +58,7 @@ class StateComputed(namedtuple("StateComputed",
 
 class StepCompleted(
         namedtuple("StepCompleted",
-            ["dt", "t", "current_state", "next_state"])):
+            ["dt", "t", "current_state", "next_phase"])):
     """
     .. attribute:: dt
 
@@ -69,7 +69,7 @@ class StepCompleted(
         Approximate integrator time at end of step.
 
     .. attribute:: current_state
-    .. attribute:: next_state
+    .. attribute:: next_phase
     """
 
 
@@ -88,7 +88,7 @@ class NumpyInterpreter(object):
     """A :mod:`numpy`-targeting interpreter for the time integration language
     defined in :mod:`dagrt.language`.
 
-    .. attribute:: next_state
+    .. attribute:: next_phase
 
     .. automethod:: set_up
     .. automethod:: run
@@ -108,7 +108,7 @@ class NumpyInterpreter(object):
         from dagrt.language import ExecutionController
         self.exec_controller = ExecutionController(code)
         self.context = {}
-        self.next_state = self.code.initial_state
+        self.next_phase = self.code.initial_phase
 
         from dagrt.builtins_python import builtins
 
@@ -143,7 +143,7 @@ class NumpyInterpreter(object):
             if max_steps is not None and n_steps >= max_steps:
                 return
 
-            cur_state = self.next_state
+            cur_state = self.next_phase
             try:
                 for evt in self.run_single_step():
                     yield evt
@@ -157,21 +157,21 @@ class NumpyInterpreter(object):
                 continue
 
             except TransitionEvent as evt:
-                self.next_state = evt.next_state
+                self.next_phase = evt.next_phase
 
             yield StepCompleted(
                 dt=self.context["<dt>"],
                 t=self.context["<t>"],
                 current_state=cur_state,
-                next_state=self.next_state)
+                next_phase=self.next_phase)
 
             n_steps += 1
 
     def run_single_step(self):
         try:
             self.exec_controller.reset()
-            cur_state = self.code.states[self.next_state]
-            self.next_state = cur_state.next_state
+            cur_state = self.code.phases[self.next_phase]
+            self.next_phase = cur_state.next_phase
             self.exec_controller.update_plan(cur_state, cur_state.depends_on)
             for event in self.exec_controller(cur_state, self):
                 yield event
@@ -275,8 +275,8 @@ class NumpyInterpreter(object):
     def exec_Nop(self, insn):
         pass
 
-    def exec_StateTransition(self, insn):
-        raise TransitionEvent(insn.next_state)
+    def exec_PhaseTransition(self, insn):
+        raise TransitionEvent(insn.next_phase)
 
     # }}}
 

@@ -86,10 +86,10 @@ def test_missing_state_detection():
     from dagrt.language import CodeBuilder
 
     with CodeBuilder(label="state_1") as cb:
-        cb.state_transition("state_2")
+        cb.phase_transition("state_2")
 
-    code = DAGCode.create_with_steady_state(
-        dep_on=cb.state_dependencies, instructions=cb.instructions)
+    code = DAGCode.create_with_steady_phase(
+        dep_on=cb.phase_dependencies, instructions=cb.instructions)
     with pytest.raises(CodeGenerationError):
         verify_code(code)
 

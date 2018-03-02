@@ -59,11 +59,11 @@ def test_basic_codegen():
     hist = [s for s in method.run(max_steps=2)]
     assert len(hist) == 3
     assert isinstance(hist[0], method.StepCompleted)
-    assert hist[0].current_state == 'initialization'
+    assert hist[0].current_phase == 'initialization'
     assert isinstance(hist[1], method.StateComputed)
     assert hist[1].state_component == 0
     assert isinstance(hist[2], method.StepCompleted)
-    assert hist[2].current_state == 'primary'
+    assert hist[2].current_phase == 'primary'
 
 
 def test_basic_conditional_codegen():
@@ -264,25 +264,25 @@ def test_function_name_distinctness():
     assert hist[1].state_component == 1
 
 
-def test_state_transitions(python_method_impl):
-    from dagrt.language import CodeBuilder, ExecutionState
+def test_phase_transitions(python_method_impl):
+    from dagrt.language import CodeBuilder, ExecutionPhase
 
     with CodeBuilder(label="state_1") as builder_1:
         builder_1(var("<state>x"), 1)
-        builder_1.state_transition("state_2")
+        builder_1.phase_transition("state_2")
     with CodeBuilder(label="state_2") as builder_2:
         builder_2.yield_state(var("<state>x"), 'x', 0, 'final')
 
     code = DAGCode(
-        states={
-            "state_1": ExecutionState(
-                builder_1.state_dependencies, next_state="state_1",
+        phases={
+            "state_1": ExecutionPhase(
+                builder_1.phase_dependencies, next_phase="state_1",
                 instructions=builder_1.instructions),
-            "state_2": ExecutionState(
-                builder_2.state_dependencies, next_state="state_2",
+            "state_2": ExecutionPhase(
+                builder_2.phase_dependencies, next_phase="state_2",
                 instructions=builder_2.instructions)
         },
-        initial_state="state_1")
+        initial_phase="state_1")
     from utils import execute_and_return_single_result
     result = execute_and_return_single_result(python_method_impl, code,
                                               initial_context={'x': 0},
@@ -307,8 +307,8 @@ def get_IfThenElse_test_code_and_expected_result():
         cb.yield_state(tuple(var("c" + str(i)) for i in range(1, 11)),
                        "result", 0, "final")
 
-    code = DAGCode.create_with_steady_state(
-        cb.state_dependencies, cb.instructions)
+    code = DAGCode.create_with_steady_phase(
+        cb.phase_dependencies, cb.instructions)
 
     return (code, (0, 1, 0, 1, 0, 1, 1, 2, 1, 2))
 
@@ -338,8 +338,8 @@ def test_arrays_and_looping(python_method_impl):
 
     from utils import execute_and_return_single_result
 
-    code = DAGCode.create_with_steady_state(
-        cb.state_dependencies, cb.instructions)
+    code = DAGCode.create_with_steady_phase(
+        cb.phase_dependencies, cb.instructions)
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == 15
 
@@ -374,8 +374,8 @@ def test_arrays_and_linalg(python_method_impl):
 
     from utils import execute_and_return_single_result
 
-    code = DAGCode.create_with_steady_state(
-        cb.state_dependencies, cb.instructions)
+    code = DAGCode.create_with_steady_phase(
+        cb.phase_dependencies, cb.instructions)
     result = execute_and_return_single_result(python_method_impl, code)
 
     result = result.reshape(4, 4, order="F")
@@ -417,8 +417,8 @@ def test_svd(python_method_impl):
 
     from utils import execute_and_return_single_result
 
-    code = DAGCode.create_with_steady_state(
-        cb.state_dependencies, cb.instructions)
+    code = DAGCode.create_with_steady_phase(
+        cb.phase_dependencies, cb.instructions)
     result = execute_and_return_single_result(python_method_impl, code)
 
     assert la.norm(result) < 1e-10

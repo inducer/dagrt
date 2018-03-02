@@ -110,18 +110,19 @@ Assignment Instructions
 .. autoclass:: AssignExpression
 .. autoclass:: AssignFunctionCall
 
-State Instructions
-^^^^^^^^^^^^^^^^^^
+Control Instructions
+^^^^^^^^^^^^^^^^^^^^
 
 .. autoclass:: YieldState
 .. autoclass:: Raise
 .. autoclass:: FailStep
 .. autoclass:: ExitStep
+.. autoclass:: PhaseTransition
 
 Code Container
 ~~~~~~~~~~~~~~
 
-.. autoclass:: ExecutionState
+.. autoclass:: ExecutionPhase
 .. autoclass:: DAGCode
 
 Visualization
@@ -545,24 +546,24 @@ class Raise(Instruction):
     exec_method = six.moves.intern("exec_Raise")
 
 
-class StateTransition(Instruction):
+class PhaseTransition(Instruction):
     """
-    .. attribute:: next_state
+    .. attribute:: next_phase
 
         The name of the next state to enter
     """
 
-    def __init__(self, next_state, **kwargs):
-        Instruction.__init__(self, next_state=next_state, **kwargs)
+    def __init__(self, next_phase, **kwargs):
+        Instruction.__init__(self, next_phase=next_phase, **kwargs)
 
     def get_written_variables(self):
         return frozenset()
 
     def __str__(self):
-        return "Transition to {state}{cond}".format(state=self.next_state,
+        return "Transition to {state}{cond}".format(state=self.next_phase,
             cond=self._condition_printing_suffix())
 
-    exec_method = six.moves.intern("exec_StateTransition")
+    exec_method = six.moves.intern("exec_PhaseTransition")
 
 
 class FailStep(Instruction):
@@ -596,14 +597,14 @@ class ExitStep(Instruction):
 
 # {{{ code container
 
-class ExecutionState(RecordWithoutPickling):
+class ExecutionPhase(RecordWithoutPickling):
     """
     .. attribute:: depends_on
 
         a list of instruction IDs that need to be accomplished
         for successful execution of one round of this state
 
-    .. attribute:: next_state
+    .. attribute:: next_phase
 
         name of the next state after this one, if no other state
         is specified by the user.
@@ -616,10 +617,10 @@ class ExecutionState(RecordWithoutPickling):
         will actually be executed.
     """
 
-    def __init__(self, depends_on, next_state, instructions):
-        super(ExecutionState, self).__init__(
+    def __init__(self, depends_on, next_phase, instructions):
+        super(ExecutionPhase, self).__init__(
                 depends_on=depends_on,
-                next_state=next_state,
+                next_phase=next_phase,
                 instructions=instructions)
 
     @property
@@ -631,43 +632,43 @@ class ExecutionState(RecordWithoutPickling):
 
 class DAGCode(RecordWithoutPickling):
     """
-    .. attribute:: states
+    .. attribute:: phases
 
-        is a map from time integrator state names to :class:`ExecutionState`
+        is a map from time integrator state names to :class:`ExecutionPhase`
         instances
 
-    .. attribute:: initial_state
+    .. attribute:: initial_phase
 
         the name of the starting state
     """
 
     @classmethod
-    def create_with_steady_state(cls, dep_on, instructions):
-        states = {'main': ExecutionState(
-            dep_on, next_state='main', instructions=instructions)}
-        return cls(states, 'main')
+    def create_with_steady_phase(cls, dep_on, instructions):
+        phases = {'main': ExecutionPhase(
+            dep_on, next_phase='main', instructions=instructions)}
+        return cls(phases, 'main')
 
     @classmethod
     def _create_with_init_and_step(cls, initialization_dep_on,
                                   step_dep_on, instructions):
-        states = {}
-        states['initialization'] = ExecutionState(
+        phases = {}
+        phases['initialization'] = ExecutionPhase(
                 initialization_dep_on,
-                next_state='primary',
+                next_phase='primary',
                 instructions=instructions)
 
-        states['primary'] = ExecutionState(
+        phases['primary'] = ExecutionPhase(
                 step_dep_on,
-                next_state='primary',
+                next_phase='primary',
                 instructions=instructions)
 
-        return cls(states, 'initialization')
+        return cls(phases, 'initialization')
 
-    def __init__(self, states, initial_state):
-        assert not isinstance(states, list)
+    def __init__(self, phases, initial_phase):
+        assert not isinstance(phases, list)
         RecordWithoutPickling.__init__(self,
-                                       states=states,
-                                       initial_state=initial_state)
+                                       phases=phases,
+                                       initial_phase=initial_phase)
 
     # {{{ identifier wrangling
 
@@ -675,12 +676,12 @@ class DAGCode(RecordWithoutPickling):
         from pytools import UniqueNameGenerator
         return UniqueNameGenerator(
                 set(insn.id
-                    for state in six.itervalues(self.states)
-                    for insn in state.instructions))
+                    for phase in six.itervalues(self.phases)
+                    for insn in phase.instructions))
 
     def existing_var_names(self):
         result = set()
-        for state in six.itervalues(self.states):
+        for state in six.itervalues(self.phases):
             for insn in state.instructions:
                 result.update(insn.get_written_variables())
                 result.update(insn.get_read_variables())
@@ -695,15 +696,15 @@ class DAGCode(RecordWithoutPickling):
 
     def __str__(self):
         lines = []
-        for state_name, state in sorted(six.iteritems(self.states)):
-            lines.append("STATE %s" % state_name)
+        for phase_name, phase in sorted(six.iteritems(self.phases)):
+            lines.append("STAGE %s" % phase_name)
 
-            for root_id in state.depends_on:
+            for root_id in phase.depends_on:
                 lines.extend(_stringify_instructions(
-                    [state.id_to_insn[root_id]],
-                    state.id_to_insn, prefix="    "))
+                    [phase.id_to_insn[root_id]],
+                    phase.id_to_insn, prefix="    "))
 
-            lines.append("    -> (next state) %s" % state.next_state)
+            lines.append("    -> (next phase) %s" % phase.next_phase)
             lines.append("")
 
         return "\n".join(lines)
@@ -729,7 +730,7 @@ class ExecutionController(object):
         self.plan_id_set.clear()
         self.executed_ids.clear()
 
-    def update_plan(self, state, execute_ids):
+    def update_plan(self, phase, execute_ids):
         """Update the plan with the minimal list of instruction ids to execute
         so that the instruction IDs in execute_ids will be executed before any
         others and such that all their dependencies are satisfied.
@@ -737,7 +738,7 @@ class ExecutionController(object):
 
         early_plan = []
 
-        id_to_insn = state.id_to_insn
+        id_to_insn = phase.id_to_insn
 
         def add_with_deps(insn):
             insn_id = insn.id
@@ -765,8 +766,8 @@ class ExecutionController(object):
         self.plan = early_plan + self.plan
         self.plan_id_set.update(early_plan)
 
-    def __call__(self, state, target):
-        id_to_insn = state.id_to_insn
+    def __call__(self, phase, target):
+        id_to_insn = phase.id_to_insn
 
         while self.plan:
             insn_id = self.plan.pop(0)
@@ -789,7 +790,7 @@ class ExecutionController(object):
                     yield event
 
                 if new_deps is not None:
-                    self.update_plan(state, new_deps)
+                    self.update_plan(phase, new_deps)
 
 # }}}
 
@@ -800,12 +801,12 @@ class CodeBuilder(object):
     """
     .. attribute:: instructions
 
-       The set of instructions generated for the state
+       The set of instructions generated for the phase
 
-    .. attribute:: state_dependencies
+    .. attribute:: phase_dependencies
 
        A list of instruction names. Starting with these instructions
-       as the root dependencies, the state can be executed by following
+       as the root dependencies, the phase can be executed by following
        the dependency list of each instruction.
 
     .. automethod:: fence
@@ -820,7 +821,7 @@ class CodeBuilder(object):
     .. automethod:: fail_step
     .. automethod:: exit_step
     .. automethod:: raise_
-    .. automethod:: state_transition
+    .. automethod:: phase_transition
     .. automethod:: __enter__
 
     """
@@ -848,9 +849,9 @@ class CodeBuilder(object):
                 used_variables=set(used_variables),
                 condition=condition)
 
-    def __init__(self, label="state"):
+    def __init__(self, label="phase"):
         """
-        :arg label: The name of the state to generate
+        :arg label: The name of the phase to generate
         """
         self.label = label
         self._instruction_map = {}
@@ -1164,9 +1165,9 @@ class CodeBuilder(object):
         self.fence()
         self._add_inst_to_context(Raise(error_condition, error_message))
 
-    def state_transition(self, next_state):
+    def phase_transition(self, next_phase):
         self.fence()
-        self._add_inst_to_context(StateTransition(next_state))
+        self._add_inst_to_context(PhaseTransition(next_phase))
 
     def __enter__(self):
         self._contexts.append(CodeBuilder.Context())
@@ -1174,7 +1175,7 @@ class CodeBuilder(object):
 
     def __exit__(self, *ignored):
         self.fence()
-        self.state_dependencies = list(self._contexts[-1].lead_instruction_ids)
+        self.phase_dependencies = list(self._contexts[-1].lead_instruction_ids)
         self.instructions = set(self._instruction_map.values())
 
     def __str__(self):
@@ -1185,13 +1186,13 @@ class CodeBuilder(object):
 
         return "\n".join(_stringify_instructions(roots, self._instruction_map))
 
-    def as_execution_state(self, next_state):
+    def as_execution_phase(self, next_phase):
         """
         :arg cb: A :class:`CodeBuilder` instance
-        :arg next_state: The name of the default next state
+        :arg next_phase: The name of the default next phase
         """
-        return ExecutionState(
-                depends_on=self.state_dependencies, next_state=next_state,
+        return ExecutionPhase(
+                depends_on=self.phase_dependencies, next_phase=next_phase,
                 instructions=self.instructions)
 
 # }}}
@@ -1207,16 +1208,16 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
     from pymbolic.imperative.utils import get_dot_dependency_graph
 
     def addtional_lines_hook():
-        for i, (name, state) in enumerate(six.iteritems(code.states)):
+        for i, (name, phase) in enumerate(six.iteritems(code.phases)):
             yield "subgraph cluster_%d { label=\"%s\"" % (i, name)
-            for dep in state.depends_on:
+            for dep in phase.depends_on:
                 yield dep
             yield "}"
 
     instructions = [
             insn if use_insn_ids else insn.copy(id=insn.id)
-            for state_name, state in six.iteritems(code.states)
-            for insn in state.instructions]
+            for phase_name, phase in six.iteritems(code.phases)
+            for insn in phase.instructions]
     return get_dot_dependency_graph(
             instructions, use_insn_ids=use_insn_ids,
             addtional_lines_hook=addtional_lines_hook)

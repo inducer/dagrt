@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 import six
 from pymbolic.mapper import Collector
-from dagrt.language import YieldState, StateTransition, AssignFunctionCall
+from dagrt.language import YieldState, PhaseTransition, AssignFunctionCall
 
 
 # {{{ verifier
@@ -34,54 +34,54 @@ def _quote(string):
     return "\"{0}\"".format(string)
 
 
-def verify_state_transitions(states, errors):
+def verify_phase_transitions(phases, errors):
     """
-    Ensure that states referenced by StateTransition exist.
+    Ensure that phases referenced by PhaseTransition exist.
 
     :arg instructions: A set of instructions to verify
-    :arg states: A map from state names to states
+    :arg phases: A map from phase names to phases
     :arg errors: An error list to which new errors get appended
     """
-    state_names = [key for key in states.keys()]
-    for state in six.itervalues(states):
-        for inst in state.instructions:
-            if not isinstance(inst, StateTransition):
+    phase_names = [key for key in phases.keys()]
+    for phase in six.itervalues(phases):
+        for inst in phase.instructions:
+            if not isinstance(inst, PhaseTransition):
                 continue
-            if inst.next_state not in state_names:
+            if inst.next_phase not in phase_names:
                 errors.append(
-                    "State \"{0}\" referenced by instruction \"{1}:{2}\" not found"
-                    .format(inst.next_state, state, inst))
+                    "Phase \"{0}\" referenced by instruction \"{1}:{2}\" not found"
+                    .format(inst.next_phase, phase, inst))
 
 
-def verify_all_dependencies_exist(states, errors):
+def verify_all_dependencies_exist(phases, errors):
     """
     Ensure that all instruction dependencies exist.
 
     :arg instructions: A set of instructions to verify
-    :arg states: A map from state names to states
+    :arg phases: A map from phase names to phases
     :arg errors: An error list to which new errors get appended
     """
     ids = set(inst.id
-            for state in six.itervalues(states)
-            for inst in state.instructions)
+            for phase in six.itervalues(phases)
+            for inst in phase.instructions)
 
     # Check instructions
-    for state in six.itervalues(states):
-        for inst in state.instructions:
+    for phase in six.itervalues(phases):
+        for inst in phase.instructions:
             deps = set(inst.depends_on)
             if not deps <= ids:
                 errors.extend(
                     ["Dependency \"{0}\" referenced by instruction \"{1}\" not found"
                      .format(dep_name, inst) for dep_name in deps - ids])
 
-    # Check states.
-    for state_name, state in six.iteritems(states):
-        deps = set(state.depends_on)
+    # Check phases.
+    for phase_name, phase in six.iteritems(phases):
+        deps = set(phase.depends_on)
         if not deps <= ids:
             errors.extend(
-                ["Dependencies {0} referenced by state \"{1}\" not found"
+                ["Dependencies {0} referenced by phase \"{1}\" not found"
                  .format(", ".join(_quote(dep) for dep in ids - deps),
-                         state_name)])
+                         phase_name)])
 
 
 def verify_no_circular_dependencies(instructions, errors):
@@ -153,14 +153,14 @@ def verify_code(code):
     try:
         # Wrap in a try block, since some verifier passes may fail due to badly
         # malformed code.
-        verify_all_dependencies_exist(code.states, errors)
-        for state in six.itervalues(code.states):
-            verify_no_circular_dependencies(state.instructions, errors)
+        verify_all_dependencies_exist(code.phases, errors)
+        for phase in six.itervalues(code.phases):
+            verify_no_circular_dependencies(phase.instructions, errors)
 
-        verify_state_transitions(code.states, errors)
+        verify_phase_transitions(code.phases, errors)
 
-        for state in six.itervalues(code.states):
-            verify_single_definition_cond_rule(state.instructions, errors)
+        for phase in six.itervalues(code.phases):
+            verify_single_definition_cond_rule(phase.instructions, errors)
 
     except Exception as e:
         # Ensure there is at least one error to report.
@@ -205,8 +205,8 @@ def collect_function_names_from_dag(dag, no_expressions=False):
     def mapper(expr):
         result.update(fnc(expr))
         return expr
-    for state in six.itervalues(dag.states):
-        for insn in state.instructions:
+    for phase in six.itervalues(dag.phases):
+        for insn in phase.instructions:
             if isinstance(insn, AssignFunctionCall):
                 result.add(insn.function_id)
 
@@ -223,8 +223,8 @@ def collect_function_names_from_dag(dag, no_expressions=False):
 def collect_time_ids_from_dag(dag):
     result = set()
 
-    for state in six.itervalues(dag.states):
-        for insn in state.instructions:
+    for phase in six.itervalues(dag.phases):
+        for insn in phase.instructions:
             if isinstance(insn, YieldState):
                 result.add(insn.time_id)
 
@@ -238,8 +238,8 @@ def collect_time_ids_from_dag(dag):
 def collect_ode_component_names_from_dag(dag):
     result = set()
 
-    for state in six.itervalues(dag.states):
-        for insn in state.instructions:
+    for phase in six.itervalues(dag.phases):
+        for insn in phase.instructions:
             if isinstance(insn, YieldState):
                 result.add(insn.component_id)
 

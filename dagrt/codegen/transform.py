@@ -34,10 +34,10 @@ def eliminate_self_dependencies(dag):
     insn_id_gen = dag.get_insn_id_generator()
     var_name_gen = dag.get_var_name_generator()
 
-    new_states = {}
-    for state_name, state in six.iteritems(dag.states):
+    new_phases = {}
+    for phase_name, phase in six.iteritems(dag.phases):
         new_instructions = []
-        for insn in sorted(state.instructions, key=lambda insn: insn.id):
+        for insn in sorted(phase.instructions, key=lambda insn: insn.id):
             read_and_written = (
                     insn.get_read_variables() & insn.get_written_variables())
 
@@ -77,9 +77,9 @@ def eliminate_self_dependencies(dag):
 
             new_instructions.append(new_insn)
 
-        new_states[state_name] = state.copy(instructions=new_instructions)
+        new_phases[phase_name] = phase.copy(instructions=new_instructions)
 
-    return dag.copy(states=new_states)
+    return dag.copy(phases=new_phases)
 
 # }}}
 
@@ -143,8 +143,8 @@ def isolate_function_arguments(dag):
     insn_id_gen = dag.get_insn_id_generator()
     var_name_gen = dag.get_var_name_generator()
 
-    new_states = {}
-    for state_name, state in six.iteritems(dag.states):
+    new_phases = {}
+    for phase_name, phase in six.iteritems(dag.phases):
         new_instructions = []
 
         fai = FunctionArgumentIsolator(
@@ -152,7 +152,7 @@ def isolate_function_arguments(dag):
                 insn_id_gen=insn_id_gen,
                 var_name_gen=var_name_gen)
 
-        for insn in sorted(state.instructions, key=lambda insn: insn.id):
+        for insn in sorted(phase.instructions, key=lambda insn: insn.id):
             base_deps = insn.depends_on
             new_deps = []
 
@@ -163,9 +163,9 @@ def isolate_function_arguments(dag):
                             expr, insn.condition, base_deps, new_deps))
                     .copy(depends_on=insn.depends_on | frozenset(new_deps)))
 
-        new_states[state_name] = state.copy(instructions=new_instructions)
+        new_phases[phase_name] = phase.copy(instructions=new_instructions)
 
-    return dag.copy(states=new_states)
+    return dag.copy(phases=new_phases)
 
 # }}}
 
@@ -241,8 +241,8 @@ def isolate_function_calls(dag):
     insn_id_gen = dag.get_insn_id_generator()
     var_name_gen = dag.get_var_name_generator()
 
-    new_states = {}
-    for state_name, state in six.iteritems(dag.states):
+    new_phases = {}
+    for phase_name, phase in six.iteritems(dag.phases):
         new_instructions = []
 
         fci = FunctionCallIsolator(
@@ -250,7 +250,7 @@ def isolate_function_calls(dag):
                 insn_id_gen=insn_id_gen,
                 var_name_gen=var_name_gen)
 
-        for insn in sorted(state.instructions, key=lambda insn: insn.id):
+        for insn in sorted(phase.instructions, key=lambda insn: insn.id):
             new_deps = []
 
             from dagrt.language import AssignExpression
@@ -267,9 +267,9 @@ def isolate_function_calls(dag):
             else:
                 new_instructions.append(insn)
 
-        new_states[state_name] = state.copy(instructions=new_instructions)
+        new_phases[phase_name] = phase.copy(instructions=new_instructions)
 
-    return dag.copy(states=new_states)
+    return dag.copy(phases=new_phases)
 
 # }}}
 
@@ -361,8 +361,8 @@ def expand_IfThenElse(dag):  # noqa
     insn_id_gen = dag.get_insn_id_generator()
     var_name_gen = dag.get_var_name_generator()
 
-    new_states = {}
-    for state_name, state in six.iteritems(dag.states):
+    new_phases = {}
+    for phase_name, phase in six.iteritems(dag.phases):
         new_instructions = []
 
         expander = IfThenElseExpander(
@@ -370,7 +370,7 @@ def expand_IfThenElse(dag):  # noqa
             insn_id_gen=insn_id_gen,
             var_name_gen=var_name_gen)
 
-        for insn in state.instructions:
+        for insn in phase.instructions:
             base_deps = insn.depends_on
             new_deps = []
 
@@ -379,9 +379,9 @@ def expand_IfThenElse(dag):  # noqa
                     lambda expr: expander(expr, insn.condition, base_deps, new_deps))
                 .copy(depends_on=insn.depends_on | frozenset(new_deps)))
 
-        new_states[state_name] = state.copy(instructions=new_instructions)
+        new_phases[phase_name] = phase.copy(instructions=new_instructions)
 
-    return dag.copy(states=new_states)
+    return dag.copy(phases=new_phases)
 
 # }}}
 
