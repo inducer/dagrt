@@ -99,8 +99,8 @@ def test_arrays_and_linalg():
         with cb.if_("`<builtin>norm_2`(myzero) > 10**(-8)"):
             cb.raise_(MatrixInversionFailure)
 
-    code = DAGCode.create_with_steady_state(
-        cb.state_dependencies, cb.instructions)
+    code = DAGCode.create_with_steady_phase(
+        cb.phase_dependencies, cb.instructions)
 
     codegen = f.CodeGenerator(
             'arrays',

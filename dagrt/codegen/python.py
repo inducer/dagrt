@@ -61,7 +61,7 @@ class StateComputed(namedtuple("StateComputed",
 
 class StepCompleted(
         namedtuple("StepCompleted",
-            ["dt", "t", "current_state", "next_state"])):
+            ["dt", "t", "current_phase", "next_phase"])):
     """
     .. attribute:: dt
 
@@ -71,8 +71,8 @@ class StepCompleted(
 
         Approximate integrator time at end of step.
 
-    .. attribute:: current_state
-    .. attribute:: next_state
+    .. attribute:: current_phase
+    .. attribute:: next_phase
     """
 
 class StepFailed(namedtuple("StepFailed", ["t"])):
@@ -97,8 +97,8 @@ class ExitStepException(RuntimeError):
 
 class TransitionEvent(Exception):
 
-    def __init__(self, next_state):
-        self.next_state = next_state
+    def __init__(self, next_phase):
+        self.next_phase = next_phase
 
 
 class StepError(Exception):
@@ -206,13 +206,13 @@ class CodeGenerator(StructuredCodeGenerator):
         from .analysis import verify_code
         verify_code(dag)
 
-        from .ast import create_ast_from_state
+        from .ast import create_ast_from_phase
 
         self.begin_emit(dag)
-        for state_name in six.iterkeys(dag.states):
-            ast = create_ast_from_state(dag, state_name)
+        for phase_name in six.iterkeys(dag.phases):
+            ast = create_ast_from_phase(dag, phase_name)
             self._pre_lower(ast)
-            self.lower_function(state_name, ast)
+            self.lower_function(phase_name, ast)
         self.finish_emit(dag)
 
         return self.get_code()
@@ -289,11 +289,11 @@ class CodeGenerator(StructuredCodeGenerator):
                         py_function_id=py_function_id,
                         function_id=function_id))
         emit("")
-        emit("self.state_transition_table = "+repr(dict(
-            (state_name, (
-                state.next_state,
-                BareExpression("self.state_"+state_name)))
-            for state_name, state in six.iteritems(dag.states))))
+        emit("self.phase_transition_table = "+repr(dict(
+            (phase_name, (
+                phase.next_phase,
+                BareExpression("self.phase_"+phase_name)))
+            for phase_name, phase in six.iteritems(dag.phases))))
         emit("")
 
         self._class_emitter.incorporate(emit)
@@ -313,7 +313,7 @@ class CodeGenerator(StructuredCodeGenerator):
             emit('{component} = context.get("{component_id}")'.format(
                 component=component, component_id=component_id))
 
-        emit("self.next_state = "+repr(dag.initial_state))
+        emit("self.next_phase = "+repr(dag.initial_phase))
 
         emit("")
         self._class_emitter.incorporate(emit)
@@ -329,7 +329,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 if max_steps is not None and n_steps >= max_steps:
                     return
 
-                cur_state = self.next_state
+                cur_phase = self.next_phase
                 try:
                     for evt in self.run_single_step():
                         yield evt
@@ -342,10 +342,10 @@ class CodeGenerator(StructuredCodeGenerator):
                     continue
 
                 except self.TransitionEvent as evt:
-                    self.next_state = evt.next_state
+                    self.next_phase = evt.next_phase
 
                 yield self.StepCompleted(dt=self.dt, t=self.t,
-                    current_state=cur_state, next_state=self.next_state)
+                    current_phase=cur_phase, next_phase=self.next_phase)
 
                 n_steps += 1
             """)
@@ -356,10 +356,10 @@ class CodeGenerator(StructuredCodeGenerator):
         emit = PythonFunctionEmitter('run_single_step', ('self',))
 
         emit("""
-            self.next_state, state_func = (
-                self.state_transition_table[self.next_state])
+            self.next_phase, phase_func = (
+                self.phase_transition_table[self.next_phase])
 
-            for evt in state_func():
+            for evt in phase_func():
                 yield evt
             """)
         self._class_emitter.incorporate(emit)
@@ -374,7 +374,7 @@ class CodeGenerator(StructuredCodeGenerator):
         return self._class_emitter.get()
 
     def emit_def_begin(self, name):
-        self._emitter = PythonFunctionEmitter('state_' + name, ('self',))
+        self._emitter = PythonFunctionEmitter('phase_' + name, ('self',))
         self._name_manager.clear_locals()
 
     def emit_def_end(self):
@@ -487,9 +487,9 @@ class CodeGenerator(StructuredCodeGenerator):
         if not self._has_yield_inst:
             self._emit('yield')
 
-    def emit_inst_StateTransition(self, inst):
-        assert '\'' not in inst.next_state
-        self._emit('raise self.TransitionEvent(\'' + inst.next_state + '\')')
+    def emit_inst_PhaseTransition(self, inst):
+        assert '\'' not in inst.next_phase
+        self._emit('raise self.TransitionEvent(\'' + inst.next_phase + '\')')
         if not self._has_yield_inst:
             self._emit('yield')
 

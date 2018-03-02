@@ -25,72 +25,72 @@ THE SOFTWARE.
 
 # {{{ insert_empty_intermediate_state
 
-def insert_empty_intermediate_state(dag, state_name, after_state):
-    new_states = dag.states.copy()
+def insert_empty_intermediate_state(dag, phase_name, after_phase):
+    new_phases = dag.phases.copy()
 
-    if state_name in new_states:
-        raise ValueError("state '%s' already exists"
-                % state_name)
+    if phase_name in new_phases:
+        raise ValueError("phase '%s' already exists"
+                % phase_name)
 
-    from dagrt.language import DAGCode, ExecutionState
-    new_states[state_name] = ExecutionState(
-            next_state=new_states[after_state].next_state)
-    new_states[after_state] = new_states[after_state].copy(
-            next_state=state_name)
+    from dagrt.language import DAGCode, ExecutionPhase
+    new_phases[phase_name] = ExecutionPhase(
+            next_phase=new_phases[after_phase].next_phase)
+    new_phases[after_phase] = new_phases[after_phase].copy(
+            next_phase=phase_name)
 
-    return DAGCode(dag.instructions, new_states, dag.initial_state)
+    return DAGCode(dag.instructions, new_phases, dag.initial_phase)
 
 # }}}
 
 
-# {{{ fuse_two_states
+# {{{ fuse_two_phases
 
-def fuse_two_states(state_name, state1, state2):
-    from dagrt.language import ExecutionState
-    if state1 is not None and state2 is not None:
-        if state1.next_state != state2.next_state:
+def fuse_two_phases(phase_name, phase1, phase2):
+    from dagrt.language import ExecutionPhase
+    if phase1 is not None and phase2 is not None:
+        if phase1.next_phase != phase2.next_phase:
             raise ValueError("DAGs don't agree on default "
-                    "state transition out of state '%s'"
-                    % state_name)
+                    "phase transition out of phase '%s'"
+                    % phase_name)
 
         from pymbolic.imperative.transform import disambiguate_and_fuse
         new_instructions, _, old_2_id_to_new_2_id = disambiguate_and_fuse(
-                state1.instructions, state2.instructions)
+                phase1.instructions, phase2.instructions)
 
-        return ExecutionState(
-                next_state=state1.next_state,
-                depends_on=frozenset(state1.depends_on) | frozenset(
+        return ExecutionPhase(
+                next_phase=phase1.next_phase,
+                depends_on=frozenset(phase1.depends_on) | frozenset(
                     old_2_id_to_new_2_id.get(id2, id2)
-                    for id2 in state2.depends_on),
+                    for id2 in phase2.depends_on),
                 instructions=new_instructions
                 )
 
-    elif state1 is not None:
-        return state1
-    elif state2 is not None:
-        return state2
+    elif phase1 is not None:
+        return phase1
+    elif phase2 is not None:
+        return phase2
     else:
-        raise ValueError("both states are None")
+        raise ValueError("both phases are None")
 
 # }}}
 
 
 # {{{ fuse_two_dags
 
-def fuse_two_dags(dag1, dag2, state_correspondences=None,
+def fuse_two_dags(dag1, dag2, phase_correspondences=None,
         should_disambiguate_name=None):
     from dagrt.language import DAGCode
-    new_states = {}
-    for state_name in frozenset(dag1.states) | frozenset(dag2.states):
-        state1 = dag1.states.get(state_name)
-        state2 = dag2.states.get(state_name)
+    new_phases = {}
+    for phase_name in frozenset(dag1.phases) | frozenset(dag2.phases):
+        phase1 = dag1.phases.get(phase_name)
+        phase2 = dag2.phases.get(phase_name)
 
-        new_states[state_name] = fuse_two_states(state_name, state1, state2)
+        new_phases[phase_name] = fuse_two_phases(phase_name, phase1, phase2)
 
-    if dag1.initial_state != dag2.initial_state:
-        raise ValueError("DAGs don't agree on initial state")
+    if dag1.initial_phase != dag2.initial_phase:
+        raise ValueError("DAGs don't agree on initial phase")
 
-    return DAGCode(new_states, dag1.initial_state)
+    return DAGCode(new_phases, dag1.initial_phase)
 
 # }}}
 

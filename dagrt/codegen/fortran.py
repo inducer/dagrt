@@ -842,15 +842,15 @@ class CodeGenerator(StructuredCodeGenerator):
     The following attributes are available and allowed for read access in
     *dagrt_state_type* while outside of *run*:
 
-    * *dagrt_state_STATE_count*
-    * *dagrt_state_STATE_failures*
-    * *dagrt_state_STATE_time*
+    * *dagrt_state_PHASE_count*
+    * *dagrt_state_PHASE_failures*
+    * *dagrt_state_PHASE_time*
 
     * *dagrt_func_FUNC_count*
     * *dagrt_func_FUNC_time*
 
-    In all of the above, upper case denotes a "metavariable"--e.g. *STATE* is
-    the name of a state, or *FUNC* is  the name of a function. The name of a
+    In all of the above, upper case denotes a "metavariable"--e.g. *PHASE* is
+    the name of a phase, or *FUNC* is  the name of a function. The name of a
     function will typically be ``<func>something``, for which *FUNC* will be
     ``func_something``.  As a result, the profile field counting the number of
     invocations of the function ``<func>something`` will be named
@@ -990,8 +990,8 @@ class CodeGenerator(StructuredCodeGenerator):
         return "dagrt_deinit_"+make_identifier_from_name(utype_id)
 
     @staticmethod
-    def state_name_to_state_sym(state_name):
-        return "dagrt_state_"+state_name
+    def phase_name_to_phase_sym(phase_name):
+        return "dagrt_phase_"+phase_name
 
     @staticmethod
     def component_name_to_component_sym(comp_name):
@@ -1046,15 +1046,15 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ produce function name / function AST pairs
 
-        from .ast import create_ast_from_state
+        from .ast import create_ast_from_phase
 
         from collections import namedtuple
         NameASTPair = namedtuple("NameASTPair", "name, ast")  # noqa
         fdescrs = []
 
-        for state_name in sorted(six.iterkeys(dag.states)):
-            ast = create_ast_from_state(dag, state_name)
-            fdescrs.append(NameASTPair(state_name, ast))
+        for phase_name in sorted(six.iterkeys(dag.phases)):
+            ast = create_ast_from_phase(dag, phase_name)
+            fdescrs.append(NameASTPair(phase_name, ast))
 
         # }}}
 
@@ -1108,9 +1108,9 @@ class CodeGenerator(StructuredCodeGenerator):
         self.current_function = function_name
 
         self.emit_def_begin(
-                'dagrt_state_func_' + function_name,
+                'dagrt_phase_func_' + function_name,
                 self.extra_arguments + ('dagrt_state',),
-                state_id=function_name)
+                phase_id=function_name)
         self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
         self.declaration_emitter('')
 
@@ -1118,9 +1118,9 @@ class CodeGenerator(StructuredCodeGenerator):
 
         if self.emit_instrumentation:
             self.emit(
-                    "dagrt_state%dagrt_state_{state}_count "
-                    "= dagrt_state%dagrt_state_{state}_count + 1"
-                    .format(state=function_name))
+                    "dagrt_state%dagrt_phase_{phase}_count "
+                    "= dagrt_state%dagrt_phase_{phase}_count + 1"
+                    .format(phase=function_name))
 
             timer_start_var = self.name_manager.make_unique_fortran_name(
                 "timer_start")
@@ -1154,11 +1154,11 @@ class CodeGenerator(StructuredCodeGenerator):
 
         if self.emit_instrumentation:
             self.emit(
-                    "dagrt_state%dagrt_state_{state}_time "
-                    "= dagrt_state%dagrt_state_{state}_time "
+                    "dagrt_state%dagrt_phase_{phase}_time "
+                    "= dagrt_state%dagrt_phase_{phase}_time "
                     "+ ({timing_function}() - {timer_start_var})"
                     .format(
-                        state=function_name,
+                        phase=function_name,
                         timing_function=self.timing_function,
                         timer_start_var=timer_start_var,
                         ))
@@ -1211,14 +1211,14 @@ class CodeGenerator(StructuredCodeGenerator):
                 time_id=time_id, i=i))
         self.emit('')
 
-        # {{{ state name constants
+        # {{{ phase name constants
 
-        for i, state in enumerate(sorted(dag.states)):
-            state_sym_name = self.state_name_to_state_sym(state)
-            self.emit("integer {state_sym_name}".format(
-                state_sym_name=state_sym_name))
-            self.emit("parameter ({state_sym_name} = {i})".format(
-                state_sym_name=state_sym_name, i=i))
+        for i, phase in enumerate(sorted(dag.phases)):
+            phase_sym_name = self.phase_name_to_phase_sym(phase)
+            self.emit("integer {phase_sym_name}".format(
+                phase_sym_name=phase_sym_name))
+            self.emit("parameter ({phase_sym_name} = {i})".format(
+                phase_sym_name=phase_sym_name, i=i))
 
         self.emit('')
 
@@ -1247,7 +1247,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 self.emitter,
                 'dagrt_state_type',
                 self) as emit:
-            emit('integer dagrt_next_state')
+            emit('integer dagrt_next_phase')
             emit('')
 
             for identifier, sym_kind in sorted(six.iteritems(
@@ -1265,10 +1265,10 @@ class CodeGenerator(StructuredCodeGenerator):
                 emit('! {{{ instrumentation')
                 emit('')
 
-                for state_name in sorted(dag.states):
-                    emit('integer dagrt_state_%s_count' % state_name)
-                    emit('integer dagrt_state_%s_failures' % state_name)
-                    emit('real*8 dagrt_state_%s_time' % state_name)
+                for phase_name in sorted(dag.phases):
+                    emit('integer dagrt_phase_%s_count' % phase_name)
+                    emit('integer dagrt_phase_%s_failures' % phase_name)
+                    emit('real*8 dagrt_phase_%s_time' % phase_name)
 
                 emit('')
 
@@ -1614,18 +1614,18 @@ class CodeGenerator(StructuredCodeGenerator):
                 for sym in init_symbols)
 
         function_name = 'initialize'
-        state_id = "<dagrt>"+function_name
-        self.emit_def_begin(function_name, args, state_id=state_id)
+        phase_id = "<dagrt>"+function_name
+        self.emit_def_begin(function_name, args, phase_id=phase_id)
 
         for sym in init_symbols:
             sym_kind = self.sym_kind_table.global_table[sym]
             fortran_name = self.name_manager.name_global(sym)
-            self.sym_kind_table.set(state_id, "<target>"+fortran_name, sym_kind)
+            self.sym_kind_table.set(phase_id, "<target>"+fortran_name, sym_kind)
 
         self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
         self.declaration_emitter('')
 
-        self.current_function = state_id
+        self.current_function = phase_id
 
         for sym in init_symbols:
             sym_kind = self.sym_kind_table.global_table[sym]
@@ -1644,8 +1644,8 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit("read(dagrt_nan_str,*) dagrt_nan")
 
         self.emit(
-                "dagrt_state%dagrt_next_state = dagrt_state_{0}"
-                .format(dag.initial_state))
+                "dagrt_state%dagrt_next_phase = dagrt_phase_{0}"
+                .format(dag.initial_phase))
 
         for sym, sym_kind in sorted(six.iteritems(
                 self.sym_kind_table.global_table)):
@@ -1707,10 +1707,10 @@ class CodeGenerator(StructuredCodeGenerator):
             self.emit('! {{{ instrumentation')
             self.emit('')
 
-            for state_name in sorted(dag.states):
-                self.emit('dagrt_state%%dagrt_state_%s_count = 0' % state_name)
-                self.emit('dagrt_state%%dagrt_state_%s_failures = 0' % state_name)
-                self.emit('dagrt_state%%dagrt_state_%s_time = 0' % state_name)
+            for phase_name in sorted(dag.phases):
+                self.emit('dagrt_state%%dagrt_phase_%s_count = 0' % phase_name)
+                self.emit('dagrt_state%%dagrt_phase_%s_failures = 0' % phase_name)
+                self.emit('dagrt_state%%dagrt_phase_%s_time = 0' % phase_name)
 
             self.emit('')
 
@@ -1737,13 +1737,13 @@ class CodeGenerator(StructuredCodeGenerator):
         args = self.extra_arguments + ('dagrt_state',)
 
         function_name = 'shutdown'
-        state_id = "<dagrt>"+function_name
-        self.emit_def_begin(function_name, args, state_id=state_id)
+        phase_id = "<dagrt>"+function_name
+        self.emit_def_begin(function_name, args, phase_id=phase_id)
 
         self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
         self.declaration_emitter('')
 
-        self.current_function = state_id
+        self.current_function = phase_id
 
         from dagrt.codegen.data import UserType
 
@@ -1775,18 +1775,18 @@ class CodeGenerator(StructuredCodeGenerator):
         args = self.extra_arguments + ('dagrt_state',)
 
         function_name = 'run'
-        state_id = "<dagrt>"+function_name
-        self.emit_def_begin(function_name, args, state_id=state_id)
+        phase_id = "<dagrt>"+function_name
+        self.emit_def_begin(function_name, args, phase_id=phase_id)
 
         self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
         self.declaration_emitter('')
 
-        self.current_function = state_id
+        self.current_function = phase_id
 
         if_emit = None
-        for name, state_descr in sorted(six.iteritems(dag.states)):
-            state_sym_name = self.state_name_to_state_sym(name)
-            cond = "dagrt_state%dagrt_next_state == "+state_sym_name
+        for name, phase_descr in sorted(six.iteritems(dag.phases)):
+            phase_sym_name = self.phase_name_to_phase_sym(name)
+            cond = "dagrt_state%dagrt_next_phase == "+phase_sym_name
 
             if if_emit is None:
                 if_emit = FortranIfEmitter(
@@ -1796,18 +1796,18 @@ class CodeGenerator(StructuredCodeGenerator):
                 if_emit.emit_else_if(cond)
 
             self.emit(
-                    "dagrt_state%dagrt_next_state = "
-                    + self.state_name_to_state_sym(state_descr.next_state))
+                    "dagrt_state%dagrt_next_phase = "
+                    + self.phase_name_to_phase_sym(phase_descr.next_phase))
 
             self.emit(
-                    "call dagrt_state_func_{state_name}({args})".format(
-                        state_name=name,
+                    "call dagrt_phase_func_{phase_name}({args})".format(
+                        phase_name=name,
                         args=", ".join(args)))
 
         if if_emit:
             if_emit.emit_else()
-            self.emit("write(dagrt_stderr,*) 'encountered invalid state in run', "
-                    "dagrt_state%dagrt_next_state")
+            self.emit("write(dagrt_stderr,*) 'encountered invalid phase in run', "
+                    "dagrt_state%dagrt_next_phase")
             self.emit("stop")
 
         if_emit.__exit__(None, None, None)
@@ -1835,29 +1835,29 @@ class CodeGenerator(StructuredCodeGenerator):
             self.emit("write(*,*) 'dagrt profile information'")
             self.emit("write(*,*) '%s'" % delim)
 
-            for state_name in sorted(dag.states):
+            for phase_name in sorted(dag.phases):
                 self.emit(
-                    "write(*,*) 'state {state} count:', "
-                    "dagrt_state%dagrt_state_{state}_count"
-                    .format(state=state_name))
+                    "write(*,*) 'phase {phase} count:', "
+                    "dagrt_state%dagrt_phase_{phase}_count"
+                    .format(phase=phase_name))
                 self.emit(
-                    "write(*,*) 'state {state} failures:', "
-                    "dagrt_state%dagrt_state_{state}_failures"
-                    .format(state=state_name))
+                    "write(*,*) 'phase {phase} failures:', "
+                    "dagrt_state%dagrt_phase_{phase}_failures"
+                    .format(phase=phase_name))
                 with FortranIfEmitter(
                         self.emitter,
-                        'dagrt_state%dagrt_state_{state}_count > 0'
-                        .format(state=state_name),
+                        'dagrt_state%dagrt_phase_{phase}_count > 0'
+                        .format(phase=phase_name),
                         self):
                     self.emit(
-                        "write(*,*) 'state {state} mean time:', "
-                        "dagrt_state%dagrt_state_{state}_time"
-                        "/dagrt_state%dagrt_state_{state}_count"
-                        .format(state=state_name))
+                        "write(*,*) 'phase {phase} mean time:', "
+                        "dagrt_state%dagrt_phase_{phase}_time"
+                        "/dagrt_state%dagrt_phase_{phase}_count"
+                        .format(phase=phase_name))
                 self.emit(
-                    "write(*,*) 'state {state} total time:', "
-                    "dagrt_state%dagrt_state_{state}_time"
-                    .format(state=state_name))
+                    "write(*,*) 'phase {phase} total time:', "
+                    "dagrt_state%dagrt_phase_{phase}_time"
+                    .format(phase=phase_name))
 
             self.emit('')
             self.emit("write(*,*) '%s'" % delim)
@@ -1979,7 +1979,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
     # {{{ called by superclass
 
-    def emit_def_begin(self, function_name, argument_names, state_id=None,
+    def emit_def_begin(self, function_name, argument_names, phase_id=None,
             with_extra_args=True):
         self.declaration_emitter = FortranEmitter()
 
@@ -1999,8 +1999,8 @@ class CodeGenerator(StructuredCodeGenerator):
         body_emitter = FortranEmitter()
         self.emitters.append(body_emitter)
 
-        if state_id is not None:
-            sym_table = self.sym_kind_table.per_function_table.get(state_id, {})
+        if phase_id is not None:
+            sym_table = self.sym_kind_table.per_function_table.get(phase_id, {})
             for identifier, sym_kind in sorted(six.iteritems(sym_table)):
                 self.emit_variable_decl(
                         self.name_manager[identifier], sym_kind,
@@ -2013,7 +2013,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_trace('================================================')
         self.emit_trace('enter %s' % function_name)
 
-        if state_id is not None:
+        if phase_id is not None:
             for identifier, sym_kind in sorted(six.iteritems(sym_table)):
                 self.emit_variable_init(identifier, sym_kind)
 
@@ -2244,19 +2244,19 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_inst_FailStep(self, inst):
         if self.emit_instrumentation:
             self.emit(
-                    "dagrt_state%dagrt_state_{state}_failures "
-                    "= dagrt_state%dagrt_state_{state}_failures + 1"
-                    .format(state=self.current_function))
+                    "dagrt_state%dagrt_phase_{phase}_failures "
+                    "= dagrt_state%dagrt_phase_{phase}_failures + 1"
+                    .format(phase=self.current_function))
 
         self.emit("goto 999")
 
     def emit_inst_ExitStep(self, inst):
         self.emit("goto 999")
 
-    def emit_inst_StateTransition(self, inst):
+    def emit_inst_PhaseTransition(self, inst):
         self.emit(
-                'dagrt_state%dagrt_next_state = '
-                + self.state_name_to_state_sym(inst.next_state))
+                'dagrt_state%dagrt_next_phase = '
+                + self.phase_name_to_phase_sym(inst.next_phase))
 
     # }}}
 

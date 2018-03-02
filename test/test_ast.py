@@ -28,7 +28,7 @@ from pymbolic import var
 from pymbolic.primitives import LogicalNot
 
 from dagrt.codegen.ast import (IfThen, IfThenElse, Block, InstructionWrapper,
-                               create_ast_from_state, simplify_ast)
+                               create_ast_from_phase, simplify_ast)
 from dagrt.language import Instruction, DAGCode
 
 import pytest
@@ -58,8 +58,8 @@ def test_create_ast():
             return hash(self._state())
 
     nop = ComparableNop(condition=x, id="nop", depends_on=())
-    code = DAGCode.create_with_steady_state(["nop"], [nop])
-    ast = create_ast_from_state(code, "main")
+    code = DAGCode.create_with_steady_phase(["nop"], [nop])
+    ast = create_ast_from_phase(code, "main")
     assert ast == IfThen(x, InstructionWrapper(nop.copy(condition=True)))
 
 
