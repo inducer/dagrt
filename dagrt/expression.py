@@ -32,6 +32,7 @@ from pymbolic.mapper.unifier import UnidirectionalUnifier
 from pymbolic.primitives import Variable, is_constant
 from pymbolic.parser import Parser, _less, _greater, _identifier
 from pymbolic.primitives import If as IfThenElse # noqa
+from pymbolic.mapper.stringifier import PREC_LOGICAL_OR
 
 import logging
 import operator
@@ -42,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 # Precedence constant for IfThenElse.
-PREC_IFTHENELSE = 1
+PREC_IFTHENELSE = PREC_LOGICAL_OR - 1
 
 
 class ExtendedDependencyMapper(DependencyMapper):
