@@ -22,8 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from . import analysis
-from . import python
+import dagrt.codegen.analysis as analysis
+import dagrt.codegen.python as python
 
 
 CodeGenerationError = analysis.CodeGenerationError

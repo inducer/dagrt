@@ -106,6 +106,8 @@ Instructions
 Assignment Instructions
 ^^^^^^^^^^^^^^^^^^^^^^^
 
+These instructions perform updates to the execution state, i.e. the variables.
+
 .. autoclass:: AssignSolved
 .. autoclass:: AssignExpression
 .. autoclass:: AssignFunctionCall
@@ -113,11 +115,19 @@ Assignment Instructions
 Control Instructions
 ^^^^^^^^^^^^^^^^^^^^
 
+These instructions affect the execution of a phase, or cause a phase to interact
+with user code.
+
 .. autoclass:: YieldState
 .. autoclass:: Raise
 .. autoclass:: FailStep
 .. autoclass:: ExitStep
 .. autoclass:: PhaseTransition
+
+Miscellaneous Instructions
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autoclass:: Nop
 
 Code Container
 ~~~~~~~~~~~~~~

@@ -22,9 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from .expressions import PythonExpressionMapper
-from .codegen_base import StructuredCodeGenerator
-from .utils import (wrap_line_base, exec_in_new_namespace,
+from dagrt.codegen.expressions import PythonExpressionMapper
+from dagrt.codegen.codegen_base import StructuredCodeGenerator
+from dagrt.codegen.utils import (wrap_line_base, exec_in_new_namespace,
                     KeyToUniqueNameMap)
 from pytools.py_codegen import (
         PythonCodeGenerator as PythonEmitter,
@@ -32,9 +32,6 @@ from pytools.py_codegen import (
 from dagrt.utils import is_state_variable
 from functools import partial
 import six
-
-
-# from .ir import YieldStateInst
 
 
 def pad_python(line, width):
@@ -203,10 +200,10 @@ class CodeGenerator(StructuredCodeGenerator):
                 self._name_manager, function_registry, numpy='self._numpy')
 
     def __call__(self, dag):
-        from .analysis import verify_code
+        from dagrt.codegen.analysis import verify_code
         verify_code(dag)
 
-        from .ast import create_ast_from_phase
+        from dagrt.codegen.ast import create_ast_from_phase
 
         self.begin_emit(dag)
         for phase_name in six.iterkeys(dag.phases):
@@ -220,7 +217,7 @@ class CodeGenerator(StructuredCodeGenerator):
     def _pre_lower(self, ast):
         self._has_yield_inst = False
         from dagrt.language import YieldState
-        from .ast import get_instructions_in_ast
+        from dagrt.codegen.ast import get_instructions_in_ast
         for inst in get_instructions_in_ast(ast):
             if isinstance(inst, YieldState):
                 self._has_yield_inst = True

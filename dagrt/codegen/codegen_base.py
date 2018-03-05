@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from .ast import Block, IfThen, IfThenElse, InstructionWrapper
+from dagrt.codegen.ast import Block, IfThen, IfThenElse, InstructionWrapper
 
 
 class StructuredCodeGenerator(object):
