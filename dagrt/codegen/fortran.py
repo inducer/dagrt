@@ -1046,7 +1046,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ produce function name / function AST pairs
 
-        from dagrt.codegen.ast import create_ast_from_phase
+        from dagrt.codegen.dag_ast import create_ast_from_phase
 
         from collections import namedtuple
         NameASTPair = namedtuple("NameASTPair", "name, ast")  # noqa

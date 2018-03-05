@@ -203,7 +203,7 @@ class CodeGenerator(StructuredCodeGenerator):
         from dagrt.codegen.analysis import verify_code
         verify_code(dag)
 
-        from dagrt.codegen.ast import create_ast_from_phase
+        from dagrt.codegen.dag_ast import create_ast_from_phase
 
         self.begin_emit(dag)
         for phase_name in six.iterkeys(dag.phases):
@@ -217,7 +217,7 @@ class CodeGenerator(StructuredCodeGenerator):
     def _pre_lower(self, ast):
         self._has_yield_inst = False
         from dagrt.language import YieldState
-        from dagrt.codegen.ast import get_instructions_in_ast
+        from dagrt.codegen.dag_ast import get_instructions_in_ast
         for inst in get_instructions_in_ast(ast):
             if isinstance(inst, YieldState):
                 self._has_yield_inst = True

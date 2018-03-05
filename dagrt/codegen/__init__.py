@@ -22,9 +22,5 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import dagrt.codegen.analysis as analysis
-import dagrt.codegen.python as python
-
-
-CodeGenerationError = analysis.CodeGenerationError
-PythonCodeGenerator = python.CodeGenerator
+from dagrt.codegen.analysis import CodeGenerationError  # noqa
+from dagrt.codegen.python import CodeGenerator as PythonCodeGenerator  # noqa
