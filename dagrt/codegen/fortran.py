@@ -28,8 +28,8 @@ from functools import partial
 import re  # noqa
 import six
 
-from .expressions import FortranExpressionMapper
-from .codegen_base import StructuredCodeGenerator
+from dagrt.codegen.expressions import FortranExpressionMapper
+from dagrt.codegen.codegen_base import StructuredCodeGenerator
 from dagrt.utils import is_state_variable
 from dagrt.codegen.data import UserType
 from pytools.py_codegen import (
@@ -38,7 +38,7 @@ from pytools.py_codegen import (
 from pymbolic.primitives import (Call, CallWithKwargs, Variable,
         Subscript, Lookup)
 from pymbolic.mapper import IdentityMapper
-from .utils import (wrap_line_base, KeyToUniqueNameMap,
+from dagrt.codegen.utils import (wrap_line_base, KeyToUniqueNameMap,
         make_identifier_from_name)
 
 
@@ -1028,10 +1028,10 @@ class CodeGenerator(StructuredCodeGenerator):
                     "used more than once")
         self.used = True
 
-        from .analysis import verify_code
+        from dagrt.codegen.analysis import verify_code
         verify_code(dag)
 
-        from .transform import (
+        from dagrt.codegen.transform import (
                 eliminate_self_dependencies,
                 isolate_function_arguments,
                 isolate_function_calls,
@@ -1046,7 +1046,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ produce function name / function AST pairs
 
-        from .ast import create_ast_from_phase
+        from dagrt.codegen.dag_ast import create_ast_from_phase
 
         from collections import namedtuple
         NameASTPair = namedtuple("NameASTPair", "name, ast")  # noqa
@@ -1064,7 +1064,7 @@ class CodeGenerator(StructuredCodeGenerator):
             [fd.name for fd in fdescrs],
             [fd.ast for fd in fdescrs])
 
-        from .analysis import collect_ode_component_names_from_dag
+        from dagrt.codegen.analysis import collect_ode_component_names_from_dag
         component_ids = collect_ode_component_names_from_dag(dag)
 
         if not component_ids <= set(self.user_type_map):
@@ -1204,7 +1204,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 self.emit(l)
             self.emit('')
 
-        from .analysis import collect_time_ids_from_dag
+        from dagrt.codegen.analysis import collect_time_ids_from_dag
         for i, time_id in enumerate(sorted(collect_time_ids_from_dag(dag))):
             self.emit("integer dagrt_time_{time_id}".format(time_id=time_id))
             self.emit("parameter (dagrt_time_{time_id} = {i})".format(
@@ -1226,7 +1226,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ component name constants
 
-        from .analysis import collect_ode_component_names_from_dag
+        from dagrt.codegen.analysis import collect_ode_component_names_from_dag
         component_ids = collect_ode_component_names_from_dag(dag)
 
         for i, comp_id in enumerate(sorted(component_ids)):

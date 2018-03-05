@@ -1,6 +1,6 @@
 """Code generation of expressions"""
 from pymbolic.mapper.stringifier import (
-        StringifyMapper, PREC_NONE, PREC_CALL, PREC_PRODUCT)
+        StringifyMapper, PREC_NONE, PREC_CALL, PREC_PRODUCT, PREC_LOGICAL_OR)
 import numpy as np
 
 
@@ -139,7 +139,7 @@ class PythonExpressionMapper(StringifyMapper):
     """Converts expressions to Python code."""
 
     def __init__(self, name_manager, function_registry,
-            numpy='numpy'):
+            numpy="numpy"):
         """name_manager is a map from a variable name (as a string) to its
         representation (as a string).
 
@@ -152,7 +152,7 @@ class PythonExpressionMapper(StringifyMapper):
 
     def map_foreign(self, expr, *args):
         if expr is None:
-            return 'None'
+            return "None"
         elif isinstance(expr, str):
             return repr(expr)
         else:
@@ -165,11 +165,11 @@ class PythonExpressionMapper(StringifyMapper):
 
     def map_numpy_array(self, expr, *args):
         if len(expr.shape) > 1:
-            raise ValueError('Representing multidimensional arrays is ' +
-                             'not supported')
+            raise ValueError(
+                    "Representing multidimensional arrays is not supported")
         elements = [self.rec(element, *args) for element in expr]
-        return '{numpy}.array([{elements}],dtype=\'object\')'.format(
-            numpy=self._numpy, elements=', '.join(elements))
+        return "{numpy}.array([{elements}],dtype=\'object\')".format(
+            numpy=self._numpy, elements=", ".join(elements))
 
     def map_generic_call(self, symbol, args, kwargs):
         arg_strs_dict = {}
@@ -187,12 +187,12 @@ class PythonExpressionMapper(StringifyMapper):
                     self.rec(val, PREC_NONE)
                     for val in args
                     ] + [
-                    '{name}={expr}'.format(
+                    "{name}={expr}".format(
                         name=name,
                         expr=self.rec(val, PREC_NONE))
                     for name, val in kwargs.items()]
 
-            return '{rhs}({args})'.format(
+            return "{rhs}({args})".format(
                     rhs=self._name_manager.name_function(symbol.name),
                     args=", ".join(args_strs))
 
@@ -212,10 +212,12 @@ class PythonExpressionMapper(StringifyMapper):
         from dagrt.expression import PREC_IFTHENELSE
         return self.parenthesize_if_needed(
             "{then} if {cond} else {else_}".format(
-                then=self.rec(expr.then, PREC_IFTHENELSE),
-                cond=self.rec(expr.condition, PREC_IFTHENELSE),
-                else_=self.rec(expr.else_, PREC_IFTHENELSE)),
-            enclosing_prec, PREC_NONE)
+                # "1 if 0 if 1 else 2 else 3" is not valid Python.
+                # So force parens by using an artificially higher precedence.
+                then=self.rec(expr.then, PREC_LOGICAL_OR),
+                cond=self.rec(expr.condition, PREC_LOGICAL_OR),
+                else_=self.rec(expr.else_, PREC_LOGICAL_OR)),
+            enclosing_prec, PREC_IFTHENELSE)
 
 # }}}
 

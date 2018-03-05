@@ -410,7 +410,7 @@ class SymbolKindFinder(object):
 
         result = SymbolKindTable()
 
-        from .ast import get_instructions_in_ast
+        from dagrt.codegen.dag_ast import get_instructions_in_ast
 
         def make_kim(func_name, check):
             return KindInferenceMapper(

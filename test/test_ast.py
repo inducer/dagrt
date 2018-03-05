@@ -27,7 +27,7 @@ from pymbolic import var
 
 from pymbolic.primitives import LogicalNot
 
-from dagrt.codegen.ast import (IfThen, IfThenElse, Block, InstructionWrapper,
+from dagrt.codegen.dag_ast import (IfThen, IfThenElse, Block, InstructionWrapper,
                                create_ast_from_phase, simplify_ast)
 from dagrt.language import Instruction, DAGCode
 
