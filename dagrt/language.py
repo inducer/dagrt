@@ -1217,7 +1217,7 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
 
     from pymbolic.imperative.utils import get_dot_dependency_graph
 
-    def addtional_lines_hook():
+    def additional_lines_hook():
         for i, (name, phase) in enumerate(six.iteritems(code.phases)):
             yield "subgraph cluster_%d { label=\"%s\"" % (i, name)
             for dep in phase.depends_on:
@@ -1228,9 +1228,10 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
             insn if use_insn_ids else insn.copy(id=insn.id)
             for phase_name, phase in six.iteritems(code.phases)
             for insn in phase.instructions]
+
     return get_dot_dependency_graph(
             instructions, use_insn_ids=use_insn_ids,
-            addtional_lines_hook=addtional_lines_hook)
+            additional_lines_hook=additional_lines_hook)
 
 
 def show_dependency_graph(*args, **kwargs):
