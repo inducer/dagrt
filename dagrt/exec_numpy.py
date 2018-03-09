@@ -153,7 +153,6 @@ class NumpyInterpreter(object):
                 continue
 
             except ExitStepException:
-                yield StepFailed(t=self.context["<t>"])
                 continue
 
             except TransitionEvent as evt:
