@@ -91,29 +91,29 @@ class NullASTNode(Expression):
     mapper_method = "map_NullASTNode"
 
 
-class InstructionWrapper(Expression):
+class StatementWrapper(Expression):
     """
-    .. attribute: instruction
+    .. attribute: statement
     """
 
-    init_arg_names = ("instruction",)
+    init_arg_names = ("statement",)
 
-    def __init__(self, instruction):
-        self.instruction = instruction
+    def __init__(self, statement):
+        self.statement = statement
 
     def __getinitargs__(self):
-        return self.instruction,
+        return self.statement,
 
-    mapper_method = "map_InstructionWrapper"
+    mapper_method = "map_StatementWrapper"
 
 
-def get_instructions_in_ast(ast):
+def get_statements_in_ast(ast):
     """
-    Return a generator that yields the instructions in the AST in linear order.
+    Return a generator that yields the statements in the AST in linear order.
     """
 
-    if isinstance(ast, InstructionWrapper):
-        yield ast.instruction
+    if isinstance(ast, StatementWrapper):
+        yield ast.statement
         return
 
     if isinstance(ast, IfThen):
@@ -126,21 +126,21 @@ def get_instructions_in_ast(ast):
         raise ValueError("Unknown node type: {}".format(ast.__class__.__name__))
 
     for child in children:
-        for inst in get_instructions_in_ast(child):
+        for inst in get_statements_in_ast(child):
             yield inst
 
 
 def create_ast_from_phase(code, phase_name):
     """
-    Return an AST representation of the instructions corresponding to the phase
+    Return an AST representation of the statements corresponding to the phase
     named `phase` as found in the :class:`DAGCode` instance `code`.
     """
 
     phase = code.phases[phase_name]
 
-    # Construct a topological order of the instructions.
+    # Construct a topological order of the statements.
     stack = []
-    instruction_map = dict((inst.id, inst) for inst in phase.instructions)
+    statement_map = dict((inst.id, inst) for inst in phase.statements)
     visiting = set()
     visited = set()
     topological_order = []
@@ -149,48 +149,48 @@ def create_ast_from_phase(code, phase_name):
 
     stack.extend(sorted(phase.depends_on))
     while stack:
-        instruction = stack[-1]
-        if instruction in visited:
-            if instruction in visiting:
-                visiting.remove(instruction)
-                topological_order.append(instruction)
+        statement = stack[-1]
+        if statement in visited:
+            if statement in visiting:
+                visiting.remove(statement)
+                topological_order.append(statement)
             stack.pop()
         else:
-            visited.add(instruction)
-            visiting.add(instruction)
+            visited.add(statement)
+            visiting.add(statement)
             stack.extend(
-                    sorted(instruction_map[instruction].depends_on))
+                    sorted(statement_map[statement].depends_on))
 
     # Convert the topological order to an AST.
     main_block = []
 
     from pymbolic.primitives import LogicalAnd
 
-    for instruction in map(instruction_map.__getitem__, topological_order):
-        if isinstance(instruction, Nop):
+    for statement in map(statement_map.__getitem__, topological_order):
+        if isinstance(statement, Nop):
             continue
 
-        # Instructions become AST nodes. An unconditional instruction is wrapped
-        # into an InstructionWrapper, while conditional instructions are wrapped
+        # Statements become AST nodes. An unconditional statement is wrapped
+        # into an StatementWrapper, while conditional statements are wrapped
         # using IfThens.
 
-        if isinstance(instruction.condition, LogicalAnd):
+        if isinstance(statement.condition, LogicalAnd):
             # LogicalAnd(c1, c2, ...) => IfThen(c1, IfThen(c2, ...))
-            conditions = reversed(instruction.condition.children)
+            conditions = reversed(statement.condition.children)
             inst = IfThenElse(next(conditions),
-                              InstructionWrapper(instruction.copy(condition=True)),
+                              StatementWrapper(statement.copy(condition=True)),
                               NullASTNode())
             for next_cond in conditions:
                 inst = IfThenElse(next_cond, inst, NullASTNode())
             main_block.append(inst)
 
-        elif instruction.condition is not True:
-            main_block.append(IfThenElse(instruction.condition,
-                InstructionWrapper(instruction.copy(condition=True)),
+        elif statement.condition is not True:
+            main_block.append(IfThenElse(statement.condition,
+                StatementWrapper(statement.copy(condition=True)),
                 NullASTNode()))
 
         else:
-            main_block.append(InstructionWrapper(instruction))
+            main_block.append(StatementWrapper(statement))
 
     ast = Block(*main_block)
 
@@ -228,8 +228,8 @@ class ASTIdentityMapper(IdentityMapper):
     def map_NullASTNode(self, expr):
         return type(expr)()
 
-    def map_InstructionWrapper(self, expr):
-        return type(expr)(expr.instruction)
+    def map_StatementWrapper(self, expr):
+        return type(expr)(expr.statement)
 
 
 class ASTPreSimplifyMapper(ASTIdentityMapper):
@@ -274,8 +274,8 @@ class ASTPostSimplifyMapper(ASTIdentityMapper):
         else:
             return Block(*new_children)
 
-    def map_InstructionWrapper(self, expr):
-        return InstructionWrapper(expr.instruction)
+    def map_StatementWrapper(self, expr):
+        return StatementWrapper(expr.statement)
 
 
 class ASTSimplifyMapper(ASTIdentityMapper):

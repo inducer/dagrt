@@ -2081,7 +2081,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 assignee_fortran_name, assignee_subscript, expr, sym_kind)
 
     def lower_inst(self, inst):
-        """Emit the code for an instruction."""
+        """Emit the code for an statement."""
 
         self.emit("! {{{ %s" % inst)
         self.emit("")

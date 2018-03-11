@@ -190,29 +190,29 @@ class NumpyInterpreter(object):
 
         self.functions[name] = f
 
-    def evaluate_condition(self, insn):
-        return self.eval_mapper(insn.condition)
+    def evaluate_condition(self, stmt):
+        return self.eval_mapper(stmt.condition)
 
     # {{{ execution methods
 
-    def exec_AssignSolved(self, insn):
+    def exec_AssignSolved(self, stmt):
         raise NotImplementedError("Encountered AssignSolved.")
 
-    def exec_YieldState(self, insn):
+    def exec_YieldState(self, stmt):
         return StateComputed(
-            t=self.eval_mapper(insn.time),
-            time_id=insn.time_id,
-            component_id=insn.component_id,
-            state_component=self.eval_mapper(insn.expression)), []
+            t=self.eval_mapper(stmt.time),
+            time_id=stmt.time_id,
+            component_id=stmt.component_id,
+            state_component=self.eval_mapper(stmt.expression)), []
 
-    def exec_AssignExpression(self, insn):
-        if not insn.loops:
-            if insn.assignee_subscript:
-                self.context[insn.assignee][
-                        self.eval_mapper(insn.assignee_subscript)] = \
-                                self.eval_mapper(insn.expression)
+    def exec_AssignExpression(self, stmt):
+        if not stmt.loops:
+            if stmt.assignee_subscript:
+                self.context[stmt.assignee][
+                        self.eval_mapper(stmt.assignee_subscript)] = \
+                                self.eval_mapper(stmt.expression)
             else:
-                self.context[insn.assignee] = self.eval_mapper(insn.expression)
+                self.context[stmt.assignee] = self.eval_mapper(stmt.expression)
 
         else:
             def implement_loops(loops):
@@ -228,54 +228,54 @@ class NumpyInterpreter(object):
                     for val in implement_loops(loops[1:]):
                         yield
 
-            for val in implement_loops(insn.loops):
-                if insn.assignee_subscript:
-                    self.context[insn.assignee][
-                            self.eval_mapper(insn.assignee_subscript)] = \
-                                    self.eval_mapper(insn.expression)
+            for val in implement_loops(stmt.loops):
+                if stmt.assignee_subscript:
+                    self.context[stmt.assignee][
+                            self.eval_mapper(stmt.assignee_subscript)] = \
+                                    self.eval_mapper(stmt.expression)
                 else:
-                    self.context[insn.assignee] = self.eval_mapper(insn.expression)
+                    self.context[stmt.assignee] = self.eval_mapper(stmt.expression)
 
-            for ident, _, _ in insn.loops:
+            for ident, _, _ in stmt.loops:
                 del self.context[ident]
 
-    def exec_AssignFunctionCall(self, insn):
+    def exec_AssignFunctionCall(self, stmt):
         parameters = [
                 self.eval_mapper(expr)
-                for expr in insn.parameters]
+                for expr in stmt.parameters]
         kw_parameters = dict(
                 (name, self.eval_mapper(expr))
-                for name, expr in insn.kw_parameters.items())
+                for name, expr in stmt.kw_parameters.items())
 
-        func = self.eval_mapper.functions[insn.function_id]
+        func = self.eval_mapper.functions[stmt.function_id]
 
         results = func(*parameters, **kw_parameters)
 
-        if len(insn.assignees) == 0:
+        if len(stmt.assignees) == 0:
             return
 
-        if len(insn.assignees) == 1:
+        if len(stmt.assignees) == 1:
             results = (results,)
 
-        assert len(results) == len(insn.assignees)
+        assert len(results) == len(stmt.assignees)
 
-        for assignee, res in zip(insn.assignees, results):
+        for assignee, res in zip(stmt.assignees, results):
             self.context[assignee] = res
 
-    def exec_Raise(self, insn):
-        raise insn.error_condition(insn.error_message)
+    def exec_Raise(self, stmt):
+        raise stmt.error_condition(stmt.error_message)
 
-    def exec_FailStep(self, insn):
+    def exec_FailStep(self, stmt):
         raise FailStepException()
 
-    def exec_ExitStep(self, insn):
+    def exec_ExitStep(self, stmt):
         raise ExitStepException()
 
-    def exec_Nop(self, insn):
+    def exec_Nop(self, stmt):
         pass
 
-    def exec_PhaseTransition(self, insn):
-        raise TransitionEvent(insn.next_phase)
+    def exec_PhaseTransition(self, stmt):
+        raise TransitionEvent(stmt.next_phase)
 
     # }}}
 

@@ -50,7 +50,7 @@ def test_basic_codegen():
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'])
+            statements=cbuild.statements, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)  # noqa
     method = Method({})
@@ -84,7 +84,7 @@ def test_basic_conditional_codegen():
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'])
+            statements=cbuild.statements, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)  # noqa
     method = Method({})
@@ -118,7 +118,7 @@ def test_basic_assign_rhs_codegen():
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'])
+            statements=cbuild.statements, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)  # noqa
 
@@ -138,7 +138,7 @@ def test_basic_assign_rhs_codegen():
 
 
 def test_basic_raise_codegen():
-    """Test code generation of the Raise instruction."""
+    """Test code generation of the Raise statement."""
     cbuild = RawCodeBuilder()
 
     class TimeStepUnderflow(RuntimeError):
@@ -148,7 +148,7 @@ def test_basic_raise_codegen():
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=["raise"])
+            statements=cbuild.statements, step_dep_on=["raise"])
     codegen = PythonCodeGenerator(class_name="Method")
     Method = codegen.get_class(code)  # noqa
     method = Method({})
@@ -167,13 +167,13 @@ def test_basic_raise_codegen():
 
 
 def test_basic_fail_step_codegen():
-    """Test code generation of the FailStep instruction."""
+    """Test code generation of the FailStep statement."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(FailStep(id="fail"))
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=["fail"])
+            statements=cbuild.statements, step_dep_on=["fail"])
     codegen = PythonCodeGenerator(class_name="Method")
     Method = codegen.get_class(code)  # noqa
     method = Method({})
@@ -204,7 +204,7 @@ def test_local_name_distinctness():
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'])
+            statements=cbuild.statements, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)  # noqa
     method = Method({})
@@ -231,7 +231,7 @@ def test_global_name_distinctness():
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'])
+            statements=cbuild.statements, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)  # noqa
     method = Method({})
@@ -252,7 +252,7 @@ def test_function_name_distinctness():
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'])
+            statements=cbuild.statements, step_dep_on=['return'])
     codegen = PythonCodeGenerator(class_name='Method')
     Method = codegen.get_class(code)  # noqa
     method = Method({'<func>y^': lambda: 0,
@@ -277,10 +277,10 @@ def test_phase_transitions(python_method_impl):
         phases={
             "state_1": ExecutionPhase(
                 builder_1.phase_dependencies, next_phase="state_1",
-                instructions=builder_1.instructions),
+                statements=builder_1.statements),
             "state_2": ExecutionPhase(
                 builder_2.phase_dependencies, next_phase="state_2",
-                instructions=builder_2.instructions)
+                statements=builder_2.statements)
         },
         initial_phase="state_1")
     from utils import execute_and_return_single_result
@@ -308,7 +308,7 @@ def get_IfThenElse_test_code_and_expected_result():
                        "result", 0, "final")
 
     code = DAGCode.create_with_steady_phase(
-        cb.phase_dependencies, cb.instructions)
+        cb.phase_dependencies, cb.statements)
 
     return (code, (0, 1, 0, 1, 0, 1, 1, 2, 1, 2))
 
@@ -339,7 +339,7 @@ def test_arrays_and_looping(python_method_impl):
     from utils import execute_and_return_single_result
 
     code = DAGCode.create_with_steady_phase(
-        cb.phase_dependencies, cb.instructions)
+        cb.phase_dependencies, cb.statements)
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == 15
 
@@ -375,7 +375,7 @@ def test_arrays_and_linalg(python_method_impl):
     from utils import execute_and_return_single_result
 
     code = DAGCode.create_with_steady_phase(
-        cb.phase_dependencies, cb.instructions)
+        cb.phase_dependencies, cb.statements)
     result = execute_and_return_single_result(python_method_impl, code)
 
     result = result.reshape(4, 4, order="F")
@@ -418,7 +418,7 @@ def test_svd(python_method_impl):
     from utils import execute_and_return_single_result
 
     code = DAGCode.create_with_steady_phase(
-        cb.phase_dependencies, cb.instructions)
+        cb.phase_dependencies, cb.statements)
     result = execute_and_return_single_result(python_method_impl, code)
 
     assert la.norm(result) < 1e-10

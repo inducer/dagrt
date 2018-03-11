@@ -217,8 +217,8 @@ class CodeGenerator(StructuredCodeGenerator):
     def _pre_lower(self, ast):
         self._has_yield_inst = False
         from dagrt.language import YieldState
-        from dagrt.codegen.dag_ast import get_instructions_in_ast
-        for inst in get_instructions_in_ast(ast):
+        from dagrt.codegen.dag_ast import get_statements_in_ast
+        for inst in get_statements_in_ast(ast):
             if isinstance(inst, YieldState):
                 self._has_yield_inst = True
                 return
@@ -404,7 +404,7 @@ class CodeGenerator(StructuredCodeGenerator):
         if not self._has_yield_inst:
             self._emit('yield')
 
-    # {{{ instructions
+    # {{{ statements
 
     def emit_inst_AssignExpression(self, inst):
         emitter = self._emitter

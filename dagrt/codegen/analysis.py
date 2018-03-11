@@ -38,40 +38,40 @@ def verify_phase_transitions(phases, errors):
     """
     Ensure that phases referenced by PhaseTransition exist.
 
-    :arg instructions: A set of instructions to verify
+    :arg statements: A set of statements to verify
     :arg phases: A map from phase names to phases
     :arg errors: An error list to which new errors get appended
     """
     phase_names = [key for key in phases.keys()]
     for phase in six.itervalues(phases):
-        for inst in phase.instructions:
+        for inst in phase.statements:
             if not isinstance(inst, PhaseTransition):
                 continue
             if inst.next_phase not in phase_names:
                 errors.append(
-                    "Phase \"{0}\" referenced by instruction \"{1}:{2}\" not found"
+                    "Phase \"{0}\" referenced by statement \"{1}:{2}\" not found"
                     .format(inst.next_phase, phase, inst))
 
 
 def verify_all_dependencies_exist(phases, errors):
     """
-    Ensure that all instruction dependencies exist.
+    Ensure that all statement dependencies exist.
 
-    :arg instructions: A set of instructions to verify
+    :arg statements: A set of statements to verify
     :arg phases: A map from phase names to phases
     :arg errors: An error list to which new errors get appended
     """
     ids = set(inst.id
             for phase in six.itervalues(phases)
-            for inst in phase.instructions)
+            for inst in phase.statements)
 
-    # Check instructions
+    # Check statements
     for phase in six.itervalues(phases):
-        for inst in phase.instructions:
+        for inst in phase.statements:
             deps = set(inst.depends_on)
             if not deps <= ids:
                 errors.extend(
-                    ["Dependency \"{0}\" referenced by instruction \"{1}\" not found"
+                    ["Dependency \"{0}\" referenced by statement \"{1}\" not found"
                      .format(dep_name, inst) for dep_name in deps - ids])
 
     # Check phases.
@@ -84,15 +84,15 @@ def verify_all_dependencies_exist(phases, errors):
                          phase_name)])
 
 
-def verify_no_circular_dependencies(instructions, errors):
+def verify_no_circular_dependencies(statements, errors):
     """
-    Ensure that there are no circular dependencies among the instructions.
+    Ensure that there are no circular dependencies among the statements.
 
-    :arg instructions: A set of instructions to verify
+    :arg statements: A set of statements to verify
     :arg errors: An error list to which new errors get appended
     """
-    id_to_instruction = dict((inst.id, inst) for inst in instructions)
-    stack = list(instructions)
+    id_to_statement = dict((inst.id, inst) for inst in statements)
+    stack = list(statements)
     visiting = set()
     visited = set()
     while stack:
@@ -104,36 +104,36 @@ def verify_no_circular_dependencies(instructions, errors):
                 if neighbor in visiting:
                     errors.append("Circular dependency chain found")
                     return
-                stack.append(id_to_instruction[neighbor])
+                stack.append(id_to_statement[neighbor])
         else:
             if top.id in visiting:
                 visiting.remove(top.id)
             stack.pop()
 
 
-def verify_single_definition_cond_rule(instructions, errors):
+def verify_single_definition_cond_rule(statements, errors):
     """
     Verify that <cond> variables are never redefined.
 
-    :arg instructions: A set of instructions to verify
+    :arg statements: A set of statements to verify
     :arg errors: An error list to which new errors get appended
     """
     cond_variables = {}
 
-    for instruction in instructions:
-        for varname in instruction.get_written_variables():
+    for statement in statements:
+        for varname in statement.get_written_variables():
             if not varname.startswith("<cond>"):
                 continue
             if varname not in cond_variables:
-                cond_variables[varname] = [instruction]
+                cond_variables[varname] = [statement]
             else:
-                cond_variables[varname].append(instruction)
+                cond_variables[varname].append(statement)
 
     import six
     for varname, insts in six.iteritems(cond_variables):
         if len(insts) > 1:
             errors.append(
-                "Conditional variable \"{0}\" defined by multiple instructions: {1}"
+                "Conditional variable \"{0}\" defined by multiple statements: {1}"
                 .format(varname, ", ".join(_quote(str(inst)) for inst in insts)))
 
 
@@ -155,12 +155,12 @@ def verify_code(code):
         # malformed code.
         verify_all_dependencies_exist(code.phases, errors)
         for phase in six.itervalues(code.phases):
-            verify_no_circular_dependencies(phase.instructions, errors)
+            verify_no_circular_dependencies(phase.statements, errors)
 
         verify_phase_transitions(code.phases, errors)
 
         for phase in six.itervalues(code.phases):
-            verify_single_definition_cond_rule(phase.instructions, errors)
+            verify_single_definition_cond_rule(phase.statements, errors)
 
     except Exception as e:
         # Ensure there is at least one error to report.
@@ -206,12 +206,12 @@ def collect_function_names_from_dag(dag, no_expressions=False):
         result.update(fnc(expr))
         return expr
     for phase in six.itervalues(dag.phases):
-        for insn in phase.instructions:
-            if isinstance(insn, AssignFunctionCall):
-                result.add(insn.function_id)
+        for stmt in phase.statements:
+            if isinstance(stmt, AssignFunctionCall):
+                result.add(stmt.function_id)
 
             if not no_expressions:
-                insn.map_expressions(mapper)
+                stmt.map_expressions(mapper)
 
     return result
 
@@ -224,9 +224,9 @@ def collect_time_ids_from_dag(dag):
     result = set()
 
     for phase in six.itervalues(dag.phases):
-        for insn in phase.instructions:
-            if isinstance(insn, YieldState):
-                result.add(insn.time_id)
+        for stmt in phase.statements:
+            if isinstance(stmt, YieldState):
+                result.add(stmt.time_id)
 
     return result
 
@@ -239,9 +239,9 @@ def collect_ode_component_names_from_dag(dag):
     result = set()
 
     for phase in six.itervalues(dag.phases):
-        for insn in phase.instructions:
-            if isinstance(insn, YieldState):
-                result.add(insn.component_id)
+        for stmt in phase.statements:
+            if isinstance(stmt, YieldState):
+                result.add(stmt.component_id)
 
     return result
 

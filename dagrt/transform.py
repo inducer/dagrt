@@ -38,7 +38,7 @@ def insert_empty_intermediate_state(dag, phase_name, after_phase):
     new_phases[after_phase] = new_phases[after_phase].copy(
             next_phase=phase_name)
 
-    return DAGCode(dag.instructions, new_phases, dag.initial_phase)
+    return DAGCode(dag.statements, new_phases, dag.initial_phase)
 
 # }}}
 
@@ -54,15 +54,15 @@ def fuse_two_phases(phase_name, phase1, phase2):
                     % phase_name)
 
         from pymbolic.imperative.transform import disambiguate_and_fuse
-        new_instructions, _, old_2_id_to_new_2_id = disambiguate_and_fuse(
-                phase1.instructions, phase2.instructions)
+        new_statements, _, old_2_id_to_new_2_id = disambiguate_and_fuse(
+                phase1.statements, phase2.statements)
 
         return ExecutionPhase(
                 next_phase=phase1.next_phase,
                 depends_on=frozenset(phase1.depends_on) | frozenset(
                     old_2_id_to_new_2_id.get(id2, id2)
                     for id2 in phase2.depends_on),
-                instructions=new_instructions
+                statements=new_statements
                 )
 
     elif phase1 is not None:
