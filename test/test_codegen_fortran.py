@@ -54,7 +54,7 @@ def test_basic_codegen():
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'])
+            statements=cbuild.statements, step_dep_on=['return'])
     codegen = f.CodeGenerator("simple",
             user_type_map={
                 "state": f.ArrayType(
@@ -100,7 +100,7 @@ def test_arrays_and_linalg():
             cb.raise_(MatrixInversionFailure)
 
     code = DAGCode.create_with_steady_phase(
-        cb.phase_dependencies, cb.instructions)
+        cb.phase_dependencies, cb.statements)
 
     codegen = f.CodeGenerator(
             'arrays',

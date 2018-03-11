@@ -59,7 +59,7 @@ def test_circular_dependency_detection():
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'])
+            statements=cbuild.statements, step_dep_on=['return'])
     with pytest.raises(CodeGenerationError):
         verify_code(code)
 
@@ -67,7 +67,7 @@ def test_circular_dependency_detection():
 def test_missing_dependency_detection():
     """Check that the code generator detects that there is a missing
     dependency."""
-    instructions = set([
+    statements = set([
         AssignExpression(id='assign', assignee='<state>y', assignee_subscript=(),
             expression=1, depends_on=['assign2']),
         YieldState(id='return', time=0, time_id='final',
@@ -76,7 +76,7 @@ def test_missing_dependency_detection():
         ])
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=instructions, step_dep_on=['return'])
+            statements=statements, step_dep_on=['return'])
     with pytest.raises(CodeGenerationError):
         verify_code(code)
 
@@ -89,7 +89,7 @@ def test_missing_state_detection():
         cb.phase_transition("state_2")
 
     code = DAGCode.create_with_steady_phase(
-        dep_on=cb.phase_dependencies, instructions=cb.instructions)
+        dep_on=cb.phase_dependencies, statements=cb.statements)
     with pytest.raises(CodeGenerationError):
         verify_code(code)
 
@@ -118,7 +118,7 @@ def test_cond_detection():
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
             initialization_dep_on=[],
-            instructions=cbuild.instructions, step_dep_on=['return'])
+            statements=cbuild.statements, step_dep_on=['return'])
     with pytest.raises(CodeGenerationError):
         verify_code(code)
 

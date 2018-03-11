@@ -35,11 +35,11 @@ from pytools import RecordWithoutPickling
 from pymbolic.mapper import Mapper
 
 
-def _get_arg_dict_from_call_insn(insn):
+def _get_arg_dict_from_call_stmt(stmt):
     arg_dict = {}
-    for i, arg_val in enumerate(insn.parameters):
+    for i, arg_val in enumerate(stmt.parameters):
         arg_dict[i] = arg_val
-    for arg_name, arg_val in insn.kw_parameters.items():
+    for arg_name, arg_val in stmt.kw_parameters.items():
         arg_dict[arg_name] = arg_val
 
     return arg_dict
@@ -410,7 +410,7 @@ class SymbolKindFinder(object):
 
         result = SymbolKindTable()
 
-        from dagrt.codegen.dag_ast import get_instructions_in_ast
+        from dagrt.codegen.dag_ast import get_statements_in_ast
 
         def make_kim(func_name, check):
             return KindInferenceMapper(
@@ -420,38 +420,38 @@ class SymbolKindFinder(object):
                     check=False)
 
         while True:
-            insn_queue = []
+            stmt_queue = []
             for name, func in zip(names, functions):
-                insn_queue.extend(
-                        (name, insn)
-                        for insn in get_instructions_in_ast(func))
+                stmt_queue.extend(
+                        (name, stmt)
+                        for stmt in get_statements_in_ast(func))
 
-            insn_queue_push_buffer = []
+            stmt_queue_push_buffer = []
             made_progress = False
 
             result.reset_change_flag()
 
-            while insn_queue or insn_queue_push_buffer:
-                if not insn_queue:
+            while stmt_queue or stmt_queue_push_buffer:
+                if not stmt_queue:
                     # {{{ provide a usable error message if no progress
 
                     if not made_progress:
-                        print("Left-over instructions in kind inference:")
-                        for func_name, insn in insn_queue_push_buffer:
-                            print("[%s] %s" % (func_name, insn))
+                        print("Left-over statements in kind inference:")
+                        for func_name, stmt in stmt_queue_push_buffer:
+                            print("[%s] %s" % (func_name, stmt))
 
                             kim = make_kim(func_name, check=False)
 
                             try:
-                                if isinstance(insn, lang.AssignExpression):
-                                    kim(insn.expression)
+                                if isinstance(stmt, lang.AssignExpression):
+                                    kim(stmt.expression)
 
-                                elif isinstance(insn, lang.AssignFunctionCall):
-                                    kim.map_generic_call(insn.function_id,
-                                            _get_arg_dict_from_call_insn(insn),
+                                elif isinstance(stmt, lang.AssignFunctionCall):
+                                    kim.map_generic_call(stmt.function_id,
+                                            _get_arg_dict_from_call_stmt(stmt),
                                             single_return_only=False)
 
-                                elif isinstance(insn, lang.AssignmentBase):
+                                elif isinstance(stmt, lang.AssignmentBase):
                                     raise TODO()
 
                                 else:
@@ -468,44 +468,44 @@ class SymbolKindFinder(object):
 
                     # }}}
 
-                    insn_queue = insn_queue_push_buffer
-                    insn_queue_push_buffer = []
+                    stmt_queue = stmt_queue_push_buffer
+                    stmt_queue_push_buffer = []
                     made_progress = False
 
-                func_name, insn = insn_queue.pop()
+                func_name, stmt = stmt_queue.pop()
 
-                if isinstance(insn, lang.AssignExpression):
+                if isinstance(stmt, lang.AssignExpression):
                     kim = make_kim(func_name, check=False)
 
-                    for ident, _, _ in insn.loops:
+                    for ident, _, _ in stmt.loops:
                         result.set(func_name, ident, kind=Integer())
 
-                    if insn.assignee_subscript:
+                    if stmt.assignee_subscript:
                         continue
 
                     try:
-                        kind = kim(insn.expression)
+                        kind = kim(stmt.expression)
                     except UnableToInferKind:
-                        insn_queue_push_buffer.append((func_name, insn))
+                        stmt_queue_push_buffer.append((func_name, stmt))
                     else:
                         made_progress = True
-                        result.set(func_name, insn.assignee, kind=kind)
+                        result.set(func_name, stmt.assignee, kind=kind)
 
-                elif isinstance(insn, lang.AssignFunctionCall):
+                elif isinstance(stmt, lang.AssignFunctionCall):
                     kim = make_kim(func_name, check=False)
 
                     try:
-                        kinds = kim.map_generic_call(insn.function_id,
-                                _get_arg_dict_from_call_insn(insn),
+                        kinds = kim.map_generic_call(stmt.function_id,
+                                _get_arg_dict_from_call_stmt(stmt),
                                 single_return_only=False)
                     except UnableToInferKind:
-                        insn_queue_push_buffer.append((func_name, insn))
+                        stmt_queue_push_buffer.append((func_name, stmt))
                     else:
                         made_progress = True
-                        for assignee, kind in zip(insn.assignees, kinds):
+                        for assignee, kind in zip(stmt.assignees, kinds):
                             result.set(func_name, assignee, kind=kind)
 
-                elif isinstance(insn, lang.AssignmentBase):
+                elif isinstance(stmt, lang.AssignmentBase):
                     raise TODO()
 
                 else:
@@ -520,25 +520,25 @@ class SymbolKindFinder(object):
         for func_name, func in zip(names, functions):
             kim = make_kim(func_name, check=True)
 
-            for insn in get_instructions_in_ast(func):
-                if isinstance(insn, lang.AssignExpression):
-                    kim(insn.expression)
+            for stmt in get_statements_in_ast(func):
+                if isinstance(stmt, lang.AssignExpression):
+                    kim(stmt.expression)
 
-                elif isinstance(insn, lang.AssignFunctionCall):
-                    kim.map_generic_call(insn.function_id,
-                            _get_arg_dict_from_call_insn(insn),
+                elif isinstance(stmt, lang.AssignFunctionCall):
+                    kim.map_generic_call(stmt.function_id,
+                            _get_arg_dict_from_call_stmt(stmt),
                             single_return_only=False)
 
-                    func = self.function_registry[insn.function_id]
-                    if len(func.result_names) != len(insn.assignees):
+                    func = self.function_registry[stmt.function_id]
+                    if len(func.result_names) != len(stmt.assignees):
                         raise ValueError("number of function return values "
                                 "for '%s' (%d) "
                                 "and number of assigned variables (%d) "
                                 "do not match"
-                                % (insn.function_id,
-                                    len(func.result_names), len(insn.assignees)))
+                                % (stmt.function_id,
+                                    len(func.result_names), len(stmt.assignees)))
 
-                elif isinstance(insn, lang.AssignmentBase):
+                elif isinstance(stmt, lang.AssignmentBase):
                     raise TODO()
 
                 else:

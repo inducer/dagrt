@@ -27,9 +27,9 @@ from pymbolic import var
 
 from pymbolic.primitives import LogicalNot
 
-from dagrt.codegen.dag_ast import (IfThen, IfThenElse, Block, InstructionWrapper,
+from dagrt.codegen.dag_ast import (IfThen, IfThenElse, Block, StatementWrapper,
                                create_ast_from_phase, simplify_ast)
-from dagrt.language import Instruction, DAGCode
+from dagrt.language import Statement, DAGCode
 
 import pytest
 
@@ -37,10 +37,10 @@ import pytest
 def test_create_ast():
     x = var("<cond>x")
 
-    class ComparableNop(Instruction):
+    class ComparableNop(Statement):
         """
         Works around the fact that __hash__ and comparison isn't defined for
-        instructions, but is necessary for comparison purposes when embedded
+        statements, but is necessary for comparison purposes when embedded
         in an expression.
         """
 
@@ -60,7 +60,7 @@ def test_create_ast():
     nop = ComparableNop(condition=x, id="nop", depends_on=())
     code = DAGCode.create_with_steady_phase(["nop"], [nop])
     ast = create_ast_from_phase(code, "main")
-    assert ast == IfThen(x, InstructionWrapper(nop.copy(condition=True)))
+    assert ast == IfThen(x, StatementWrapper(nop.copy(condition=True)))
 
 
 _p = var("<cond>p")

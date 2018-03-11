@@ -26,8 +26,8 @@ THE SOFTWARE.
 """
 
 from pytools import RecordWithoutPickling, memoize_method
-from pymbolic.imperative.instruction import (
-        ConditionalInstruction as InstructionBase,
+from pymbolic.imperative.statement import (
+        ConditionalStatement as StatementBase,
         ConditionalAssignment as AssignExpressionBase,
         Nop as NopBase)
 
@@ -40,7 +40,7 @@ import six.moves
 
 logger = logging.getLogger(__name__)
 
-# {{{ instructions
+# {{{ statements
 
 __doc__ = """
 Identifier conventions
@@ -99,23 +99,23 @@ See :mod:`dagrt.function_registry` for interpretation of function names. The
 function namespace and the variable namespace are distinct. No user-defined
 identifiers should start with `dagrt_`.
 
-Instructions
+Statements
 ~~~~~~~~~~~~
-.. autoclass:: Instruction
+.. autoclass:: Statement
 
-Assignment Instructions
+Assignment Statements
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-These instructions perform updates to the execution state, i.e. the variables.
+These statements perform updates to the execution state, i.e. the variables.
 
 .. autoclass:: AssignSolved
 .. autoclass:: AssignExpression
 .. autoclass:: AssignFunctionCall
 
-Control Instructions
+Control Statements
 ^^^^^^^^^^^^^^^^^^^^
 
-These instructions affect the execution of a phase, or cause a phase to interact
+These statements affect the execution of a phase, or cause a phase to interact
 with user code.
 
 .. autoclass:: YieldState
@@ -124,7 +124,7 @@ with user code.
 .. autoclass:: ExitStep
 .. autoclass:: PhaseTransition
 
-Miscellaneous Instructions
+Miscellaneous Statements
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autoclass:: Nop
@@ -153,32 +153,32 @@ Code Creation
 
 # {{{ utilities
 
-def _stringify_instructions(roots, id_to_insn, prefix=""):
+def _stringify_statements(roots, id_to_stmt, prefix=""):
         lines = []
 
-        printed_insn_ids = set()
+        printed_stmt_ids = set()
 
-        def print_insn(insn):
-            if insn.id in printed_insn_ids:
+        def print_stmt(stmt):
+            if stmt.id in printed_stmt_ids:
                 return
-            printed_insn_ids.add(insn.id)
+            printed_stmt_ids.add(stmt.id)
 
-            for dep_id in insn.depends_on:
-                print_insn(id_to_insn[dep_id])
+            for dep_id in stmt.depends_on:
+                print_stmt(id_to_stmt[dep_id])
 
             lines.append(
                     "%s{%s} %s" % (
-                        prefix, insn.id, str(insn).replace("\n", "\n        ")))
+                        prefix, stmt.id, str(stmt).replace("\n", "\n        ")))
 
-        for root_insn in roots:
-            print_insn(root_insn)
+        for root_stmt in roots:
+            print_stmt(root_stmt)
 
         return lines
 
 # }}}
 
 
-class Instruction(InstructionBase):
+class Statement(StatementBase):
     def get_dependency_mapper(self, include_calls="descend_args"):
         from dagrt.expression import ExtendedDependencyMapper
         return ExtendedDependencyMapper(
@@ -193,11 +193,11 @@ class Nop(NopBase):
 
 # {{{ assignments
 
-class AssignmentBase(Instruction):
+class AssignmentBase(Statement):
     pass
 
 
-class AssignExpression(Instruction, AssignExpressionBase):
+class AssignExpression(Statement, AssignExpressionBase):
     """
     .. attribute:: loops
 
@@ -323,7 +323,7 @@ class AssignSolved(AssignmentBase):
 
     def __init__(self, assignees, solve_variables, expressions, other_params,
                  solver_id, **kwargs):
-        Instruction.__init__(self, assignees=assignees,
+        Statement.__init__(self, assignees=assignees,
                              solve_variables=solve_variables,
                              expressions=expressions,
                              other_params=other_params,
@@ -386,13 +386,13 @@ class AssignSolved(AssignmentBase):
 
 
 class AssignFunctionCall(AssignmentBase):
-    """This instruction encodes function calls. It should be noted
+    """This statement encodes function calls. It should be noted
     that function calls can *also* be encoded as expressions
-    involving calls, however the existence of this separate instruction
+    involving calls, however the existence of this separate statement
     is justified by two facts:
 
     *   Some backends (such as Fortran) choose to separate out function calls
-        into individual instructions. This instruction provides a
+        into individual statements. This statement provides a
         natural way to encode them.
 
         See :class:`leam.vm.codegen.transform.FunctionCallIsolator` for
@@ -486,7 +486,7 @@ class AssignFunctionCall(AssignmentBase):
 # }}}
 
 
-class YieldState(Instruction):
+class YieldState(Statement):
     """
     .. attribute:: time_id
     .. attribute:: time
@@ -525,7 +525,7 @@ class YieldState(Instruction):
     exec_method = six.moves.intern("exec_YieldState")
 
 
-class Raise(Instruction):
+class Raise(Statement):
     """
     .. attribute:: error_condition
 
@@ -537,7 +537,7 @@ class Raise(Instruction):
     """
 
     def __init__(self, error_condition, error_message=None, **kwargs):
-        Instruction.__init__(self,
+        Statement.__init__(self,
                 error_condition=error_condition,
                 error_message=error_message,
                 **kwargs)
@@ -556,7 +556,7 @@ class Raise(Instruction):
     exec_method = six.moves.intern("exec_Raise")
 
 
-class PhaseTransition(Instruction):
+class PhaseTransition(Statement):
     """
     .. attribute:: next_phase
 
@@ -564,7 +564,7 @@ class PhaseTransition(Instruction):
     """
 
     def __init__(self, next_phase, **kwargs):
-        Instruction.__init__(self, next_phase=next_phase, **kwargs)
+        Statement.__init__(self, next_phase=next_phase, **kwargs)
 
     def get_written_variables(self):
         return frozenset()
@@ -576,7 +576,7 @@ class PhaseTransition(Instruction):
     exec_method = six.moves.intern("exec_PhaseTransition")
 
 
-class FailStep(Instruction):
+class FailStep(Statement):
     """Exits the current step with a failure indication to the controlling
     program. Execution resumes with the next step as normal.
     """
@@ -590,7 +590,7 @@ class FailStep(Instruction):
     exec_method = six.moves.intern("exec_FailStep")
 
 
-class ExitStep(Instruction):
+class ExitStep(Statement):
     """Exits the current step. Execution resumes with the next step as normal.
     """
 
@@ -611,7 +611,7 @@ class ExecutionPhase(RecordWithoutPickling):
     """
     .. attribute:: depends_on
 
-        a list of instruction IDs that need to be accomplished
+        a list of statement IDs that need to be accomplished
         for successful execution of one round of this state
 
     .. attribute:: next_phase
@@ -619,25 +619,25 @@ class ExecutionPhase(RecordWithoutPickling):
         name of the next state after this one, if no other state
         is specified by the user.
 
-    .. attribute:: instructions
+    .. attribute:: statements
 
-        is a list of Instruction instances, in no particular
-        order. Only instructions referred to by :attr:`depends_on`
+        is a list of Statement instances, in no particular
+        order. Only statements referred to by :attr:`depends_on`
         or the transitive closure of their dependency relations
         will actually be executed.
     """
 
-    def __init__(self, depends_on, next_phase, instructions):
+    def __init__(self, depends_on, next_phase, statements):
         super(ExecutionPhase, self).__init__(
                 depends_on=depends_on,
                 next_phase=next_phase,
-                instructions=instructions)
+                statements=statements)
 
     @property
     @memoize_method
-    def id_to_insn(self):
-        return dict((insn.id, insn)
-                for insn in self.instructions)
+    def id_to_stmt(self):
+        return dict((stmt.id, stmt)
+                for stmt in self.statements)
 
 
 class DAGCode(RecordWithoutPickling):
@@ -653,24 +653,24 @@ class DAGCode(RecordWithoutPickling):
     """
 
     @classmethod
-    def create_with_steady_phase(cls, dep_on, instructions):
+    def create_with_steady_phase(cls, dep_on, statements):
         phases = {'main': ExecutionPhase(
-            dep_on, next_phase='main', instructions=instructions)}
+            dep_on, next_phase='main', statements=statements)}
         return cls(phases, 'main')
 
     @classmethod
     def _create_with_init_and_step(cls, initialization_dep_on,
-                                  step_dep_on, instructions):
+                                  step_dep_on, statements):
         phases = {}
         phases['initialization'] = ExecutionPhase(
                 initialization_dep_on,
                 next_phase='primary',
-                instructions=instructions)
+                statements=statements)
 
         phases['primary'] = ExecutionPhase(
                 step_dep_on,
                 next_phase='primary',
-                instructions=instructions)
+                statements=statements)
 
         return cls(phases, 'initialization')
 
@@ -682,19 +682,19 @@ class DAGCode(RecordWithoutPickling):
 
     # {{{ identifier wrangling
 
-    def get_insn_id_generator(self):
+    def get_stmt_id_generator(self):
         from pytools import UniqueNameGenerator
         return UniqueNameGenerator(
-                set(insn.id
+                set(stmt.id
                     for phase in six.itervalues(self.phases)
-                    for insn in phase.instructions))
+                    for stmt in phase.statements))
 
     def existing_var_names(self):
         result = set()
         for state in six.itervalues(self.phases):
-            for insn in state.instructions:
-                result.update(insn.get_written_variables())
-                result.update(insn.get_read_variables())
+            for stmt in state.statements:
+                result.update(stmt.get_written_variables())
+                result.update(stmt.get_read_variables())
 
         return result
 
@@ -710,9 +710,9 @@ class DAGCode(RecordWithoutPickling):
             lines.append("STAGE %s" % phase_name)
 
             for root_id in phase.depends_on:
-                lines.extend(_stringify_instructions(
-                    [phase.id_to_insn[root_id]],
-                    phase.id_to_insn, prefix="    "))
+                lines.extend(_stringify_statements(
+                    [phase.id_to_stmt[root_id]],
+                    phase.id_to_stmt, prefix="    "))
 
             lines.append("    -> (next phase) %s" % phase.next_phase)
             lines.append("")
@@ -741,59 +741,59 @@ class ExecutionController(object):
         self.executed_ids.clear()
 
     def update_plan(self, phase, execute_ids):
-        """Update the plan with the minimal list of instruction ids to execute
-        so that the instruction IDs in execute_ids will be executed before any
+        """Update the plan with the minimal list of statement ids to execute
+        so that the statement IDs in execute_ids will be executed before any
         others and such that all their dependencies are satisfied.
         """
 
         early_plan = []
 
-        id_to_insn = phase.id_to_insn
+        id_to_stmt = phase.id_to_stmt
 
-        def add_with_deps(insn):
-            insn_id = insn.id
-            if insn_id in self.executed_ids:
+        def add_with_deps(stmt):
+            stmt_id = stmt.id
+            if stmt_id in self.executed_ids:
                 # Already done, no need to think more.
                 return
 
-            if insn_id in self.plan_id_set:
+            if stmt_id in self.plan_id_set:
                 # Already in plan, no need to think more.
                 return
 
-            if insn_id in early_plan:
+            if stmt_id in early_plan:
                 return
 
-            for dep_id in insn.depends_on:
-                add_with_deps(id_to_insn[dep_id])
+            for dep_id in stmt.depends_on:
+                add_with_deps(id_to_stmt[dep_id])
 
-            assert insn_id not in self.plan_id_set
+            assert stmt_id not in self.plan_id_set
 
-            early_plan.append(insn_id)
+            early_plan.append(stmt_id)
 
-        for insn_id in execute_ids:
-            add_with_deps(id_to_insn[insn_id])
+        for stmt_id in execute_ids:
+            add_with_deps(id_to_stmt[stmt_id])
 
         self.plan = early_plan + self.plan
         self.plan_id_set.update(early_plan)
 
     def __call__(self, phase, target):
-        id_to_insn = phase.id_to_insn
+        id_to_stmt = phase.id_to_stmt
 
         while self.plan:
-            insn_id = self.plan.pop(0)
-            self.plan_id_set.remove(insn_id)
+            stmt_id = self.plan.pop(0)
+            self.plan_id_set.remove(stmt_id)
 
-            self.executed_ids.add(insn_id)
+            self.executed_ids.add(stmt_id)
 
-            insn = id_to_insn[insn_id]
+            stmt = id_to_stmt[stmt_id]
 
             logger.debug("execution trace: [%s] %s" % (
-                insn.id, str(insn).replace("\n", " | ")))
+                stmt.id, str(stmt).replace("\n", " | ")))
 
-            if not target.evaluate_condition(insn):
+            if not target.evaluate_condition(stmt):
                 continue
 
-            result = getattr(target, insn.exec_method)(insn)
+            result = getattr(target, stmt.exec_method)(stmt)
             if result is not None:
                 event, new_deps = result
                 if event is not None:
@@ -809,15 +809,15 @@ class ExecutionController(object):
 
 class CodeBuilder(object):
     """
-    .. attribute:: instructions
+    .. attribute:: statements
 
-       The set of instructions generated for the phase
+       The set of statements generated for the phase
 
     .. attribute:: phase_dependencies
 
-       A list of instruction names. Starting with these instructions
+       A list of statement names. Starting with these statements
        as the root dependencies, the phase can be executed by following
-       the dependency list of each instruction.
+       the dependency list of each statement.
 
     .. automethod:: fence
     .. automethod:: if_
@@ -838,23 +838,23 @@ class CodeBuilder(object):
 
     class Context(RecordWithoutPickling):
         """
-        A context represents a block of instructions being built into the DAG
+        A context represents a block of statements being built into the DAG
 
-        .. attribute:: lead_instruction_ids
+        .. attribute:: lead_statement_ids
 
         .. attribute:: introduced_condition
 
-        .. attribute:: context_instruction_ids
+        .. attribute:: context_statement_ids
 
         .. attribute:: used_variables
 
         .. attribute:: definition_map
         """
-        def __init__(self, lead_instruction_ids=[], definition_map={},
+        def __init__(self, lead_statement_ids=[], definition_map={},
                      used_variables=[], condition=True):
             RecordWithoutPickling.__init__(self,
-                lead_instruction_ids=frozenset(lead_instruction_ids),
-                context_instruction_ids=set(lead_instruction_ids),
+                lead_statement_ids=frozenset(lead_statement_ids),
+                context_statement_ids=set(lead_statement_ids),
                 definition_map=dict(definition_map),
                 used_variables=set(used_variables),
                 condition=condition)
@@ -864,8 +864,8 @@ class CodeBuilder(object):
         :arg label: The name of the phase to generate
         """
         self.label = label
-        self._instruction_map = {}
-        self._instruction_count = 0
+        self._statement_map = {}
+        self._statement_count = 0
         self._contexts = []
         self._last_popped_context = None
         self._all_var_names = set()
@@ -873,8 +873,8 @@ class CodeBuilder(object):
 
     def fence(self):
         """
-        Enter a new logical block of instructions. Force all prior
-        instructions to execute before subsequent ones.
+        Enter a new logical block of statements. Force all prior
+        statements to execute before subsequent ones.
         """
         self._contexts[-1] = self._make_new_context(Nop(),
             additional_condition=self._contexts[-1].condition)
@@ -923,7 +923,7 @@ class CodeBuilder(object):
         else:
             raise ValueError("Unrecognized condition expression")
 
-        # Create an instruction as a lead instruction to assign a logical flag.
+        # Create an statement as a lead statement to assign a logical flag.
         cond_var = self.fresh_var("<cond>")
         cond_assignment = AssignExpression(
                 assignee=cond_var.name,
@@ -938,7 +938,7 @@ class CodeBuilder(object):
         # Pop myself from the stack.
         last_context = self._contexts.pop()
         self._contexts[-1] = self._make_new_context(
-            Nop(depends_on=last_context.context_instruction_ids),
+            Nop(depends_on=last_context.context_statement_ids),
             additional_condition=self._contexts[-1].condition)
 
         self._last_popped_if = last_context
@@ -964,12 +964,12 @@ class CodeBuilder(object):
         last_context = self._contexts.pop()
 
         self._contexts[-1] = self._make_new_context(
-            Nop(depends_on=last_context.context_instruction_ids),
+            Nop(depends_on=last_context.context_statement_ids),
             additional_condition=self._contexts[-1].condition)
 
-    def _next_instruction_id(self):
-        self._instruction_count += 1
-        return self.label + "_" + str(self._instruction_count)
+    def _next_statement_id(self):
+        self._statement_count += 1
+        return self.label + "_" + str(self._statement_count)
 
     def __call__(self, assignees, expression, loops=[]):
         """Generate code for an assignment.
@@ -1057,9 +1057,9 @@ class CodeBuilder(object):
     assign = __call__
 
     def _add_inst_to_context(self, inst):
-        inst_id = self._next_instruction_id()
+        inst_id = self._next_statement_id()
         context = self._contexts[-1]
-        dependencies = set(context.lead_instruction_ids)
+        dependencies = set(context.lead_statement_ids)
 
         # Verify that assignees are not being places after uses of the
         # assignees in this context.
@@ -1088,39 +1088,39 @@ class CodeBuilder(object):
         for used_variable in inst.get_written_variables():
             # Make second (indexed) writes depend on initialization
             for def_inst_id in context.definition_map.get(used_variable, []):
-                def_inst = self._instruction_map[def_inst_id]
+                def_inst = self._statement_map[def_inst_id]
                 if (
                         not isinstance(def_inst, AssignExpression)
                         or def_inst.assignee_subscript is None):
                     dependencies.add(def_inst_id)
 
-        # Add the condition to the instruction.
+        # Add the condition to the statement.
         # Update context and global information.
-        context.context_instruction_ids.add(inst_id)
+        context.context_statement_ids.add(inst_id)
         for assignee in inst.get_written_variables():
             context.definition_map.setdefault(assignee, set()).add(inst_id)
 
         context.used_variables |= inst.get_read_variables()
         self._all_var_names |= inst.get_written_variables()
-        self._instruction_map[inst_id] = \
+        self._statement_map[inst_id] = \
             inst.copy(id=inst_id, depends_on=list(dependencies),
                       condition=self._get_active_condition())
         return inst_id
 
     def _make_new_context(self, inst, additional_condition=True):
         """
-        :param leading_instructions: A list of lead instruction ids
+        :param leading_statements: A list of lead statement ids
         :conditions: A
         """
-        inst_id = self._next_instruction_id()
+        inst_id = self._next_statement_id()
         context = self._contexts[-1]
         new_context = CodeBuilder.Context(
-            lead_instruction_ids=[inst_id],
+            lead_statement_ids=[inst_id],
             used_variables=set(),
             condition=additional_condition)
-        self._instruction_map[inst_id] = \
+        self._statement_map[inst_id] = \
             inst.copy(id=inst_id,
-                      depends_on=inst.depends_on | context.context_instruction_ids,
+                      depends_on=inst.depends_on | context.context_statement_ids,
                       condition=self._get_active_condition())
         return new_context
 
@@ -1185,16 +1185,16 @@ class CodeBuilder(object):
 
     def __exit__(self, *ignored):
         self.fence()
-        self.phase_dependencies = list(self._contexts[-1].lead_instruction_ids)
-        self.instructions = set(self._instruction_map.values())
+        self.phase_dependencies = list(self._contexts[-1].lead_statement_ids)
+        self.statements = set(self._statement_map.values())
 
     def __str__(self):
         roots = [
-                self._instruction_map[insn_id]
+                self._statement_map[stmt_id]
                 for ctx in self._contexts
-                for insn_id in ctx.context_instruction_ids]
+                for stmt_id in ctx.context_statement_ids]
 
-        return "\n".join(_stringify_instructions(roots, self._instruction_map))
+        return "\n".join(_stringify_statements(roots, self._statement_map))
 
     def as_execution_phase(self, next_phase):
         """
@@ -1203,16 +1203,16 @@ class CodeBuilder(object):
         """
         return ExecutionPhase(
                 depends_on=self.phase_dependencies, next_phase=next_phase,
-                instructions=self.instructions)
+                statements=self.statements)
 
 # }}}
 
 
 # {{{ graphviz / dot export
 
-def get_dot_dependency_graph(code, use_insn_ids=False):
+def get_dot_dependency_graph(code, use_stmt_ids=False):
     """Return a string in the `dot <http://graphviz.org/>`_ language depicting
-    dependencies among kernel instructions.
+    dependencies among kernel statements.
     """
 
     from pymbolic.imperative.utils import get_dot_dependency_graph
@@ -1224,13 +1224,13 @@ def get_dot_dependency_graph(code, use_insn_ids=False):
                 yield dep
             yield "}"
 
-    instructions = [
-            insn if use_insn_ids else insn.copy(id=insn.id)
+    statements = [
+            stmt if use_stmt_ids else stmt.copy(id=stmt.id)
             for phase_name, phase in six.iteritems(code.phases)
-            for insn in phase.instructions]
+            for stmt in phase.statements]
 
     return get_dot_dependency_graph(
-            instructions, use_insn_ids=use_insn_ids,
+            statements, use_stmt_ids=use_stmt_ids,
             additional_lines_hook=additional_lines_hook)
 
 

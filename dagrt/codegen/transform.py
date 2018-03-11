@@ -31,22 +31,22 @@ from pymbolic.mapper import IdentityMapper
 # {{{ eliminate self dependencies
 
 def eliminate_self_dependencies(dag):
-    insn_id_gen = dag.get_insn_id_generator()
+    stmt_id_gen = dag.get_stmt_id_generator()
     var_name_gen = dag.get_var_name_generator()
 
     new_phases = {}
     for phase_name, phase in six.iteritems(dag.phases):
-        new_instructions = []
-        for insn in sorted(phase.instructions, key=lambda insn: insn.id):
+        new_statements = []
+        for stmt in sorted(phase.statements, key=lambda stmt: stmt.id):
             read_and_written = (
-                    insn.get_read_variables() & insn.get_written_variables())
+                    stmt.get_read_variables() & stmt.get_written_variables())
 
             if not read_and_written:
-                new_instructions.append(insn)
+                new_statements.append(stmt)
                 continue
 
             substs = []
-            tmp_insn_ids = []
+            tmp_stmt_ids = []
 
             from dagrt.language import AssignExpression
             from pymbolic import var
@@ -56,28 +56,28 @@ def eliminate_self_dependencies(dag):
                         + var_name.replace("<", "_").replace(">", "_"))
                 substs.append((var_name, var(tmp_var_name)))
 
-                tmp_insn_id = insn_id_gen("temp")
-                tmp_insn_ids.append(tmp_insn_id)
+                tmp_stmt_id = stmt_id_gen("temp")
+                tmp_stmt_ids.append(tmp_stmt_id)
 
-                new_tmp_insn = AssignExpression(
+                new_tmp_stmt = AssignExpression(
                         tmp_var_name, (), var(var_name),
-                        condition=insn.condition,
-                        id=tmp_insn_id,
-                        depends_on=insn.depends_on)
-                new_instructions.append(new_tmp_insn)
+                        condition=stmt.condition,
+                        id=tmp_stmt_id,
+                        depends_on=stmt.depends_on)
+                new_statements.append(new_tmp_stmt)
 
             from pymbolic import substitute
-            new_insn = (insn
+            new_stmt = (stmt
                     .map_expressions(
                         lambda expr: substitute(expr, dict(substs)),
                         include_lhs=False)
                     .copy(
                         # lhs will be rewritten, but we don't want that.
-                        depends_on=insn.depends_on | frozenset(tmp_insn_ids)))
+                        depends_on=stmt.depends_on | frozenset(tmp_stmt_ids)))
 
-            new_instructions.append(new_insn)
+            new_statements.append(new_stmt)
 
-        new_phases[phase_name] = phase.copy(instructions=new_instructions)
+        new_phases[phase_name] = phase.copy(statements=new_statements)
 
     return dag.copy(phases=new_phases)
 
@@ -87,11 +87,11 @@ def eliminate_self_dependencies(dag):
 # {{{ isolate function arguments
 
 class FunctionArgumentIsolator(IdentityMapper):
-    def __init__(self, new_instructions,
-            insn_id_gen, var_name_gen):
+    def __init__(self, new_statements,
+            stmt_id_gen, var_name_gen):
         super(IdentityMapper, self).__init__()
-        self.new_instructions = new_instructions
-        self.insn_id_gen = insn_id_gen
+        self.new_statements = new_statements
+        self.stmt_id_gen = stmt_id_gen
         self.var_name_gen = var_name_gen
 
     def isolate_arg(self, expr, base_condition, base_deps, extra_deps):
@@ -102,21 +102,21 @@ class FunctionArgumentIsolator(IdentityMapper):
         # FIXME: These aren't awesome identifiers.
         tmp_var_name = self.var_name_gen("tmp")
 
-        tmp_insn_id = self.insn_id_gen("tmp")
-        extra_deps.append(tmp_insn_id)
+        tmp_stmt_id = self.stmt_id_gen("tmp")
+        extra_deps.append(tmp_stmt_id)
 
         sub_extra_deps = []
         rec_result = self.rec(
                 expr, base_condition, base_deps, sub_extra_deps)
 
         from dagrt.language import AssignExpression
-        new_insn = AssignExpression(
+        new_stmt = AssignExpression(
                 tmp_var_name, (), rec_result,
                 condition=base_condition,
                 depends_on=base_deps | frozenset(sub_extra_deps),
-                id=tmp_insn_id)
+                id=tmp_stmt_id)
 
-        self.new_instructions.append(new_insn)
+        self.new_statements.append(new_stmt)
 
         from pymbolic import var
         return var(tmp_var_name)
@@ -140,30 +140,30 @@ class FunctionArgumentIsolator(IdentityMapper):
 
 
 def isolate_function_arguments(dag):
-    insn_id_gen = dag.get_insn_id_generator()
+    stmt_id_gen = dag.get_stmt_id_generator()
     var_name_gen = dag.get_var_name_generator()
 
     new_phases = {}
     for phase_name, phase in six.iteritems(dag.phases):
-        new_instructions = []
+        new_statements = []
 
         fai = FunctionArgumentIsolator(
-                new_instructions=new_instructions,
-                insn_id_gen=insn_id_gen,
+                new_statements=new_statements,
+                stmt_id_gen=stmt_id_gen,
                 var_name_gen=var_name_gen)
 
-        for insn in sorted(phase.instructions, key=lambda insn: insn.id):
-            base_deps = insn.depends_on
+        for stmt in sorted(phase.statements, key=lambda stmt: stmt.id):
+            base_deps = stmt.depends_on
             new_deps = []
 
-            new_instructions.append(
-                    insn
+            new_statements.append(
+                    stmt
                     .map_expressions(
                         lambda expr: fai(
-                            expr, insn.condition, base_deps, new_deps))
-                    .copy(depends_on=insn.depends_on | frozenset(new_deps)))
+                            expr, stmt.condition, base_deps, new_deps))
+                    .copy(depends_on=stmt.depends_on | frozenset(new_deps)))
 
-        new_phases[phase_name] = phase.copy(instructions=new_instructions)
+        new_phases[phase_name] = phase.copy(statements=new_statements)
 
     return dag.copy(phases=new_phases)
 
@@ -173,11 +173,11 @@ def isolate_function_arguments(dag):
 # {{{ isolate function calls
 
 class FunctionCallIsolator(IdentityMapper):
-    def __init__(self, new_instructions,
-            insn_id_gen, var_name_gen):
+    def __init__(self, new_statements,
+            stmt_id_gen, var_name_gen):
         super(IdentityMapper, self).__init__()
-        self.new_instructions = new_instructions
-        self.insn_id_gen = insn_id_gen
+        self.new_statements = new_statements
+        self.stmt_id_gen = stmt_id_gen
         self.var_name_gen = var_name_gen
 
     def isolate_call(self, expr, base_condition, base_deps, extra_deps,
@@ -185,8 +185,8 @@ class FunctionCallIsolator(IdentityMapper):
         # FIXME: These aren't awesome identifiers.
         tmp_var_name = self.var_name_gen("tmp")
 
-        tmp_insn_id = self.insn_id_gen("tmp")
-        extra_deps.append(tmp_insn_id)
+        tmp_stmt_id = self.stmt_id_gen("tmp")
+        extra_deps.append(tmp_stmt_id)
 
         sub_extra_deps = []
         rec_result = super_method(
@@ -206,16 +206,16 @@ class FunctionCallIsolator(IdentityMapper):
                 kw_parameters[par_name] = par
 
         from dagrt.language import AssignFunctionCall
-        new_insn = AssignFunctionCall(
+        new_stmt = AssignFunctionCall(
                 assignees=(tmp_var_name,),
                 function_id=rec_result.function.name,
                 parameters=tuple(parameters),
                 kw_parameters=kw_parameters,
-                id=tmp_insn_id,
+                id=tmp_stmt_id,
                 condition=base_condition,
                 depends_on=base_deps | frozenset(sub_extra_deps))
 
-        self.new_instructions.append(new_insn)
+        self.new_statements.append(new_stmt)
 
         from pymbolic import var
         return var(tmp_var_name)
@@ -238,36 +238,36 @@ def isolate_function_calls(dag):
     called before this.
     """
 
-    insn_id_gen = dag.get_insn_id_generator()
+    stmt_id_gen = dag.get_stmt_id_generator()
     var_name_gen = dag.get_var_name_generator()
 
     new_phases = {}
     for phase_name, phase in six.iteritems(dag.phases):
-        new_instructions = []
+        new_statements = []
 
         fci = FunctionCallIsolator(
-                new_instructions=new_instructions,
-                insn_id_gen=insn_id_gen,
+                new_statements=new_statements,
+                stmt_id_gen=stmt_id_gen,
                 var_name_gen=var_name_gen)
 
-        for insn in sorted(phase.instructions, key=lambda insn: insn.id):
+        for stmt in sorted(phase.statements, key=lambda stmt: stmt.id):
             new_deps = []
 
             from dagrt.language import AssignExpression
-            if isinstance(insn, AssignExpression):
-                new_instructions.append(
-                        insn
+            if isinstance(stmt, AssignExpression):
+                new_statements.append(
+                        stmt
                         .map_expressions(
                             lambda expr: fci(
-                                expr, insn.condition, insn.depends_on, new_deps))
-                        .copy(depends_on=insn.depends_on | frozenset(new_deps)))
+                                expr, stmt.condition, stmt.depends_on, new_deps))
+                        .copy(depends_on=stmt.depends_on | frozenset(new_deps)))
                 from pymbolic.primitives import Call, CallWithKwargs
-                assert not isinstance(new_instructions[-1].rhs,
+                assert not isinstance(new_statements[-1].rhs,
                         (Call, CallWithKwargs))
             else:
-                new_instructions.append(insn)
+                new_statements.append(stmt)
 
-        new_phases[phase_name] = phase.copy(instructions=new_instructions)
+        new_phases[phase_name] = phase.copy(statements=new_statements)
 
     return dag.copy(phases=new_phases)
 
@@ -289,10 +289,10 @@ def flat_LogicalAnd(*children):  # noqa
 
 class IfThenElseExpander(IdentityMapper):
 
-    def __init__(self, new_instructions, insn_id_gen, var_name_gen):
+    def __init__(self, new_statements, stmt_id_gen, var_name_gen):
         super(IfThenElseExpander, self).__init__()
-        self.new_instructions = new_instructions
-        self.insn_id_gen = insn_id_gen
+        self.new_statements = new_statements
+        self.stmt_id_gen = stmt_id_gen
         self.var_name_gen = var_name_gen
 
     def map_if(self, expr, base_condition, base_deps, extra_deps):
@@ -301,9 +301,9 @@ class IfThenElseExpander(IdentityMapper):
 
         flag = var(self.var_name_gen("<cond>ifthenelse_cond"))
         tmp_result = self.var_name_gen("ifthenelse_result")
-        if_insn_id = self.insn_id_gen("ifthenelse_cond")
-        then_insn_id = self.insn_id_gen("ifthenelse_then")
-        else_insn_id = self.insn_id_gen("ifthenelse_else")
+        if_stmt_id = self.stmt_id_gen("ifthenelse_cond")
+        then_stmt_id = self.stmt_id_gen("ifthenelse_then")
+        else_stmt_id = self.stmt_id_gen("ifthenelse_else")
 
         sub_condition_deps = []
         rec_condition = self.rec(expr.condition, base_condition, base_deps,
@@ -312,74 +312,74 @@ class IfThenElseExpander(IdentityMapper):
         sub_then_deps = []
         then_condition = flat_LogicalAnd(base_condition, flag)
         rec_then = self.rec(expr.then, then_condition,
-                            base_deps | frozenset([if_insn_id]), sub_then_deps)
+                            base_deps | frozenset([if_stmt_id]), sub_then_deps)
 
         sub_else_deps = []
         else_condition = flat_LogicalAnd(base_condition, LogicalNot(flag))
         rec_else = self.rec(expr.else_, else_condition,
-                            base_deps | frozenset([if_insn_id]), sub_else_deps)
+                            base_deps | frozenset([if_stmt_id]), sub_else_deps)
 
         from dagrt.language import AssignExpression
 
-        self.new_instructions.extend([
+        self.new_statements.extend([
             AssignExpression(
                 assignee=flag.name,
                 assignee_subscript=(),
                 expression=rec_condition,
                 condition=base_condition,
-                id=if_insn_id,
+                id=if_stmt_id,
                 depends_on=base_deps | frozenset(sub_condition_deps)),
             AssignExpression(
                 assignee=tmp_result,
                 assignee_subscript=(),
                 condition=then_condition,
                 expression=rec_then,
-                id=then_insn_id,
+                id=then_stmt_id,
                 depends_on=(
                     base_deps | frozenset(sub_then_deps) |
-                    frozenset([if_insn_id]))),
+                    frozenset([if_stmt_id]))),
             AssignExpression(
                 assignee=tmp_result,
                 assignee_subscript=(),
                 condition=else_condition,
                 expression=rec_else,
-                id=else_insn_id,
+                id=else_stmt_id,
                 depends_on=base_deps | frozenset(sub_else_deps) |
-                frozenset([if_insn_id]))])
+                frozenset([if_stmt_id]))])
 
-        extra_deps.extend([then_insn_id, else_insn_id])
+        extra_deps.extend([then_stmt_id, else_stmt_id])
         return var(tmp_result)
 
 
 def expand_IfThenElse(dag):  # noqa
     """
     Turn IfThenElse expressions into values that are computed as a result of an
-    If instruction. This is useful for targets that do not support ternary
+    If statement. This is useful for targets that do not support ternary
     operators.
     """
 
-    insn_id_gen = dag.get_insn_id_generator()
+    stmt_id_gen = dag.get_stmt_id_generator()
     var_name_gen = dag.get_var_name_generator()
 
     new_phases = {}
     for phase_name, phase in six.iteritems(dag.phases):
-        new_instructions = []
+        new_statements = []
 
         expander = IfThenElseExpander(
-            new_instructions=new_instructions,
-            insn_id_gen=insn_id_gen,
+            new_statements=new_statements,
+            stmt_id_gen=stmt_id_gen,
             var_name_gen=var_name_gen)
 
-        for insn in phase.instructions:
-            base_deps = insn.depends_on
+        for stmt in phase.statements:
+            base_deps = stmt.depends_on
             new_deps = []
 
-            new_instructions.append(
-                insn.map_expressions(
-                    lambda expr: expander(expr, insn.condition, base_deps, new_deps))
-                .copy(depends_on=insn.depends_on | frozenset(new_deps)))
+            new_statements.append(
+                stmt.map_expressions(
+                    lambda expr: expander(expr, stmt.condition, base_deps, new_deps))
+                .copy(depends_on=stmt.depends_on | frozenset(new_deps)))
 
-        new_phases[phase_name] = phase.copy(instructions=new_instructions)
+        new_phases[phase_name] = phase.copy(statements=new_statements)
 
     return dag.copy(phases=new_phases)
 

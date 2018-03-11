@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from dagrt.codegen.dag_ast import Block, IfThen, IfThenElse, InstructionWrapper
+from dagrt.codegen.dag_ast import Block, IfThen, IfThenElse, StatementWrapper
 
 
 class StructuredCodeGenerator(object):
@@ -40,8 +40,8 @@ class StructuredCodeGenerator(object):
         """
         :arg node: An AST node to lower
         """
-        if isinstance(node, InstructionWrapper):
-            self.lower_inst(node.instruction)
+        if isinstance(node, StatementWrapper):
+            self.lower_inst(node.statement)
 
         elif isinstance(node, IfThen):
             self.emit_if_begin(node.condition)
@@ -64,14 +64,14 @@ class StructuredCodeGenerator(object):
                 type=type(node).__name__))
 
     def lower_inst(self, inst):
-        """Emit the code for an instruction."""
+        """Emit the code for an statement."""
 
         method_name = "emit_inst_"+type(inst).__name__
         try:
             method = getattr(self, method_name)
         except AttributeError:
             raise RuntimeError(
-                    "{gen} cannot handle instruction of type {inst}"
+                    "{gen} cannot handle statement of type {inst}"
                     .format(
                         gen=repr(type(self)),
                         inst=type(inst).__name__))
