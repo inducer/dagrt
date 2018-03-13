@@ -96,6 +96,15 @@ def test_match_modulo_identity():
     assert subst["b"] == 0
 
 
+def test_match_with_pre_match():
+    a, b, c, d = declare("a", "b", "c", "d")
+    from dagrt.expression import match
+    subst = match(a + b, c + d, ["a", "b"], pre_match={"a": "c"})
+
+    assert subst["a"] == c
+    assert subst["b"] == d
+
+
 def test_get_variables():
     from pymbolic import var
     f = var('f')
