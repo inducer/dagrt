@@ -330,7 +330,7 @@ def match(template, expression, free_variable_names=None,
     `bound_variable_names` are treated as free.
 
     Matches that are already known to hold can be specified in `pre_match`, a
-    map from variable names to subexpression (or strings representing
+    map from variable names to subexpressions (or strings representing
     subexpressions).
 
     Return a map from variable names in `free_variable_names` to
