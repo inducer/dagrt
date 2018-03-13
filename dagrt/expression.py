@@ -355,6 +355,10 @@ def match(template, expression, free_variable_names=None,
     if pre_match is not None:
         eqns = []
         for name, expr in six.iteritems(pre_match):
+            if name not in free_variable_names:
+                raise ValueError(
+                    "'%s' was given in 'pre_match' but is "
+                    "not a candidate for matching" % name)
             if isinstance(expr, str):
                 expr = parse(expr)
             eqns.append((Variable(name), expr))

@@ -24,6 +24,9 @@ THE SOFTWARE.
 """
 
 
+import pytest
+
+
 def test_collapse_constants():
     from pymbolic import var
     f = var("f")
@@ -103,6 +106,13 @@ def test_match_with_pre_match():
 
     assert subst["a"] == c
     assert subst["b"] == d
+
+
+def test_match_with_pre_match_invalid_arg():
+    a, b, c, d = declare("a", "b", "c", "d")
+    from dagrt.expression import match
+    with pytest.raises(ValueError):
+        match(a + b, c + d, ["a"], pre_match={"b": "c"})
 
 
 def test_get_variables():
