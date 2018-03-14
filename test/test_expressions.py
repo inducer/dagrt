@@ -133,6 +133,13 @@ def test_get_variables_with_function_symbols():
         frozenset(['f', 'x'])
 
 
+def test_substitute():
+    f, a = declare("f", "a")
+
+    from dagrt.expression import substitute
+    assert substitute("f(<state>y)", {"<state>y": a}) == f(a)
+
+
 # {{{ parser
 
 def test_parser():

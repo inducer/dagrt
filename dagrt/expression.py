@@ -414,8 +414,10 @@ class _ExtendedParser(Parser):
 
 
 def parse(expr):
-    """Return a pymbolic expression constructed from the string. Values
-    between backticks ("`") are parsed as variable names.
+    """Return a pymbolic expression constructed from the string.
+
+    Values between backticks ("`") are parsed as variable names.
+    Tagged identifiers ("<func>f") are also parsed as variable names.
     """
     from pymbolic import var
 
@@ -431,6 +433,22 @@ def parse(expr):
     parser = _ExtendedParser()
     substitutor = SubstitutionMapper(remove_backticks)
     return substitutor(parser(expr))
+
+
+def substitute(expression, variable_assignments={}, **kwargs):
+    """Perform variable substitution.
+
+    :arg expression: A string or :mod:`pymbolic` expression.
+        If a string, it will be parsed with :func:`parse`.
+    :arg variable_assignments: Mapping from variable names to expressions
+    :arg kwargs: Extra arguments passed to to :func:`pymbolic.substitute`
+    """
+    from pymbolic import substitute as substitute_pymbolic
+
+    if isinstance(expression, str):
+        expression = parse(expression)
+
+    return substitute_pymbolic(expression, variable_assignments, **kwargs)
 
 
 # vim: foldmethod=marker
