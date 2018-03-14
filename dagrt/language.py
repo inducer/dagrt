@@ -1139,7 +1139,7 @@ class CodeBuilder(object):
         return var(self.fresh_var_name(prefix))
 
     def assign_solved_1(self, assignee, solve_component, expression, guess,
-                        solver_id):
+                        solver_id=None):
         """Special case of AssignSolved when there is 1 component to solve for."""
         self.assign_solved((assignee.name,), (solve_component.name,), (expression,),
                            {"guess": guess}, solver_id)
