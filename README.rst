@@ -12,3 +12,4 @@ operator fusion and versatile code generation.
 Resources:
 
 * `source code via git <https://github.com/inducer/dagrt>`_
+* `Documentation <https://documen.tician.de/dagrt>`_
