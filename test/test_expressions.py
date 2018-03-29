@@ -24,6 +24,9 @@ THE SOFTWARE.
 """
 
 
+import pytest
+
+
 def test_collapse_constants():
     from pymbolic import var
     f = var("f")
@@ -96,6 +99,22 @@ def test_match_modulo_identity():
     assert subst["b"] == 0
 
 
+def test_match_with_pre_match():
+    a, b, c, d = declare("a", "b", "c", "d")
+    from dagrt.expression import match
+    subst = match(a + b, c + d, ["a", "b"], pre_match={"a": "c"})
+
+    assert subst["a"] == c
+    assert subst["b"] == d
+
+
+def test_match_with_pre_match_invalid_arg():
+    a, b, c, d = declare("a", "b", "c", "d")
+    from dagrt.expression import match
+    with pytest.raises(ValueError):
+        match(a + b, c + d, ["a"], pre_match={"b": "c"})
+
+
 def test_get_variables():
     from pymbolic import var
     f = var('f')
@@ -112,6 +131,13 @@ def test_get_variables_with_function_symbols():
     from dagrt.utils import get_variables
     assert get_variables(f(x), include_function_symbols=True) == \
         frozenset(['f', 'x'])
+
+
+def test_substitute():
+    f, a = declare("f", "a")
+
+    from dagrt.expression import substitute
+    assert substitute("f(<state>y)", {"<state>y": a}) == f(a)
 
 
 # {{{ parser
