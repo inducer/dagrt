@@ -1,6 +1,8 @@
 dagrt
 =====
 
+.. image:: https://gitlab.tiker.net/inducer/dagrt/badges/master/pipeline.svg
+   :target: https://gitlab.tiker.net/inducer/dagrt/commits/master
 .. image:: https://badge.fury.io/py/dagrt.png
     :target: http://pypi.python.org/pypi/dagrt
 
