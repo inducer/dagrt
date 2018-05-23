@@ -1058,9 +1058,13 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # }}}
 
-        from dagrt.codegen.data import SymbolKindFinder
+        from dagrt.codegen.data import SymbolKindFinder, VariableDepFinder
 
         self.sym_kind_table = SymbolKindFinder(self.function_registry)(
+            [fd.name for fd in fdescrs],
+            [fd.ast for fd in fdescrs])
+
+        self.var_dep_table = VariableDepFinder(self.function_registry)(
             [fd.name for fd in fdescrs],
             [fd.ast for fd in fdescrs])
 
@@ -2115,6 +2119,20 @@ class CodeGenerator(StructuredCodeGenerator):
         for ident, start, stop in inst.loops[::-1]:
             self.emitter.__exit__(None, None, None)
 
+        # Deallocate if done with intermed. quantities
+        from dagrt.utils import is_state_variable
+
+        read_and_written = inst.get_read_variables().union(
+                inst.get_written_variables())
+
+        for variable in read_and_written:
+            var_kind = self.sym_kind_table.get(
+                self.current_function, variable)
+            test_id = self.var_dep_table.get(
+                self.current_function, variable)
+            if inst.id == test_id and not is_state_variable(variable):
+                self.emit_variable_deinit(variable, var_kind)
+
         assert start_em is self.emitter
 
     # }}}
@@ -2191,6 +2209,25 @@ class CodeGenerator(StructuredCodeGenerator):
                         + list(function.resolve_args(arg_strs_dict))
                         + assignee_fortran_names
                         )))
+
+        # Deallocate if done with intermed. quantities
+        from dagrt.utils import is_state_variable
+
+        read_and_written = inst.get_read_variables().union(
+                inst.get_written_variables())
+
+        for variable in read_and_written:
+            # FIXME: This can fail for args of state update notification,
+            # hence the try/catch.
+            try:
+                var_kind = self.sym_kind_table.get(
+                    self.current_function, variable)
+                test_id = self.var_dep_table.get(
+                    self.current_function, variable)
+                if inst.id == test_id and not is_state_variable(variable):
+                    self.emit_variable_deinit(variable, var_kind)
+            except KeyError:
+                pass
 
     # }}}
 
