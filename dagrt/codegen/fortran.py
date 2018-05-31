@@ -1058,18 +1058,19 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # }}}
 
-        from dagrt.codegen.data import SymbolKindFinder, VariableDepFinder
+        from dagrt.codegen.data import SymbolKindFinder
 
         self.sym_kind_table = SymbolKindFinder(self.function_registry)(
             [fd.name for fd in fdescrs],
             [fd.ast for fd in fdescrs])
 
-        self.var_dep_table = VariableDepFinder(self.function_registry)(
+        from dagrt.codegen.analysis import (
+                collect_ode_component_names_from_dag, var_to_statement_table)
+
+        component_ids = collect_ode_component_names_from_dag(dag)
+        self.var_dep_table = var_to_statement_table(
             [fd.name for fd in fdescrs],
             [fd.ast for fd in fdescrs])
-
-        from dagrt.codegen.analysis import collect_ode_component_names_from_dag
-        component_ids = collect_ode_component_names_from_dag(dag)
 
         if not component_ids <= set(self.user_type_map):
             raise RuntimeError("User type missing from user type map: %r"
@@ -2128,8 +2129,7 @@ class CodeGenerator(StructuredCodeGenerator):
         for variable in read_and_written:
             var_kind = self.sym_kind_table.get(
                 self.current_function, variable)
-            test_id = self.var_dep_table.get(
-                self.current_function, variable)
+            test_id = self.var_dep_table[variable, self.current_function]
             if inst.id == test_id and not is_state_variable(variable):
                 self.emit_variable_deinit(variable, var_kind)
 
@@ -2222,12 +2222,12 @@ class CodeGenerator(StructuredCodeGenerator):
             try:
                 var_kind = self.sym_kind_table.get(
                     self.current_function, variable)
-                test_id = self.var_dep_table.get(
-                    self.current_function, variable)
-                if inst.id == test_id and not is_state_variable(variable):
-                    self.emit_variable_deinit(variable, var_kind)
             except KeyError:
-                pass
+                continue
+
+            test_id = self.var_dep_table[variable, self.current_function]
+            if inst.id == test_id and not is_state_variable(variable):
+                self.emit_variable_deinit(variable, var_kind)
 
     # }}}
 

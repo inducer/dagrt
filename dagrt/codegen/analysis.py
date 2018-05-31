@@ -247,4 +247,31 @@ def collect_ode_component_names_from_dag(dag):
 
 # }}}
 
+
+# {{{ variable dependency finder
+
+def var_to_statement_table(names, functions):
+
+        """Return a table describing variable dependencies
+           in terms of statement ids.
+        """
+
+        tbl = {}
+
+        from dagrt.codegen.dag_ast import get_statements_in_ast
+
+        for name, func in zip(names, functions):
+
+            for statement in get_statements_in_ast(func):
+                # Associate latest statement in this phase at which
+                # a given variable is used
+                read_and_written = statement.get_read_variables().union(
+                        statement.get_written_variables())
+                for variable in read_and_written:
+                    tbl[variable, name] = statement.id
+
+        return tbl
+
+# }}}
+
 # vim: foldmethod=marker
