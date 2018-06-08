@@ -248,12 +248,15 @@ def collect_ode_component_names_from_dag(dag):
 # }}}
 
 
-# {{{ variable dependency finder
+# {{{ variable to last dependent statement table
 
-def var_to_statement_table(names, functions):
+def var_to_last_dependent_statement_table(names, functions):
 
-        """Return a table describing variable dependencies
-           in terms of statement ids.
+        """Return a table pairing each variable with the
+           latest statement in the topological order at which
+           that variable is used.  This is used for intermediate
+           deallocation of variables that no longer need to be
+           read or written.
         """
 
         tbl = {}

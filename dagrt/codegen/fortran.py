@@ -1065,10 +1065,11 @@ class CodeGenerator(StructuredCodeGenerator):
             [fd.ast for fd in fdescrs])
 
         from dagrt.codegen.analysis import (
-                collect_ode_component_names_from_dag, var_to_statement_table)
+                collect_ode_component_names_from_dag,
+                var_to_last_dependent_statement_table)
 
         component_ids = collect_ode_component_names_from_dag(dag)
-        self.var_dep_table = var_to_statement_table(
+        self.var_dep_table = var_to_last_dependent_statement_table(
             [fd.name for fd in fdescrs],
             [fd.ast for fd in fdescrs])
 
@@ -2120,18 +2121,7 @@ class CodeGenerator(StructuredCodeGenerator):
         for ident, start, stop in inst.loops[::-1]:
             self.emitter.__exit__(None, None, None)
 
-        # Deallocate if done with intermed. quantities
-        from dagrt.utils import is_state_variable
-
-        read_and_written = inst.get_read_variables().union(
-                inst.get_written_variables())
-
-        for variable in read_and_written:
-            var_kind = self.sym_kind_table.get(
-                self.current_function, variable)
-            test_id = self.var_dep_table[variable, self.current_function]
-            if inst.id == test_id and not is_state_variable(variable):
-                self.emit_variable_deinit(variable, var_kind)
+        self.intermediate_deallocation(inst)
 
         assert start_em is self.emitter
 
@@ -2210,24 +2200,7 @@ class CodeGenerator(StructuredCodeGenerator):
                         + assignee_fortran_names
                         )))
 
-        # Deallocate if done with intermed. quantities
-        from dagrt.utils import is_state_variable
-
-        read_and_written = inst.get_read_variables().union(
-                inst.get_written_variables())
-
-        for variable in read_and_written:
-            # FIXME: This can fail for args of state update notification,
-            # hence the try/catch.
-            try:
-                var_kind = self.sym_kind_table.get(
-                    self.current_function, variable)
-            except KeyError:
-                continue
-
-            test_id = self.var_dep_table[variable, self.current_function]
-            if inst.id == test_id and not is_state_variable(variable):
-                self.emit_variable_deinit(variable, var_kind)
+        self.intermediate_deallocation(inst)
 
     # }}}
 
@@ -2267,6 +2240,26 @@ class CodeGenerator(StructuredCodeGenerator):
                         self.call_after_state_update,
                         (var(self.component_name_to_component_sym(
                             inst.component_id)),)))
+
+    def intermediate_deallocation(self, inst):
+        # Deallocate if done with intermed. quantities
+        from dagrt.utils import is_state_variable
+
+        read_and_written = inst.get_read_variables().union(
+                inst.get_written_variables())
+
+        for variable in read_and_written:
+            # FIXME: This can fail for args of state update notification,
+            # hence the try/catch.
+            try:
+                var_kind = self.sym_kind_table.get(
+                    self.current_function, variable)
+            except KeyError:
+                continue
+
+            test_id = self.var_dep_table[variable, self.current_function]
+            if inst.id == test_id and not is_state_variable(variable):
+                self.emit_variable_deinit(variable, var_kind)
 
     def emit_inst_Raise(self, inst):
         # FIXME: Reenable emitting full error message
