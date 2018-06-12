@@ -1046,7 +1046,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ produce function name / function AST pairs
 
-        from dagrt.codegen.dag_ast import create_ast_from_phase
+        from dagrt.codegen.dag_ast import (
+                create_ast_from_phase, get_statements_in_ast)
 
         from collections import namedtuple
         NameASTPair = namedtuple("NameASTPair", "name, ast")  # noqa
@@ -1066,12 +1067,16 @@ class CodeGenerator(StructuredCodeGenerator):
 
         from dagrt.codegen.analysis import (
                 collect_ode_component_names_from_dag,
-                var_to_last_dependent_statement_table)
+                var_to_last_dependent_statement_mapping)
 
         component_ids = collect_ode_component_names_from_dag(dag)
-        self.var_dep_table = var_to_last_dependent_statement_table(
+
+        self.last_used_stmt_table = var_to_last_dependent_statement_mapping(
             [fd.name for fd in fdescrs],
-            [fd.ast for fd in fdescrs])
+            [get_statements_in_ast(fd.ast) for fd in fdescrs])
+        #self.last_used_stmt_table = var_to_last_dependent_statement_mapping(
+        #    [fd.name for fd in fdescrs],
+        #    [fd.ast for fd in fdescrs])
 
         if not component_ids <= set(self.user_type_map):
             raise RuntimeError("User type missing from user type map: %r"
@@ -1150,7 +1155,10 @@ class CodeGenerator(StructuredCodeGenerator):
                 self.current_function, {})
 
         for identifier, sym_kind in sorted(six.iteritems(sym_table)):
-            self.emit_variable_deinit(identifier, sym_kind)
+            try:
+                self.last_used_stmt_table[identifier, self.current_function]
+            except KeyError:
+                self.emit_variable_deinit(identifier, sym_kind)
 
         # }}}
 
@@ -2121,7 +2129,7 @@ class CodeGenerator(StructuredCodeGenerator):
         for ident, start, stop in inst.loops[::-1]:
             self.emitter.__exit__(None, None, None)
 
-        self.intermediate_deallocation(inst)
+        self.emit_deinit_if_no_longer_used(inst)
 
         assert start_em is self.emitter
 
@@ -2200,7 +2208,7 @@ class CodeGenerator(StructuredCodeGenerator):
                         + assignee_fortran_names
                         )))
 
-        self.intermediate_deallocation(inst)
+        self.emit_deinit_if_no_longer_used(inst)
 
     # }}}
 
@@ -2241,7 +2249,7 @@ class CodeGenerator(StructuredCodeGenerator):
                         (var(self.component_name_to_component_sym(
                             inst.component_id)),)))
 
-    def intermediate_deallocation(self, inst):
+    def emit_deinit_if_no_longer_used(self, inst):
         # Deallocate if done with intermed. quantities
         from dagrt.utils import is_state_variable
 
@@ -2257,8 +2265,9 @@ class CodeGenerator(StructuredCodeGenerator):
             except KeyError:
                 continue
 
-            test_id = self.var_dep_table[variable, self.current_function]
-            if inst.id == test_id and not is_state_variable(variable):
+            last_used_stmt_id = self.last_used_stmt_table[
+                    variable, self.current_function]
+            if inst.id == last_used_stmt_id and not is_state_variable(variable):
                 self.emit_variable_deinit(variable, var_kind)
 
     def emit_inst_Raise(self, inst):
