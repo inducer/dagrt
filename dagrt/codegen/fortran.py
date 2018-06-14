@@ -2246,7 +2246,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def emit_deinit_for_last_usage_of_vars(self, inst):
         """Check if, for any of the variables in instruction *inst*,
-        *inst* contains the last use of that variable in the 
+        *inst* contains the last use of that variable in the
         :attr:`current_function`. If so, emit code to deallocate that variable.
         """
         from dagrt.utils import is_state_variable
