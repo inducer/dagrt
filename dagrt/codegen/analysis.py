@@ -250,39 +250,16 @@ def collect_ode_component_names_from_dag(dag):
 
 # {{{ variable to last dependent statement mapping
 
-#def var_to_last_dependent_statement_mapping(names, functions):
-#
-#    """Return a mapping of each variable to the
-#    latest statement in the topological order at which
-#    that variable is used.  This is used for intermediate
-#    deallocation of variables that no longer need to be
-#    read or written.
-#    """
-#
-#    tbl = {}
-#
-#    from dagrt.codegen.dag_ast import get_statements_in_ast
-#
-#    for name, func in zip(names, functions):
-#
-#        for statement in get_statements_in_ast(func):
-#            # Associate latest statement in this phase at which
-#            # a given variable is used
-#            read_and_written = statement.get_read_variables().union(
-#                    statement.get_written_variables())
-#            for variable in read_and_written:
-#                tbl[variable, name] = statement.id
-#
-#    return tbl
-
-
 def var_to_last_dependent_statement_mapping(names, statement_lists):
 
-    """Return a mapping of each variable to the
-    latest statement in the topological order at which
-    that variable is used.  This is used for intermediate
-    deallocation of variables that no longer need to be
-    read or written.
+    """For each function in names, return a mapping of each variable to the
+    latest statement in statement_lists at which that variable is used.
+    This is used for intermediate deallocation of variables that no longer
+    need to be read or written.
+
+    :arg names: a list of function names in the ast.
+    :arg statement_lists: a set of topological orderings of the statements
+    in each function.
     """
 
     tbl = {}

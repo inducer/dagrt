@@ -1074,9 +1074,6 @@ class CodeGenerator(StructuredCodeGenerator):
         self.last_used_stmt_table = var_to_last_dependent_statement_mapping(
             [fd.name for fd in fdescrs],
             [get_statements_in_ast(fd.ast) for fd in fdescrs])
-        #self.last_used_stmt_table = var_to_last_dependent_statement_mapping(
-        #    [fd.name for fd in fdescrs],
-        #    [fd.ast for fd in fdescrs])
 
         if not component_ids <= set(self.user_type_map):
             raise RuntimeError("User type missing from user type map: %r"
@@ -1155,9 +1152,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 self.current_function, {})
 
         for identifier, sym_kind in sorted(six.iteritems(sym_table)):
-            try:
-                self.last_used_stmt_table[identifier, self.current_function]
-            except KeyError:
+            if (identifier, self.current_function) not in self.last_used_stmt_table:
                 self.emit_variable_deinit(identifier, sym_kind)
 
         # }}}
@@ -2250,11 +2245,12 @@ class CodeGenerator(StructuredCodeGenerator):
                             inst.component_id)),)))
 
     def emit_deinit_if_no_longer_used(self, inst):
-        # Deallocate if done with intermed. quantities
+        """Check if a given inst is the last use of
+        a variable.  If so, deallocate that variable.
+        """
         from dagrt.utils import is_state_variable
 
-        read_and_written = inst.get_read_variables().union(
-                inst.get_written_variables())
+        read_and_written = inst.get_read_variables() | inst.get_written_variables()
 
         for variable in read_and_written:
             # FIXME: This can fail for args of state update notification,
