@@ -251,7 +251,6 @@ def collect_ode_component_names_from_dag(dag):
 # {{{ variable to last dependent statement mapping
 
 def var_to_last_dependent_statement_mapping(names, statement_lists):
-
     """For each function in names, return a mapping of each variable to the
     latest statement in statement_lists at which that variable is used.
     This is used for intermediate deallocation of variables that no longer
@@ -259,7 +258,7 @@ def var_to_last_dependent_statement_mapping(names, statement_lists):
 
     :arg names: a list of function names in the ast.
     :arg statement_lists: a set of topological orderings of the statements
-    in each function.
+        in each function.
     """
 
     tbl = {}

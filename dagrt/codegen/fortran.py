@@ -2124,7 +2124,7 @@ class CodeGenerator(StructuredCodeGenerator):
         for ident, start, stop in inst.loops[::-1]:
             self.emitter.__exit__(None, None, None)
 
-        self.emit_deinit_if_no_longer_used(inst)
+        self.emit_deinit_for_last_usage_of_vars(inst)
 
         assert start_em is self.emitter
 
@@ -2203,7 +2203,7 @@ class CodeGenerator(StructuredCodeGenerator):
                         + assignee_fortran_names
                         )))
 
-        self.emit_deinit_if_no_longer_used(inst)
+        self.emit_deinit_for_last_usage_of_vars(inst)
 
     # }}}
 
@@ -2244,9 +2244,10 @@ class CodeGenerator(StructuredCodeGenerator):
                         (var(self.component_name_to_component_sym(
                             inst.component_id)),)))
 
-    def emit_deinit_if_no_longer_used(self, inst):
-        """Check if a given inst is the last use of
-        a variable.  If so, deallocate that variable.
+    def emit_deinit_for_last_usage_of_vars(self, inst):
+        """Check if, for any of the variables in instruction *inst*,
+        *inst* contains the last use of that variable in the 
+        :attr:`current_function`. If so, emit code to deallocate that variable.
         """
         from dagrt.utils import is_state_variable
 
