@@ -49,7 +49,7 @@ def get_variables(expr, include_function_symbols=False):
 
 def is_state_variable(var):
     """Check if the given name corresponds to a state variable."""
-    if var == '<t>' or var == '<dt>':
+    if var in ('<t>', '<dt>'):
         return True
     elif (var.startswith('<state>')
             or var.startswith('<p>')
@@ -143,9 +143,9 @@ class TemporaryDirectory(object):
     name = None
     _closed = False
 
-    def __init__(self, suffix="", prefix="tmp", dir=None):
+    def __init__(self, suffix="", prefix="tmp", dirname=None):
         from tempfile import mkdtemp
-        self.name = mkdtemp(suffix, prefix, dir)
+        self.name = mkdtemp(suffix, prefix, dirname)
 
     def __repr__(self):
         return "<{} {!r}>".format(self.__class__.__name__, self.name)
@@ -157,12 +157,7 @@ class TemporaryDirectory(object):
         import warnings
         if self.name and not self._closed:
             from shutil import rmtree
-            try:
-                rmtree(self.name)
-            except (TypeError, AttributeError) as ex:
-                if "None" not in '%s' % (ex,):
-                    raise
-                self._rmtree(self.name)
+            rmtree(self.name)
             self._closed = True
             if _warn and warnings.warn:
                 warnings.warn("Implicitly cleaning up {!r}".format(self))
@@ -179,7 +174,10 @@ class TemporaryDirectory(object):
 
 # {{{ run_fortran
 
-def run_fortran(sources, fortran_options=[]):
+def run_fortran(sources, fortran_options=None):
+    if fortran_options is None:
+        fortran_options = []
+
     from os.path import join
 
     with TemporaryDirectory() as tmpdir:
