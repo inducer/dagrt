@@ -188,9 +188,10 @@ def run_fortran(sources, fortran_options=None):
             with open(join(tmpdir, name), "w") as srcf:
                 srcf.write(contents)
 
+        import os
         from subprocess import check_call, Popen, PIPE
         check_call(
-                ["gfortran",
+                [os.environ.get("FC", "gfortran"),
                     "-Wall",
                     "-Wno-unused-dummy-argument",
                     "-Wno-unused-variable",
