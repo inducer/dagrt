@@ -445,8 +445,7 @@ class CodeGenerator(StructuredCodeGenerator):
         else:
             assign_code = (
                     ", ".join(self._name_manager[n] for n in inst.assignees)
-                    +
-                    " = ")
+                    + " = ")
 
         from pymbolic import var
         self._emit(

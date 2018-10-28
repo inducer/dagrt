@@ -294,8 +294,8 @@ class _ExtendedUnifier(UnidirectionalUnifier):
 
         variables = set(
             term for term in expr.children
-            if isinstance(term, Variable) and
-            term.name in self.lhs_mapping_candidates)
+            if isinstance(term, Variable)
+            and term.name in self.lhs_mapping_candidates)
 
         from pymbolic.mapper.unifier import unify_many
 
