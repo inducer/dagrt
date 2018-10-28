@@ -213,8 +213,9 @@ def run_fortran(sources, fortran_options=None):
                     file=sys.stderr)
 
         if stderr_data:
-            raise RuntimeError("Fortran code has non-empty stderr:\n" +
-                               stderr_data.decode('ascii'))
+            raise RuntimeError(
+                    "Fortran code has non-empty stderr:\n"
+                    + stderr_data.decode('ascii'))
 
         return p.returncode, stdout_data, stderr_data
 

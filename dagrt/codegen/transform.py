@@ -336,16 +336,20 @@ class IfThenElseExpander(IdentityMapper):
                 expression=rec_then,
                 id=then_stmt_id,
                 depends_on=(
-                    base_deps | frozenset(sub_then_deps) |
-                    frozenset([if_stmt_id]))),
+                    base_deps
+                    | frozenset(sub_then_deps)
+                    | frozenset([if_stmt_id]))),
             AssignExpression(
                 assignee=tmp_result,
                 assignee_subscript=(),
                 condition=else_condition,
                 expression=rec_else,
                 id=else_stmt_id,
-                depends_on=base_deps | frozenset(sub_else_deps) |
-                frozenset([if_stmt_id]))])
+                depends_on=(
+                    base_deps
+                    | frozenset(sub_else_deps)
+                    | frozenset([if_stmt_id])))
+                ])
 
         extra_deps.extend([then_stmt_id, else_stmt_id])
         return var(tmp_result)

@@ -1067,8 +1067,9 @@ class CodeBuilder(object):
             # Warn about potential ordering of assignments that may
             # be unexpected by the user.
             if assignee in context.used_variables:
-                raise ValueError("write after use of " + assignee +
-                                 " in the same block")
+                raise ValueError(
+                        "write after use of " + assignee
+                        + " in the same block")
 
             if (
                     assignee in context.definition_map
