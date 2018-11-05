@@ -232,7 +232,6 @@ class FunctionCallIsolator(IdentityMapper):
                 .map_call_with_kwargs)
 
 
-
 def isolate_function_calls_in_phase(phase, stmt_id_gen, var_name_gen):
     new_statements = []
 
