@@ -154,26 +154,26 @@ Code Creation
 # {{{ utilities
 
 def _stringify_statements(roots, id_to_stmt, prefix=""):
-        lines = []
+    lines = []
 
-        printed_stmt_ids = set()
+    printed_stmt_ids = set()
 
-        def print_stmt(stmt):
-            if stmt.id in printed_stmt_ids:
-                return
-            printed_stmt_ids.add(stmt.id)
+    def print_stmt(stmt):
+        if stmt.id in printed_stmt_ids:
+            return
+        printed_stmt_ids.add(stmt.id)
 
-            for dep_id in stmt.depends_on:
-                print_stmt(id_to_stmt[dep_id])
+        for dep_id in stmt.depends_on:
+            print_stmt(id_to_stmt[dep_id])
 
-            lines.append(
-                    "%s{%s} %s" % (
-                        prefix, stmt.id, str(stmt).replace("\n", "\n        ")))
+        lines.append(
+                "%s{%s} %s" % (
+                    prefix, stmt.id, str(stmt).replace("\n", "\n        ")))
 
-        for root_stmt in roots:
-            print_stmt(root_stmt)
+    for root_stmt in roots:
+        print_stmt(root_stmt)
 
-        return lines
+    return lines
 
 # }}}
 
