@@ -36,7 +36,7 @@ def _quote(string):
 
 def verify_switch_phases(phases, errors):
     """
-    Ensure that phases referenced by SwitchPhase exist.
+    Ensure that phases referenced by :class:`SwitchPhase` exist.
 
     :arg statements: A set of statements to verify
     :arg phases: A map from phase names to phases
