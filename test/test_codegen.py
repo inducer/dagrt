@@ -4,7 +4,7 @@ from __future__ import division, with_statement
 import pytest
 import sys
 
-from dagrt.language import AssignExpression, YieldState
+from dagrt.language import Assign, YieldState
 from dagrt.language import DAGCode
 from dagrt.codegen import CodeGenerationError
 from dagrt.codegen.analysis import verify_code
@@ -42,13 +42,13 @@ def test_circular_dependency_detection():
     dependency."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(
+        Assign(
             id='assign',
             assignee='<state>y',
             assignee_subscript=(),
             expression=1,
             depends_on=['assign2']),
-        AssignExpression(id='assign2',
+        Assign(id='assign2',
             assignee='<state>y',
             assignee_subscript=(),
             expression=1,
@@ -68,7 +68,7 @@ def test_missing_dependency_detection():
     """Check that the code generator detects that there is a missing
     dependency."""
     statements = set([
-        AssignExpression(id='assign', assignee='<state>y', assignee_subscript=(),
+        Assign(id='assign', assignee='<state>y', assignee_subscript=(),
             expression=1, depends_on=['assign2']),
         YieldState(id='return', time=0, time_id='final',
             expression=var('<state>y'), component_id='<state>',
@@ -86,7 +86,7 @@ def test_missing_state_detection():
     from dagrt.language import CodeBuilder
 
     with CodeBuilder(label="state_1") as cb:
-        cb.phase_transition("state_2")
+        cb.switch_phase("state_2")
 
     code = DAGCode.create_with_steady_phase(
         dep_on=cb.phase_dependencies, statements=cb.statements)
@@ -98,13 +98,13 @@ def test_cond_detection():
     """Check that the code generator detects a redefinition of a <cond> variable."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(
+        Assign(
             id='assign1',
             assignee='<cond>c',
             assignee_subscript=(),
             expression=1,
             depends_on=[]),
-        AssignExpression(
+        Assign(
             id='assign2',
             assignee='<cond>c',
             assignee_subscript=(),

@@ -2099,9 +2099,9 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit("! }}}")
         self.emit("")
 
-    # {{{ emit_inst_AssignExpression
+    # {{{ emit_inst_Assign
 
-    def emit_inst_AssignExpression(self, inst):
+    def emit_inst_Assign(self, inst):
         start_em = self.emitter
 
         for iloop, (ident, start, stop) in enumerate(inst.loops):
@@ -2286,10 +2286,10 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.emit("goto 999")
 
-    def emit_inst_ExitStep(self, inst):
+    def emit_inst_RestartStep(self, inst):
         self.emit("goto 999")
 
-    def emit_inst_PhaseTransition(self, inst):
+    def emit_inst_SwitchPhase(self, inst):
         self.emit(
                 'dagrt_state%dagrt_next_phase = '
                 + self.phase_name_to_phase_sym(inst.next_phase))

@@ -24,7 +24,7 @@ THE SOFTWARE.
 
 import six
 from pymbolic.mapper import Collector
-from dagrt.language import YieldState, PhaseTransition, AssignFunctionCall
+from dagrt.language import YieldState, SwitchPhase, AssignFunctionCall
 
 
 # {{{ verifier
@@ -34,9 +34,9 @@ def _quote(string):
     return "\"{0}\"".format(string)
 
 
-def verify_phase_transitions(phases, errors):
+def verify_switch_phases(phases, errors):
     """
-    Ensure that phases referenced by PhaseTransition exist.
+    Ensure that phases referenced by SwitchPhase exist.
 
     :arg statements: A set of statements to verify
     :arg phases: A map from phase names to phases
@@ -45,7 +45,7 @@ def verify_phase_transitions(phases, errors):
     phase_names = [key for key in phases.keys()]
     for phase in six.itervalues(phases):
         for inst in phase.statements:
-            if not isinstance(inst, PhaseTransition):
+            if not isinstance(inst, SwitchPhase):
                 continue
             if inst.next_phase not in phase_names:
                 errors.append(
@@ -157,7 +157,7 @@ def verify_code(code):
         for phase in six.itervalues(code.phases):
             verify_no_circular_dependencies(phase.statements, errors)
 
-        verify_phase_transitions(code.phases, errors)
+        verify_switch_phases(code.phases, errors)
 
         for phase in six.itervalues(code.phases):
             verify_single_definition_cond_rule(phase.statements, errors)

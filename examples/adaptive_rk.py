@@ -78,8 +78,8 @@ def adaptive_rk_method(tol):
             cb(y, y_h)
             cb(t, t + dt_old)
 
-    return DAGCode.create_with_steady_phase(cb.phase_dependencies,
-                                                       cb.statements)
+    return DAGCode.create_with_steady_phase(cb.phase_dependencies, cb.statements)
+
 
 if __name__ == "__main__":
     from dagrt.codegen import PythonCodeGenerator

@@ -48,7 +48,7 @@ def eliminate_self_dependencies(dag):
             substs = []
             tmp_stmt_ids = []
 
-            from dagrt.language import AssignExpression
+            from dagrt.language import Assign
             from pymbolic import var
             for var_name in read_and_written:
                 tmp_var_name = var_name_gen(
@@ -59,7 +59,7 @@ def eliminate_self_dependencies(dag):
                 tmp_stmt_id = stmt_id_gen("temp")
                 tmp_stmt_ids.append(tmp_stmt_id)
 
-                new_tmp_stmt = AssignExpression(
+                new_tmp_stmt = Assign(
                         tmp_var_name, (), var(var_name),
                         condition=stmt.condition,
                         id=tmp_stmt_id,
@@ -109,8 +109,8 @@ class FunctionArgumentIsolator(IdentityMapper):
         rec_result = self.rec(
                 expr, base_condition, base_deps, sub_extra_deps)
 
-        from dagrt.language import AssignExpression
-        new_stmt = AssignExpression(
+        from dagrt.language import Assign
+        new_stmt = Assign(
                 tmp_var_name, (), rec_result,
                 condition=base_condition,
                 depends_on=base_deps | frozenset(sub_extra_deps),
@@ -243,8 +243,8 @@ def isolate_function_calls_in_phase(phase, stmt_id_gen, var_name_gen):
     for stmt in sorted(phase.statements, key=lambda stmt: stmt.id):
         new_deps = []
 
-        from dagrt.language import AssignExpression
-        if isinstance(stmt, AssignExpression):
+        from dagrt.language import Assign
+        if isinstance(stmt, Assign):
             new_statements.append(
                     stmt
                     .map_expressions(
@@ -324,17 +324,17 @@ class IfThenElseExpander(IdentityMapper):
         rec_else = self.rec(expr.else_, else_condition,
                             base_deps | frozenset([if_stmt_id]), sub_else_deps)
 
-        from dagrt.language import AssignExpression
+        from dagrt.language import Assign
 
         self.new_statements.extend([
-            AssignExpression(
+            Assign(
                 assignee=flag.name,
                 assignee_subscript=(),
                 expression=rec_condition,
                 condition=base_condition,
                 id=if_stmt_id,
                 depends_on=base_deps | frozenset(sub_condition_deps)),
-            AssignExpression(
+            Assign(
                 assignee=tmp_result,
                 assignee_subscript=(),
                 condition=then_condition,
@@ -344,7 +344,7 @@ class IfThenElseExpander(IdentityMapper):
                     base_deps
                     | frozenset(sub_then_deps)
                     | frozenset([if_stmt_id]))),
-            AssignExpression(
+            Assign(
                 assignee=tmp_result,
                 assignee_subscript=(),
                 condition=else_condition,

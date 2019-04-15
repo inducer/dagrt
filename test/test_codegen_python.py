@@ -29,7 +29,7 @@ import pytest
 import numpy.linalg as la
 import numpy as np
 
-from dagrt.language import AssignExpression, YieldState, FailStep, Raise, Nop
+from dagrt.language import Assign, YieldState, FailStep, Raise, Nop
 from dagrt.language import CodeBuilder, DAGCode
 from dagrt.codegen import PythonCodeGenerator
 from pymbolic import var
@@ -70,11 +70,11 @@ def test_basic_conditional_codegen():
     """Test whether the code generator generates branches properly."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(
+        Assign(
             id='then_branch',
             assignee='<state>y', assignee_subscript=(),
             expression=1, condition=True),
-        AssignExpression(id='else_branch',
+        Assign(id='else_branch',
             assignee='<state>y', assignee_subscript=(),
             expression=0, condition=False),
         Nop(id='branch', depends_on=['then_branch', 'else_branch']),
@@ -101,12 +101,12 @@ def test_basic_assign_rhs_codegen():
     properly."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(id='assign_rhs1',
+        Assign(id='assign_rhs1',
                          assignee='<state>y',
                          assignee_subscript=(),
                          expression=var('y')(t=var('<t>')),
                          depends_on=[]),
-        AssignExpression(id='assign_rhs2',
+        Assign(id='assign_rhs2',
                          assignee='<state>y',
                          assignee_subscript=(),
                          expression=var('yy')(t=var('<t>'), y=var('<state>y')),
@@ -192,10 +192,10 @@ def test_local_name_distinctness():
     """Test whether the code generator gives locals distinct names."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(
+        Assign(
             id='assign_y^',
             assignee='y^', assignee_subscript=(), expression=1),
-        AssignExpression(
+        Assign(
             id='assign_y*',
             assignee='y*', assignee_subscript=(), expression=0),
         YieldState(id='return', time=0, time_id='final',
@@ -219,10 +219,10 @@ def test_global_name_distinctness():
     """Test whether the code generator gives globals distinct names."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        AssignExpression(
+        Assign(
             id='assign_y^',
             assignee='<p>y^', assignee_subscript=(), expression=1),
-        AssignExpression(
+        Assign(
             id='assign_y*',
             assignee='<p>y*', assignee_subscript=(), expression=0),
         YieldState(id='return', time=0, time_id='final',
@@ -264,12 +264,12 @@ def test_function_name_distinctness():
     assert hist[1].state_component == 1
 
 
-def test_phase_transitions(python_method_impl):
+def test_switch_phases(python_method_impl):
     from dagrt.language import CodeBuilder, ExecutionPhase
 
     with CodeBuilder(label="state_1") as builder_1:
         builder_1(var("<state>x"), 1)
-        builder_1.phase_transition("state_2")
+        builder_1.switch_phase("state_2")
     with CodeBuilder(label="state_2") as builder_2:
         builder_2.yield_state(var("<state>x"), 'x', 0, 'final')
 

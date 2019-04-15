@@ -88,7 +88,7 @@ class FailStepException(RuntimeError):
     pass
 
 
-class ExitStepException(RuntimeError):
+class RestartStepException(RuntimeError):
     pass
 
 
@@ -335,7 +335,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     yield self.StepFailed(t=self.t)
                     continue
 
-                except self.ExitStepException:
+                except self.RestartStepException:
                     continue
 
                 except self.TransitionEvent as evt:
@@ -406,7 +406,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
     # {{{ statements
 
-    def emit_inst_AssignExpression(self, inst):
+    def emit_inst_Assign(self, inst):
         emitter = self._emitter
         for ident, start, stop in inst.loops:
             managed_ident = self._name_manager[ident]
@@ -478,12 +478,12 @@ class CodeGenerator(StructuredCodeGenerator):
         if not self._has_yield_inst:
             self._emit('yield')
 
-    def emit_inst_ExitStep(self, inst):
-        self._emit('raise self.ExitStepException()')
+    def emit_inst_RestartStep(self, inst):
+        self._emit('raise self.RestartStepException()')
         if not self._has_yield_inst:
             self._emit('yield')
 
-    def emit_inst_PhaseTransition(self, inst):
+    def emit_inst_SwitchPhase(self, inst):
         assert '\'' not in inst.next_phase
         self._emit('raise self.TransitionEvent(\'' + inst.next_phase + '\')')
         if not self._has_yield_inst:
