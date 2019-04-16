@@ -291,6 +291,9 @@ class UserTypeReferenceTransformer(IdentityMapper):
         else:
             raise TypeError("unsupported object")
 
+    def transform(self, expr):
+        raise NotImplementedError
+
     def map_variable(self, expr):
         if isinstance(self.find_sym_kind(expr), UserType):
             return self.transform(expr)
@@ -1003,9 +1006,6 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def expr(self, expr):
         return self.expr_mapper(expr)
-
-    def rhs(self, rhs):
-        return self.name_manager.name_rhs(rhs)
 
     def emit(self, line):
         self.emitter(line)
@@ -2050,7 +2050,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emitter.__exit__(None, None, None)
 
     def emit_else_begin(self):
-        self.emitter.emit_else()
+        self.emitter.emit_else()  # pylint:disable=no-member
 
     def emit_assign_expr(self, assignee_sym, assignee_subscript, expr):
         from dagrt.codegen.data import UserType, Array
