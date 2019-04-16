@@ -823,6 +823,11 @@ class CodeBuilder(object):
     .. automethod:: if_
     .. automethod:: else_
     .. automethod:: __call__
+
+    .. method:: assign
+
+        Alias for :func:`CodeBuilder.__call__`.
+
     .. automethod:: fresh_var_name
     .. automethod:: fresh_var
     .. automethod:: assign_implicit
