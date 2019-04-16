@@ -1,5 +1,5 @@
 Welcome to dagrt's documentation!
-================================
+=================================
 
 TODO: Insert example here.
 

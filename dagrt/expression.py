@@ -190,7 +190,7 @@ class _ExpressionCollapsingMapper(IdentityMapper):
             if len(non_constants) > 1:
                 return combine_func(non_constants)
             else:
-                return self.non_constants[0]
+                return non_constants[0]
 
         if len(constants) == 1 and _is_atomic(constants[0]):
             folded_constant = constants[0]

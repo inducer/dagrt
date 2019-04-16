@@ -644,12 +644,12 @@ class DAGCode(RecordWithoutPickling):
     """
     .. attribute:: phases
 
-        is a map from time integrator state names to :class:`ExecutionPhase`
+        is a map from time integrator phase names to :class:`ExecutionPhase`
         instances
 
     .. attribute:: initial_phase
 
-        the name of the starting state
+        the name of the starting phase
     """
 
     @classmethod
@@ -823,6 +823,11 @@ class CodeBuilder(object):
     .. automethod:: if_
     .. automethod:: else_
     .. automethod:: __call__
+
+    .. method:: assign
+
+        Alias for :func:`CodeBuilder.__call__`.
+
     .. automethod:: fresh_var_name
     .. automethod:: fresh_var
     .. automethod:: assign_implicit

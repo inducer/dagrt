@@ -89,7 +89,7 @@ def eliminate_self_dependencies(dag):
 class FunctionArgumentIsolator(IdentityMapper):
     def __init__(self, new_statements,
             stmt_id_gen, var_name_gen):
-        super(IdentityMapper, self).__init__()
+        super(FunctionArgumentIsolator, self).__init__()
         self.new_statements = new_statements
         self.stmt_id_gen = stmt_id_gen
         self.var_name_gen = var_name_gen
@@ -175,7 +175,7 @@ def isolate_function_arguments(dag):
 class FunctionCallIsolator(IdentityMapper):
     def __init__(self, new_statements,
             stmt_id_gen, var_name_gen):
-        super(IdentityMapper, self).__init__()
+        super(FunctionCallIsolator, self).__init__()
         self.new_statements = new_statements
         self.stmt_id_gen = stmt_id_gen
         self.var_name_gen = var_name_gen

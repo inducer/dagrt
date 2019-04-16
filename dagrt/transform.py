@@ -23,26 +23,6 @@ THE SOFTWARE.
 """
 
 
-# {{{ insert_empty_intermediate_state
-
-def insert_empty_intermediate_state(dag, phase_name, after_phase):
-    new_phases = dag.phases.copy()
-
-    if phase_name in new_phases:
-        raise ValueError("phase '%s' already exists"
-                % phase_name)
-
-    from dagrt.language import DAGCode, ExecutionPhase
-    new_phases[phase_name] = ExecutionPhase(
-            next_phase=new_phases[after_phase].next_phase)
-    new_phases[after_phase] = new_phases[after_phase].copy(
-            next_phase=phase_name)
-
-    return DAGCode(dag.statements, new_phases, dag.initial_phase)
-
-# }}}
-
-
 # {{{ fuse_two_phases
 
 def fuse_two_phases(phase_name, phase1, phase2):
