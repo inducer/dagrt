@@ -31,7 +31,7 @@ class FailStepException(Exception):
     pass
 
 
-class ExitStepException(Exception):
+class RestartStepException(Exception):
     pass
 
 
@@ -152,7 +152,7 @@ class NumpyInterpreter(object):
                 yield StepFailed(t=self.context["<t>"])
                 continue
 
-            except ExitStepException:
+            except RestartStepException:
                 continue
 
             except TransitionEvent as evt:
@@ -195,8 +195,8 @@ class NumpyInterpreter(object):
 
     # {{{ execution methods
 
-    def exec_AssignSolved(self, stmt):
-        raise NotImplementedError("Encountered AssignSolved.")
+    def exec_AssignImplicit(self, stmt):
+        raise NotImplementedError("Encountered AssignImplicit.")
 
     def exec_YieldState(self, stmt):
         return StateComputed(
@@ -205,7 +205,7 @@ class NumpyInterpreter(object):
             component_id=stmt.component_id,
             state_component=self.eval_mapper(stmt.expression)), []
 
-    def exec_AssignExpression(self, stmt):
+    def exec_Assign(self, stmt):
         if not stmt.loops:
             if stmt.assignee_subscript:
                 self.context[stmt.assignee][
@@ -268,13 +268,13 @@ class NumpyInterpreter(object):
     def exec_FailStep(self, stmt):
         raise FailStepException()
 
-    def exec_ExitStep(self, stmt):
-        raise ExitStepException()
+    def exec_RestartStep(self, stmt):
+        raise RestartStepException()
 
     def exec_Nop(self, stmt):
         pass
 
-    def exec_PhaseTransition(self, stmt):
+    def exec_SwitchPhase(self, stmt):
         raise TransitionEvent(stmt.next_phase)
 
     # }}}

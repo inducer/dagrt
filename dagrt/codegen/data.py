@@ -443,7 +443,7 @@ class SymbolKindFinder(object):
                             kim = make_kim(func_name, check=False)
 
                             try:
-                                if isinstance(stmt, lang.AssignExpression):
+                                if isinstance(stmt, lang.Assign):
                                     kim(stmt.expression)
 
                                 elif isinstance(stmt, lang.AssignFunctionCall):
@@ -474,7 +474,7 @@ class SymbolKindFinder(object):
 
                 func_name, stmt = stmt_queue.pop()
 
-                if isinstance(stmt, lang.AssignExpression):
+                if isinstance(stmt, lang.Assign):
                     kim = make_kim(func_name, check=False)
 
                     for ident, _, _ in stmt.loops:
@@ -521,7 +521,7 @@ class SymbolKindFinder(object):
             kim = make_kim(func_name, check=True)
 
             for stmt in get_statements_in_ast(func):
-                if isinstance(stmt, lang.AssignExpression):
+                if isinstance(stmt, lang.Assign):
                     kim(stmt.expression)
 
                 elif isinstance(stmt, lang.AssignFunctionCall):

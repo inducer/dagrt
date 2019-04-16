@@ -143,10 +143,10 @@ def test_CodeBuilder_nested_condition_with_else_not_taken(python_method_impl):
     assert result == 3
 
 
-def test_CodeBuilder_exit_step(python_method_impl):
+def test_CodeBuilder_restart_step(python_method_impl):
     with CodeBuilder() as builder1:
         builder1("<p>x", 1)
-        builder1.exit_step()
+        builder1.restart_step()
         builder1.fence()
         builder1("<p>x", 2)
 

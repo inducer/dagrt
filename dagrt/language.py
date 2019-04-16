@@ -28,7 +28,7 @@ THE SOFTWARE.
 from pytools import RecordWithoutPickling, memoize_method
 from pymbolic.imperative.statement import (
         ConditionalStatement as StatementBase,
-        ConditionalAssignment as AssignExpressionBase,
+        ConditionalAssignment as AssignBase,
         Nop as NopBase)
 
 from dagrt.utils import get_variables
@@ -108,8 +108,8 @@ Assignment Statements
 
 These statements perform updates to the execution state, i.e. the variables.
 
-.. autoclass:: AssignSolved
-.. autoclass:: AssignExpression
+.. autoclass:: AssignImplicit
+.. autoclass:: Assign
 .. autoclass:: AssignFunctionCall
 
 Control Statements
@@ -121,8 +121,8 @@ with user code.
 .. autoclass:: YieldState
 .. autoclass:: Raise
 .. autoclass:: FailStep
-.. autoclass:: ExitStep
-.. autoclass:: PhaseTransition
+.. autoclass:: RestartStep
+.. autoclass:: SwitchPhase
 
 Miscellaneous Statements
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -197,7 +197,7 @@ class AssignmentBase(Statement):
     pass
 
 
-class AssignExpression(Statement, AssignExpressionBase):
+class Assign(Statement, AssignBase):
     """
     .. attribute:: loops
 
@@ -238,7 +238,7 @@ class AssignExpression(Statement, AssignExpressionBase):
         else:
             rhs = kwargs.pop("rhs")
 
-        super(AssignExpression, self).__init__(
+        super(Assign, self).__init__(
                 lhs=lhs,
                 rhs=rhs,
                 loops=loops,
@@ -270,7 +270,7 @@ class AssignExpression(Statement, AssignExpressionBase):
         return self.rhs
 
     def map_expressions(self, mapper, include_lhs=True):
-        return (super(AssignExpression, self)
+        return (super(Assign, self)
                 .map_expressions(mapper, include_lhs=include_lhs)
                 .copy(
                     loops=[
@@ -278,7 +278,7 @@ class AssignExpression(Statement, AssignExpressionBase):
                         for ident, start, end in self.loops]))
 
     def __str__(self):
-        result = super(AssignExpression, self).__str__()
+        result = super(Assign, self).__str__()
 
         for ident, start, end in self.loops:
             result += " [{ident}={start}..{end}]".format(
@@ -288,10 +288,10 @@ class AssignExpression(Statement, AssignExpressionBase):
 
         return result
 
-    exec_method = "exec_AssignExpression"
+    exec_method = "exec_Assign"
 
 
-class AssignSolved(AssignmentBase):
+class AssignImplicit(AssignmentBase):
     """
     .. attribute:: assignees
 
@@ -330,7 +330,7 @@ class AssignSolved(AssignmentBase):
                              solver_id=solver_id,
                              **kwargs)
 
-    exec_method = six.moves.intern("exec_AssignSolved")
+    exec_method = six.moves.intern("exec_AssignImplicit")
 
     def get_written_variables(self):
         return frozenset(self.assignees)
@@ -345,7 +345,7 @@ class AssignSolved(AssignmentBase):
         def flatten(iter_arg):
             return chain(*list(iter_arg))
 
-        variables = super(AssignSolved, self).get_read_variables()
+        variables = super(AssignImplicit, self).get_read_variables()
         variables |= set(flatten(get_variables(expr) for expr in self.expressions))
         variables -= set(self.solve_variables)
         variables |= set(flatten(get_variables(expr) for expr
@@ -362,7 +362,7 @@ class AssignSolved(AssignmentBase):
         else:
             assignees = self.assignees
 
-        return (super(AssignSolved, self)
+        return (super(AssignImplicit, self)
                 .map_expressions(mapper, include_lhs=include_lhs)
                 .copy(
                     assignees=assignees,
@@ -370,7 +370,7 @@ class AssignSolved(AssignmentBase):
 
     def __str__(self):
         lines = []
-        lines.append("AssignSolved")
+        lines.append("AssignImplicit")
         lines.append("solver_id = " + str(self.solver_id))
         for assignee_index, assignee in enumerate(self.assignees):
             lines.append(assignee + " <- " + self.solve_variables[assignee_index])
@@ -556,7 +556,7 @@ class Raise(Statement):
     exec_method = six.moves.intern("exec_Raise")
 
 
-class PhaseTransition(Statement):
+class SwitchPhase(Statement):
     """
     .. attribute:: next_phase
 
@@ -573,7 +573,7 @@ class PhaseTransition(Statement):
         return "Transition to {state}{cond}".format(state=self.next_phase,
             cond=self._condition_printing_suffix())
 
-    exec_method = six.moves.intern("exec_PhaseTransition")
+    exec_method = six.moves.intern("exec_SwitchPhase")
 
 
 class FailStep(Statement):
@@ -590,7 +590,7 @@ class FailStep(Statement):
     exec_method = six.moves.intern("exec_FailStep")
 
 
-class ExitStep(Statement):
+class RestartStep(Statement):
     """Exits the current step. Execution resumes with the next step as normal.
     """
 
@@ -598,9 +598,9 @@ class ExitStep(Statement):
         return frozenset()
 
     def __str__(self):
-        return "ExitStep{cond}".format(cond=self._condition_printing_suffix())
+        return "RestartStep{cond}".format(cond=self._condition_printing_suffix())
 
-    exec_method = six.moves.intern("exec_ExitStep")
+    exec_method = six.moves.intern("exec_RestartStep")
 
 # }}}
 
@@ -825,13 +825,13 @@ class CodeBuilder(object):
     .. automethod:: __call__
     .. automethod:: fresh_var_name
     .. automethod:: fresh_var
-    .. automethod:: assign_solved
-    .. automethod:: assign_solved_1
+    .. automethod:: assign_implicit
+    .. automethod:: assign_implicit_1
     .. automethod:: yield_state
     .. automethod:: fail_step
-    .. automethod:: exit_step
+    .. automethod:: restart_step
     .. automethod:: raise_
-    .. automethod:: phase_transition
+    .. automethod:: switch_phase
     .. automethod:: __enter__
 
     """
@@ -925,7 +925,7 @@ class CodeBuilder(object):
 
         # Create an statement as a lead statement to assign a logical flag.
         cond_var = self.fresh_var("<cond>")
-        cond_assignment = AssignExpression(
+        cond_assignment = Assign(
                 assignee=cond_var.name,
                 assignee_subscript=(),
                 expression=condition)
@@ -1048,7 +1048,7 @@ class CodeBuilder(object):
                         "variable or a subscribted variable, not '%s'"
                         % type(assignee))
 
-            self._add_inst_to_context(AssignExpression(
+            self._add_inst_to_context(Assign(
                     assignee=aname,
                     assignee_subscript=asub,
                     expression=expression,
@@ -1076,7 +1076,7 @@ class CodeBuilder(object):
 
                     # multiple assignments with subscript are OK
                     and not (
-                        isinstance(inst, AssignExpression)
+                        isinstance(inst, Assign)
                         and inst.assignee_subscript is not None)):
                 raise ValueError("multiple assignments to " + assignee)
 
@@ -1091,7 +1091,7 @@ class CodeBuilder(object):
             for def_inst_id in context.definition_map.get(used_variable, []):
                 def_inst = self._statement_map[def_inst_id]
                 if (
-                        not isinstance(def_inst, AssignExpression)
+                        not isinstance(def_inst, Assign)
                         or def_inst.assignee_subscript is None):
                     dependencies.add(def_inst_id)
 
@@ -1139,15 +1139,16 @@ class CodeBuilder(object):
         from pymbolic import var
         return var(self.fresh_var_name(prefix))
 
-    def assign_solved_1(self, assignee, solve_component, expression, guess,
+    def assign_implicit_1(self, assignee, solve_component, expression, guess,
                         solver_id=None):
-        """Special case of AssignSolved when there is 1 component to solve for."""
-        self.assign_solved((assignee.name,), (solve_component.name,), (expression,),
-                           {"guess": guess}, solver_id)
+        """Special case of AssignImplicit when there is 1 component to solve for."""
+        self.assign_implicit(
+                (assignee.name,), (solve_component.name,), (expression,),
+                {"guess": guess}, solver_id)
 
-    def assign_solved(self, assignees, solve_components, expressions,
+    def assign_implicit(self, assignees, solve_components, expressions,
                       other_params, solver_id):
-        self._add_inst_to_context(AssignSolved(assignees, solve_components,
+        self._add_inst_to_context(AssignImplicit(assignees, solve_components,
             expressions, other_params, solver_id))
 
     def yield_state(self, expression, component_id, time, time_id):
@@ -1168,17 +1169,17 @@ class CodeBuilder(object):
         self.fence()
         self._add_inst_to_context(FailStep())
 
-    def exit_step(self):
+    def restart_step(self):
         self.fence()
-        self._add_inst_to_context(ExitStep())
+        self._add_inst_to_context(RestartStep())
 
     def raise_(self, error_condition, error_message=None):
         self.fence()
         self._add_inst_to_context(Raise(error_condition, error_message))
 
-    def phase_transition(self, next_phase):
+    def switch_phase(self, next_phase):
         self.fence()
-        self._add_inst_to_context(PhaseTransition(next_phase))
+        self._add_inst_to_context(SwitchPhase(next_phase))
 
     def __enter__(self):
         self._contexts.append(CodeBuilder.Context())
