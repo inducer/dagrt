@@ -426,6 +426,44 @@ def test_svd(python_method_impl):
     assert la.norm(result) < 1e-10
 
 
+def test_class_preamble():
+    from dagrt.language import CodeBuilder
+
+    with CodeBuilder(label="primary") as cb:
+        cb.assign("<t>", "<t> + <dt>")
+        cb.yield_state("f()", "f", 0, "final")
+
+    code = DAGCode.create_with_steady_phase(cb.phase_dependencies, cb.statements)
+
+    from dagrt.codegen import PythonCodeGenerator
+    import dagrt.function_registry as freg
+
+    preamble = """
+            @staticmethod
+            def f():
+                return 1
+    """
+
+    f = freg.Function(
+            identifier="f",
+            language_to_codegen={"python": lambda *args: "self.f()"})
+
+    generator = PythonCodeGenerator(
+            "PythonMethod",
+            class_preamble=preamble,
+            function_registry=freg.base_function_registry.register(f))
+
+    class_ = generator.get_class(code)
+
+    method = class_(function_map={})
+    method.set_up(t_start=0, dt_start=1, context={})
+
+    events = list(method.run(t_end=1))
+    assert events
+    assert isinstance(events[0], class_.StateComputed)
+    assert events[0].state_component == 1
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])

@@ -185,10 +185,20 @@ class BareExpression(object):
 
 class CodeGenerator(StructuredCodeGenerator):
 
-    def __init__(self, class_name, function_registry=None):
+    def __init__(self, class_name, class_preamble=None, function_registry=None):
+        """
+        :arg class_name: The name of the class to generate
+        :arg class_preamble: A string to include at the beginning of the
+            the class (in class scope)
+        :arg function_registry: An instance of
+            :class:`dagrt.function_registry.FunctionRegistry`
+        """
         if function_registry is None:
             from dagrt.function_registry import base_function_registry
             function_registry = base_function_registry
+
+        from dagrt.codegen.utils import remove_common_indentation
+        self.class_preamble = remove_common_indentation(class_preamble)
 
         self._class_name = class_name
         self._class_emitter = PythonClassEmitter(class_name)
@@ -243,6 +253,13 @@ class CodeGenerator(StructuredCodeGenerator):
             self._emitter(wrapped_line)
 
     def begin_emit(self, dag):
+        if self.class_preamble:
+            emit = PythonEmitter()
+            for line in self.class_preamble:
+                emit(line)
+            emit("")
+            self._class_emitter.incorporate(emit)
+
         self._emit_inner_classes()
 
     def _emit_inner_classes(self):

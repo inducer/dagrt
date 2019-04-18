@@ -883,7 +883,10 @@ class CodeGenerator(StructuredCodeGenerator):
 
             trace=False):
         """
-        :arg function_registry:
+        :arg function_registry: An instance of
+            :class:`dagrt.function_registry.FunctionRegistry`
+        :arg module_preamble: A string to include at the beginning of the
+            emitted module
         :arg user_type_map: a map from user type names
             to :class:`FortranType` instances
         :arg call_before_state_update: The name of a function that should
