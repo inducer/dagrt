@@ -68,7 +68,7 @@ def adaptive_rk_method(tol):
 
         # Adaptation
         cb(dt_old, dt)
-        cb.fence()
+        cb.reset_dep_tracking()
         cb(dt, dt * dt_scaling(tol, y_h - y_e))
 
         # Accept or reject step

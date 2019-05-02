@@ -334,7 +334,7 @@ def test_IfThenElse_expansion(python_method_impl):
 def test_arrays_and_looping(python_method_impl):
     with CodeBuilder(label="primary") as cb:
         cb("myarray", "`<builtin>array`(20)")
-        cb.fence()
+        cb.reset_dep_tracking()
         cb("myarray[i]", "i", loops=[("i", 0, 20)])
         cb.yield_state("myarray[15]", "result", 0, "final")
 
@@ -352,20 +352,20 @@ def test_arrays_and_linalg(python_method_impl):
         cb("nodes", "`<builtin>array`(n)")
         cb("vdm", "`<builtin>array`(n*n)")
         cb("identity", "`<builtin>array`(n*n)")
-        cb.fence()
+        cb.reset_dep_tracking()
 
         cb("nodes[i]", "i/n",
                 loops=[("i", 0, "n")])
         cb("identity[i]", "0",
                 loops=[("i", 0, "n*n")])
-        cb.fence()
+        cb.reset_dep_tracking()
 
         cb("identity[i*n + i]", "1",
                 loops=[("i", 0, "n")])
         cb("vdm[j*n + i]", "nodes[i]**j",
                 loops=[("i", 0, "n"), ("j", 0, "n")])
 
-        cb.fence()
+        cb.reset_dep_tracking()
 
         cb("vdm_inverse", "`<builtin>linear_solve`(vdm, identity, n, n)")
         cb("myarray", "`<builtin>matmul`(vdm, vdm_inverse, n, n)")
@@ -391,7 +391,7 @@ def test_svd(python_method_impl):
         cb("nodes", "`<builtin>array`(n)")
         cb("vdm", "`<builtin>array`(n*n)")
         cb("identity", "`<builtin>array`(n*n)")
-        cb.fence()
+        cb.reset_dep_tracking()
 
         cb("nodes[i]", "i/n",
                 loops=[("i", 0, "n")])
@@ -399,10 +399,10 @@ def test_svd(python_method_impl):
         cb("vdm[j*n + i]", "nodes[i]**j",
                 loops=[("i", 0, "n"), ("j", 0, "n")])
 
-        cb.fence()
+        cb.reset_dep_tracking()
 
         cb("vdm_u, vdm_sigma, vdm_vt", "`<builtin>svd`(vdm, n)")
-        cb.fence()
+        cb.reset_dep_tracking()
         cb("vdm_usigma", "`<builtin>array`(n*n)")
         cb("vdm_v", "`<builtin>array`(n*n)")
         cb("vdm_usigma[i + j*n]", "vdm_u[i + j*n] * vdm_sigma[j]",

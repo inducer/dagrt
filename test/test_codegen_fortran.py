@@ -76,20 +76,20 @@ def test_arrays_and_linalg():
         cb("nodes", "`<builtin>array`(n)")
         cb("vdm", "`<builtin>array`(n*n)")
         cb("identity", "`<builtin>array`(n*n)")
-        cb.fence()
+        cb.reset_dep_tracking()
 
         cb("nodes[i]", "i/n",
                 loops=[("i", 0, "n")])
         cb("identity[i]", "0",
                 loops=[("i", 0, "n*n")])
-        cb.fence()
+        cb.reset_dep_tracking()
 
         cb("identity[i*n + i]", "1",
                 loops=[("i", 0, "n")])
         cb("vdm[j*n + i]", "nodes[i]**j",
                 loops=[("i", 0, "n"), ("j", 0, "n")])
 
-        cb.fence()
+        cb.reset_dep_tracking()
 
         cb("vdm_inverse", "`<builtin>linear_solve`(vdm, identity, n, n)")
         cb("myarray", "`<builtin>matmul`(vdm, vdm_inverse, n, n)")
