@@ -147,7 +147,7 @@ def test_CodeBuilder_restart_step(python_method_impl):
     with CodeBuilder() as builder1:
         builder1("<p>x", 1)
         builder1.restart_step()
-        builder1.fence()
+        builder1.reset_dep_tracking()
         builder1("<p>x", 2)
 
     with CodeBuilder() as builder2:

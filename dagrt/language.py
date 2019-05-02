@@ -819,7 +819,7 @@ class CodeBuilder(object):
        as the root dependencies, the phase can be executed by following
        the dependency list of each statement.
 
-    .. automethod:: fence
+    .. automethod:: reset_dep_tracking
     .. automethod:: if_
     .. automethod:: else_
     .. automethod:: __call__
@@ -876,7 +876,7 @@ class CodeBuilder(object):
         self._all_var_names = set()
         self._all_generated_var_names = set()
 
-    def fence(self):
+    def reset_dep_tracking(self):
         """
         Enter a new logical block of statements. Force all prior
         statements to execute before subsequent ones.
@@ -1171,19 +1171,19 @@ class CodeBuilder(object):
                 time_id=time_id))
 
     def fail_step(self):
-        self.fence()
+        self.reset_dep_tracking()
         self._add_inst_to_context(FailStep())
 
     def restart_step(self):
-        self.fence()
+        self.reset_dep_tracking()
         self._add_inst_to_context(RestartStep())
 
     def raise_(self, error_condition, error_message=None):
-        self.fence()
+        self.reset_dep_tracking()
         self._add_inst_to_context(Raise(error_condition, error_message))
 
     def switch_phase(self, next_phase):
-        self.fence()
+        self.reset_dep_tracking()
         self._add_inst_to_context(SwitchPhase(next_phase))
 
     def __enter__(self):
@@ -1191,7 +1191,7 @@ class CodeBuilder(object):
         return self
 
     def __exit__(self, *ignored):
-        self.fence()
+        self.reset_dep_tracking()
         self.phase_dependencies = list(self._contexts[-1].lead_statement_ids)
         self.statements = set(self._statement_map.values())
 
