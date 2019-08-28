@@ -174,9 +174,11 @@ class TemporaryDirectory(object):
 
 # {{{ run_fortran
 
-def run_fortran(sources, fortran_options=None):
+def run_fortran(sources, fortran_options=None, fortran_libraries=None):
     if fortran_options is None:
         fortran_options = []
+    if fortran_libraries is None:
+        fortran_libraries = []
 
     from os.path import join
 
@@ -198,7 +200,8 @@ def run_fortran(sources, fortran_options=None):
                     "-Wno-maybe-uninitialized",
                     "-g", "-oruntest"]
                 + fortran_options
-                + list(source_names),
+                + list(source_names)
+                + ["-l"+lib for lib in fortran_libraries],
                 cwd=tmpdir)
 
         p = Popen([join(tmpdir, "runtest")], stdout=PIPE, stderr=PIPE,
