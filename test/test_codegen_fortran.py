@@ -118,7 +118,7 @@ def test_arrays_and_linalg():
         ("arrays.f90", code_str),
         ("test_arrays_and_linalg.f90", read_file("test_arrays_and_linalg.f90")),
         ],
-        fortran_options=["-llapack", "-lblas"])
+        fortran_libraries=["lapack", "blas"])
 
 
 if __name__ == "__main__":
