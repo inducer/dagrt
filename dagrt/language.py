@@ -838,7 +838,8 @@ class CodeBuilder(object):
     """
 
     # This is a dummy variable name representing the "system state", which is
-    # used to track the dependencies for instructions having side effects.
+    # used to track the dependencies for instructions having globally visible
+    # side effects.
     _EXECUTION_STATE = "<exec>"
 
     def __init__(self, label="phase"):
