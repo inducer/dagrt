@@ -66,6 +66,18 @@ def test_CodeBuilder_condition(python_method_impl):
     assert result == 2
 
 
+def test_CodeBuilder_write_ordering(python_method_impl):
+    with CodeBuilder() as builder:
+        builder("y", "1")
+        builder("x", "y")
+        builder("y", "2")
+        builder("z", "y")
+        builder.yield_state(var('x'), 'x', 0, 'final')
+    code = DAGCode.create_with_steady_phase(builder.statements)
+    result = execute_and_return_single_result(python_method_impl, code)
+    assert result == 1
+
+
 def test_CodeBuilder_condition_with_else(python_method_impl):
     with CodeBuilder() as builder:
         builder(var('x'), 1)
