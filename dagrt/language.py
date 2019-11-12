@@ -851,7 +851,8 @@ class CodeBuilder(object):
 
         # Maps variables to the sequentially last instruction to write them
         self._writer_map = {}
-        # Maps variables to the set of instructions that read them
+        # Maps variables to the set of instructions that read them between the
+        # last time the var was written and the current instruction
         self._reader_map = {}
         # Stack of conditional expressions used to implemented nested ifs
         self._conditional_expression_stack = []
@@ -917,6 +918,10 @@ class CodeBuilder(object):
             self._writer_map[var] = stmt_id
 
         for var in read_variables:
+            # reader_map should ignore reads that happen before writes, so
+            # ignore if this instruction also reads *var*.
+            if var in written_variables:
+                continue
             self._reader_map.setdefault(var, set()).add(stmt_id)
 
         stmt = stmt.copy(
