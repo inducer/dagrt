@@ -58,7 +58,7 @@ def test_create_ast():
             return hash(self._state())
 
     nop = ComparableNop(condition=x, id="nop", depends_on=())
-    code = DAGCode.create_with_steady_phase(["nop"], [nop])
+    code = DAGCode.create_with_steady_phase([nop])
     ast = create_ast_from_phase(code, "main")
     assert ast == IfThen(x, StatementWrapper(nop.copy(condition=True)))
 

@@ -39,9 +39,6 @@ def fuse_two_phases(phase_name, phase1, phase2):
 
         return ExecutionPhase(
                 next_phase=phase1.next_phase,
-                depends_on=frozenset(phase1.depends_on) | frozenset(
-                    old_2_id_to_new_2_id.get(id2, id2)
-                    for id2 in phase2.depends_on),
                 statements=new_statements
                 )
 
