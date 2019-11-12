@@ -857,7 +857,7 @@ class CodeBuilder(object):
         # Stack of conditional expressions used to implemented nested ifs
         self._conditional_expression_stack = []
         # Used to implement if/else
-        self._last_active_conditional_expression = None
+        self._last_if_block_conditional_expression = None
         # Set of seen variables
         self._seen_var_names = set([self._EXECUTION_STATE])
 
@@ -988,22 +988,22 @@ class CodeBuilder(object):
         self._conditional_expression_stack.append(cond_var)
         yield
         self._conditional_expression_stack.pop()
-        self._last_active_conditional_expression = cond_var
+        self._last_if_block_conditional_expression = cond_var
 
     @contextmanager
     def else_(self):
         """
         Create the "else" portion of a conditionally executed block.
         """
-        assert self._last_active_conditional_expression is not None
+        assert self._last_if_block_conditional_expression is not None
 
         # Create conditions for the context.
         from pymbolic.primitives import LogicalNot
         self._conditional_expression_stack.append(
-                LogicalNot(self._last_active_conditional_expression))
+                LogicalNot(self._last_if_block_conditional_expression))
         yield
         self._conditional_expression_stack.pop()
-        self._last_active_conditional_expression = None
+        self._last_if_block_conditional_expression = None
 
     def assign(self, assignees, expression, loops=[]):
         """Generate code for an assignment.
