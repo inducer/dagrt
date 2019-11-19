@@ -51,9 +51,7 @@ def test_len(python_method_impl, obj, len_):
                    expression=var('x'), component_id='<state>',
                    depends_on=['assign_1']))
     cbuild.commit()
-    code = DAGCode.create_with_steady_phase(
-            dep_on=['return'],
-            statements=cbuild.statements)
+    code = DAGCode.create_with_steady_phase(cbuild.statements)
 
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == len_
@@ -69,9 +67,7 @@ def test_isnan(python_method_impl, value):
                    expression=var('x'), component_id='<state>',
                    depends_on=['assign_1']))
     cbuild.commit()
-    code = DAGCode.create_with_steady_phase(
-            dep_on=['return'],
-            statements=cbuild.statements)
+    code = DAGCode.create_with_steady_phase(cbuild.statements)
 
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == np.isnan(value)
@@ -102,9 +98,7 @@ def test_norm(python_method_impl, order, norm_suffix, test_vector):
                    expression=var('n'), component_id='<state>',
                    depends_on=['assign_2']))
     cbuild.commit()
-    code = DAGCode.create_with_steady_phase(
-            dep_on=['return'],
-            statements=cbuild.statements)
+    code = DAGCode.create_with_steady_phase(cbuild.statements)
 
     result = execute_and_return_single_result(python_method_impl, code)
     assert np.allclose(result, true_norm(test_vector))
@@ -121,9 +115,7 @@ def test_dot_product(python_method_impl, x, y):
                    expression=var('x'), component_id='<state>',
                    depends_on=['assign_1']))
     cbuild.commit()
-    code = DAGCode.create_with_steady_phase(
-            dep_on=['return'],
-            statements=cbuild.statements)
+    code = DAGCode.create_with_steady_phase(cbuild.statements)
 
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == np.vdot(x, y)

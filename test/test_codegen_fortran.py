@@ -52,9 +52,7 @@ def test_basic_codegen():
                     expression=0, component_id='state',
         depends_on=[]))
     cbuild.commit()
-    code = DAGCode._create_with_init_and_step(
-            initialization_dep_on=[],
-            statements=cbuild.statements, step_dep_on=['return'])
+    code = DAGCode.create_with_steady_phase(cbuild.statements)
     codegen = f.CodeGenerator("simple",
             user_type_map={
                 "state": f.ArrayType(
@@ -76,20 +74,16 @@ def test_arrays_and_linalg():
         cb("nodes", "`<builtin>array`(n)")
         cb("vdm", "`<builtin>array`(n*n)")
         cb("identity", "`<builtin>array`(n*n)")
-        cb.reset_dep_tracking()
 
         cb("nodes[i]", "i/n",
                 loops=[("i", 0, "n")])
         cb("identity[i]", "0",
                 loops=[("i", 0, "n*n")])
-        cb.reset_dep_tracking()
 
         cb("identity[i*n + i]", "1",
                 loops=[("i", 0, "n")])
         cb("vdm[j*n + i]", "nodes[i]**j",
                 loops=[("i", 0, "n"), ("j", 0, "n")])
-
-        cb.reset_dep_tracking()
 
         cb("vdm_inverse", "`<builtin>linear_solve`(vdm, identity, n, n)")
         cb("myarray", "`<builtin>matmul`(vdm, vdm_inverse, n, n)")
@@ -99,8 +93,7 @@ def test_arrays_and_linalg():
         with cb.if_("`<builtin>norm_2`(myzero) > 10**(-8)"):
             cb.raise_(MatrixInversionFailure)
 
-    code = DAGCode.create_with_steady_phase(
-        cb.phase_dependencies, cb.statements)
+    code = DAGCode.create_with_steady_phase(cb.statements)
 
     codegen = f.CodeGenerator(
             'arrays',

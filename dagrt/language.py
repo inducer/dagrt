@@ -627,11 +627,19 @@ class ExecutionPhase(RecordWithoutPickling):
         will actually be executed.
     """
 
-    def __init__(self, depends_on, next_phase, statements):
+    def __init__(self, next_phase, statements):
         super(ExecutionPhase, self).__init__(
-                depends_on=depends_on,
                 next_phase=next_phase,
                 statements=statements)
+
+    @property
+    @memoize_method
+    def depends_on(self):
+        # Get statement IDs which no other statement depends on.
+        result = set(stmt.id for stmt in self.statements)
+        for stmt in self.statements:
+            result -= set(stmt.depends_on)
+        return result
 
     @property
     @memoize_method
@@ -653,24 +661,21 @@ class DAGCode(RecordWithoutPickling):
     """
 
     @classmethod
-    def create_with_steady_phase(cls, dep_on, statements):
+    def create_with_steady_phase(cls, statements):
         phases = {'main': ExecutionPhase(
-            dep_on, next_phase='main', statements=statements)}
+            next_phase='main', statements=statements)}
         return cls(phases, 'main')
 
     @classmethod
-    def _create_with_init_and_step(cls, initialization_dep_on,
-                                  step_dep_on, statements):
+    def _create_with_init_and_step(cls, init_statements, main_statements):
         phases = {}
         phases['initialization'] = ExecutionPhase(
-                initialization_dep_on,
-                next_phase='primary',
-                statements=statements)
+                next_phase='main',
+                statements=init_statements)
 
-        phases['primary'] = ExecutionPhase(
-                step_dep_on,
-                next_phase='primary',
-                statements=statements)
+        phases['main'] = ExecutionPhase(
+                next_phase='main',
+                statements=main_statements)
 
         return cls(phases, 'initialization')
 
@@ -813,21 +818,12 @@ class CodeBuilder(object):
 
        The set of statements generated for the phase
 
-    .. attribute:: phase_dependencies
-
-       A list of statement names. Starting with these statements
-       as the root dependencies, the phase can be executed by following
-       the dependency list of each statement.
-
-    .. automethod:: reset_dep_tracking
     .. automethod:: if_
     .. automethod:: else_
-    .. automethod:: __call__
+    .. method:: __call__
+        Alias for :func:`CodeBuilder.assign`.
 
-    .. method:: assign
-
-        Alias for :func:`CodeBuilder.__call__`.
-
+    .. automethod:: assign
     .. automethod:: fresh_var_name
     .. automethod:: fresh_var
     .. automethod:: assign_implicit
@@ -838,71 +834,123 @@ class CodeBuilder(object):
     .. automethod:: raise_
     .. automethod:: switch_phase
     .. automethod:: __enter__
-
+    .. automethod:: __exit__
     """
 
-    class Context(RecordWithoutPickling):
-        """
-        A context represents a block of statements being built into the DAG
-
-        .. attribute:: lead_statement_ids
-
-        .. attribute:: introduced_condition
-
-        .. attribute:: context_statement_ids
-
-        .. attribute:: used_variables
-
-        .. attribute:: definition_map
-        """
-        def __init__(self, lead_statement_ids=[], definition_map={},
-                     used_variables=[], condition=True):
-            RecordWithoutPickling.__init__(self,
-                lead_statement_ids=frozenset(lead_statement_ids),
-                context_statement_ids=set(lead_statement_ids),
-                definition_map=dict(definition_map),
-                used_variables=set(used_variables),
-                condition=condition)
+    # This is a dummy variable name representing the "system state", which is
+    # used to track the dependencies for statements having globally visible
+    # side effects.
+    _EXECUTION_STATE = "<exec>"
 
     def __init__(self, label="phase"):
         """
         :arg label: The name of the phase to generate
         """
         self.label = label
-        self._statement_map = {}
-        self._statement_count = 0
-        self._contexts = []
-        self._last_popped_context = None
-        self._all_var_names = set()
-        self._all_generated_var_names = set()
+        self.statements = []
 
-    def reset_dep_tracking(self):
+        # Maps variables to the sequentially last statement to write them
+        self._writer_map = {}
+        # Maps variables to the set of statements that read them between the
+        # last time the var was written and the current statement
+        self._reader_map = {}
+        # Stack of conditional expressions used to implemented nested ifs
+        self._conditional_expression_stack = []
+        # Used to implement if/else
+        self._last_if_block_conditional_expression = None
+        # Set of seen variables
+        self._seen_var_names = set([self._EXECUTION_STATE])
+
+    def _add_statement(self, stmt):
+        stmt_id = self.next_statement_id()
+
+        read_variables = set(stmt.get_read_variables())
+        written_variables = set(stmt.get_written_variables())
+
+        # Add the global execution state as an implicitly read variable.
+        read_variables.add(self._EXECUTION_STATE)
+
+        # Build the condition attribute.
+        if not self._conditional_expression_stack:
+            condition = True
+        elif len(self._conditional_expression_stack) == 1:
+            condition = self._conditional_expression_stack[0]
+        else:
+            from pymbolic.primitives import LogicalAnd
+            condition = LogicalAnd(tuple(self._conditional_expression_stack))
+
+        from dagrt.utils import get_variables
+        read_variables |= get_variables(condition)
+
+        is_non_assignment = (
+                not isinstance(
+                    stmt, (Assign, AssignImplicit, AssignFunctionCall)))
+
+        # We regard all non-assignments as having potential external side
+        # effects (i.e., writing to EXECUTION_STATE).  To keep the global
+        # variables in a well-defined state, ensure that all updates to global
+        # variables have happened before a non-assignment.
+        if is_non_assignment:
+            from dagrt.utils import is_state_variable
+            read_variables |= set(
+                    var for var in self._seen_var_names if
+                    is_state_variable(var))
+            written_variables.add(self._EXECUTION_STATE)
+
+        depends_on = set()
+
+        # Ensure this statement happens after the last write of all the
+        # variables it reads or writes.
+        for var in read_variables | written_variables:
+            writer = self._writer_map.get(var, None)
+            if writer is not None:
+                depends_on.add(writer)
+
+        # Ensure this statement happens after the last read(s) of the variables
+        # it writes to.
+        for var in written_variables:
+            readers = self._reader_map.get(var, set())
+            depends_on |= readers
+            # Keep the graph sparse by clearing the readers set.
+            readers.clear()
+
+        for var in written_variables:
+            self._writer_map[var] = stmt_id
+
+        for var in read_variables:
+            # reader_map should ignore reads that happen before writes, so
+            # ignore if this statement also reads *var*.
+            if var in written_variables:
+                continue
+            self._reader_map.setdefault(var, set()).add(stmt_id)
+
+        stmt = stmt.copy(
+                id=stmt_id,
+                condition=condition,
+                depends_on=frozenset(depends_on))
+        self.statements.append(stmt)
+        self._seen_var_names |= read_variables | written_variables
+
+    def next_statement_id(self):
+        return "%s_%d" % (self.label, len(self.statements))
+
+    @memoize_method
+    def _var_name_generator(self, prefix):
+        from pytools import generate_unique_names
+        return generate_unique_names(prefix)
+
+    def fresh_var_name(self, prefix="temp"):
+        """Return a variable name that is not in use also and won't be returned in the
+        future, regardless of use.
         """
-        Enter a new logical block of statements. Force all prior
-        statements to execute before subsequent ones.
-        """
-        self._contexts[-1] = self._make_new_context(Nop(),
-            additional_condition=self._contexts[-1].condition)
+        for var_name in self._var_name_generator(prefix):
+            if var_name not in self._seen_var_names:
+                self._seen_var_names.add(var_name)
+                return var_name
 
-    def _get_active_condition(self):
-        def is_nontrivial_condition(cond):
-            return cond is not True
-
-        conditions = list(filter(is_nontrivial_condition,
-                         [context.condition for context in self._contexts]))
-        num_conditions = len(conditions)
-
-        # No conditions - trival
-        if num_conditions == 0:
-            return True
-
-        # Single condition
-        if num_conditions == 1:
-            return conditions[0]
-
-        # Conjunction of conditions
-        from pymbolic.primitives import LogicalAnd
-        return LogicalAnd(tuple(conditions))
+    def fresh_var(self, prefix="temp"):
+        from pymbolic import var
+        return var(self.fresh_var_name(prefix))
 
     @contextmanager
     def if_(self, *condition_arg):
@@ -935,77 +983,61 @@ class CodeBuilder(object):
                 assignee_subscript=(),
                 expression=condition)
 
-        self._contexts.append(
-            self._make_new_context(cond_assignment, additional_condition=cond_var))
+        self._add_statement(cond_assignment)
 
+        self._conditional_expression_stack.append(cond_var)
         yield
-
-        # Pop myself from the stack.
-        last_context = self._contexts.pop()
-        self._contexts[-1] = self._make_new_context(
-            Nop(depends_on=last_context.context_statement_ids),
-            additional_condition=self._contexts[-1].condition)
-
-        self._last_popped_if = last_context
+        self._conditional_expression_stack.pop()
+        self._last_if_block_conditional_expression = cond_var
 
     @contextmanager
     def else_(self):
         """
         Create the "else" portion of a conditionally executed block.
         """
-        assert self._last_popped_if
+        assert self._last_if_block_conditional_expression is not None
 
         # Create conditions for the context.
         from pymbolic.primitives import LogicalNot
-        self._contexts.append(
-            self._make_new_context(Nop(),
-                additional_condition=LogicalNot(self._last_popped_if.condition)))
-
-        self._last_popped_if = None
-
+        self._conditional_expression_stack.append(
+                LogicalNot(self._last_if_block_conditional_expression))
         yield
+        self._conditional_expression_stack.pop()
+        self._last_if_block_conditional_expression = None
 
-        # Pop myself from the stack.
-        last_context = self._contexts.pop()
-
-        self._contexts[-1] = self._make_new_context(
-            Nop(depends_on=last_context.context_statement_ids),
-            additional_condition=self._contexts[-1].condition)
-
-    def _next_statement_id(self):
-        self._statement_count += 1
-        return self.label + "_" + str(self._statement_count)
-
-    def __call__(self, assignees, expression, loops=[]):
+    def assign(self, assignees, expression, loops=[]):
         """Generate code for an assignment.
 
         *assignees* may be a variable, a subscript (if referring to an
         array), or a tuple of variables. There must be exactly one
         assignee unless *expression* is a function call.
+
+        *loops* is a list of tuples of the form
+        *(array, start_index, stop_index)*.
         """
 
         from dagrt.expression import parse
 
-        def _parse_if_necessary(s):
+        def parse_if_necessary(s):
             if isinstance(s, str):
                 return parse(s)
             else:
                 return s
 
-        assignees = _parse_if_necessary(assignees)
+        assignees = parse_if_necessary(assignees)
         if isinstance(assignees, tuple):
             assignees = tuple(
-                    _parse_if_necessary(s)
+                    parse_if_necessary(s)
                     for s in assignees)
         else:
             assignees = (assignees,)
 
-        expression = _parse_if_necessary(expression)
+        expression = parse_if_necessary(expression)
 
         new_loops = []
         for ident, start, stop in loops:
-            start = _parse_if_necessary(start)
-            stop = _parse_if_necessary(stop)
+            start = parse_if_necessary(start)
+            stop = parse_if_necessary(stop)
             new_loops.append((ident, start, stop))
 
         from pymbolic.primitives import Call, CallWithKwargs, Variable
@@ -1024,7 +1056,7 @@ class CodeBuilder(object):
             else:
                 kw_parameters = {}
 
-            self._add_inst_to_context(AssignFunctionCall(
+            self._add_statement(AssignFunctionCall(
                     assignees=assignee_names,
                     function_id=expression.function.name,
                     parameters=expression.parameters,
@@ -1053,96 +1085,13 @@ class CodeBuilder(object):
                         "variable or a subscribted variable, not '%s'"
                         % type(assignee))
 
-            self._add_inst_to_context(Assign(
+            self._add_statement(Assign(
                     assignee=aname,
                     assignee_subscript=asub,
                     expression=expression,
                     loops=new_loops))
 
-    assign = __call__
-
-    def _add_inst_to_context(self, inst):
-        inst_id = self._next_statement_id()
-        context = self._contexts[-1]
-        dependencies = set(context.lead_statement_ids)
-
-        # Verify that assignees are not being places after uses of the
-        # assignees in this context.
-        for assignee in inst.get_written_variables():
-            # Warn about potential ordering of assignments that may
-            # be unexpected by the user.
-            if assignee in context.used_variables:
-                raise ValueError(
-                        "write after use of " + assignee
-                        + " in the same block")
-
-            if (
-                    assignee in context.definition_map
-
-                    # multiple assignments with subscript are OK
-                    and not (
-                        isinstance(inst, Assign)
-                        and inst.assignee_subscript is not None)):
-                raise ValueError("multiple assignments to " + assignee)
-
-        # Create the set of dependencies based on the set of used
-        # variables.
-        for used_variable in inst.get_read_variables():
-            if used_variable in context.definition_map:
-                dependencies.update(context.definition_map[used_variable])
-
-        for used_variable in inst.get_written_variables():
-            # Make second (indexed) writes depend on initialization
-            for def_inst_id in context.definition_map.get(used_variable, []):
-                def_inst = self._statement_map[def_inst_id]
-                if (
-                        not isinstance(def_inst, Assign)
-                        or def_inst.assignee_subscript is None):
-                    dependencies.add(def_inst_id)
-
-        # Add the condition to the statement.
-        # Update context and global information.
-        context.context_statement_ids.add(inst_id)
-        for assignee in inst.get_written_variables():
-            context.definition_map.setdefault(assignee, set()).add(inst_id)
-
-        context.used_variables |= inst.get_read_variables()
-        self._all_var_names |= inst.get_written_variables()
-        self._statement_map[inst_id] = \
-            inst.copy(id=inst_id, depends_on=list(dependencies),
-                      condition=self._get_active_condition())
-        return inst_id
-
-    def _make_new_context(self, inst, additional_condition=True):
-        """
-        :param leading_statements: A list of lead statement ids
-        :conditions: A
-        """
-        inst_id = self._next_statement_id()
-        context = self._contexts[-1]
-        new_context = CodeBuilder.Context(
-            lead_statement_ids=[inst_id],
-            used_variables=set(),
-            condition=additional_condition)
-        self._statement_map[inst_id] = \
-            inst.copy(id=inst_id,
-                      depends_on=inst.depends_on | context.context_statement_ids,
-                      condition=self._get_active_condition())
-        return new_context
-
-    def fresh_var_name(self, prefix="temp"):
-        """Return a variable name that is not guaranteed not to be in
-        use and not to be generated in the future."""
-        from pytools import generate_unique_names
-        for possible_var in generate_unique_names(str(prefix)):
-            if possible_var not in self._all_var_names \
-                    and possible_var not in self._all_generated_var_names:
-                self._all_generated_var_names.add(possible_var)
-                return possible_var
-
-    def fresh_var(self, prefix="temp"):
-        from pymbolic import var
-        return var(self.fresh_var_name(prefix))
+    __call__ = assign
 
     def assign_implicit_1(self, assignee, solve_component, expression, guess,
                         solver_id=None):
@@ -1153,8 +1102,9 @@ class CodeBuilder(object):
 
     def assign_implicit(self, assignees, solve_components, expressions,
                       other_params, solver_id):
-        self._add_inst_to_context(AssignImplicit(assignees, solve_components,
-            expressions, other_params, solver_id))
+        self._add_statement(AssignImplicit(
+                assignees, solve_components,
+                expressions, other_params, solver_id))
 
     def yield_state(self, expression, component_id, time, time_id):
         """Yield a value."""
@@ -1164,44 +1114,29 @@ class CodeBuilder(object):
         if isinstance(expression, str):
             expression = parse(expression)
 
-        self._add_inst_to_context(YieldState(
+        self._add_statement(YieldState(
                 expression=expression,
                 component_id=component_id,
                 time=time,
                 time_id=time_id))
 
     def fail_step(self):
-        self.reset_dep_tracking()
-        self._add_inst_to_context(FailStep())
+        self._add_statement(FailStep())
 
     def restart_step(self):
-        self.reset_dep_tracking()
-        self._add_inst_to_context(RestartStep())
+        self._add_statement(RestartStep())
 
     def raise_(self, error_condition, error_message=None):
-        self.reset_dep_tracking()
-        self._add_inst_to_context(Raise(error_condition, error_message))
+        self._add_statement(Raise(error_condition, error_message))
 
     def switch_phase(self, next_phase):
-        self.reset_dep_tracking()
-        self._add_inst_to_context(SwitchPhase(next_phase))
+        self._add_statement(SwitchPhase(next_phase))
 
     def __enter__(self):
-        self._contexts.append(CodeBuilder.Context())
         return self
 
     def __exit__(self, *ignored):
-        self.reset_dep_tracking()
-        self.phase_dependencies = list(self._contexts[-1].lead_statement_ids)
-        self.statements = set(self._statement_map.values())
-
-    def __str__(self):
-        roots = [
-                self._statement_map[stmt_id]
-                for ctx in self._contexts
-                for stmt_id in ctx.context_statement_ids]
-
-        return "\n".join(_stringify_statements(roots, self._statement_map))
+        pass
 
     def as_execution_phase(self, next_phase):
         """
@@ -1209,8 +1144,8 @@ class CodeBuilder(object):
         :arg next_phase: The name of the default next phase
         """
         return ExecutionPhase(
-                depends_on=self.phase_dependencies, next_phase=next_phase,
-                statements=self.statements)
+                next_phase=next_phase,
+                statements=frozenset(self.statements))
 
 # }}}
 

@@ -58,8 +58,8 @@ def test_circular_dependency_detection():
         depends_on=['assign']))
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
-            initialization_dep_on=[],
-            statements=cbuild.statements, step_dep_on=['return'])
+            init_statements=[],
+            main_statements=cbuild.statements)
     with pytest.raises(CodeGenerationError):
         verify_code(code)
 
@@ -75,8 +75,8 @@ def test_missing_dependency_detection():
             depends_on=['assign'])
         ])
     code = DAGCode._create_with_init_and_step(
-            initialization_dep_on=[],
-            statements=statements, step_dep_on=['return'])
+            init_statements=[],
+            main_statements=statements)
     with pytest.raises(CodeGenerationError):
         verify_code(code)
 
@@ -88,8 +88,7 @@ def test_missing_state_detection():
     with CodeBuilder(label="state_1") as cb:
         cb.switch_phase("state_2")
 
-    code = DAGCode.create_with_steady_phase(
-        dep_on=cb.phase_dependencies, statements=cb.statements)
+    code = DAGCode.create_with_steady_phase(statements=cb.statements)
     with pytest.raises(CodeGenerationError):
         verify_code(code)
 
@@ -117,8 +116,8 @@ def test_cond_detection():
             depends_on=['assign2']))
     cbuild.commit()
     code = DAGCode._create_with_init_and_step(
-            initialization_dep_on=[],
-            statements=cbuild.statements, step_dep_on=['return'])
+            init_statements=[],
+            main_statements=cbuild.statements)
     with pytest.raises(CodeGenerationError):
         verify_code(code)
 
