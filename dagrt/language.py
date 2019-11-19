@@ -838,7 +838,7 @@ class CodeBuilder(object):
     """
 
     # This is a dummy variable name representing the "system state", which is
-    # used to track the dependencies for instructions having globally visible
+    # used to track the dependencies for statements having globally visible
     # side effects.
     _EXECUTION_STATE = "<exec>"
 
@@ -849,10 +849,10 @@ class CodeBuilder(object):
         self.label = label
         self.statements = []
 
-        # Maps variables to the sequentially last instruction to write them
+        # Maps variables to the sequentially last statement to write them
         self._writer_map = {}
-        # Maps variables to the set of instructions that read them between the
-        # last time the var was written and the current instruction
+        # Maps variables to the set of statements that read them between the
+        # last time the var was written and the current statement
         self._reader_map = {}
         # Stack of conditional expressions used to implemented nested ifs
         self._conditional_expression_stack = []
@@ -919,7 +919,7 @@ class CodeBuilder(object):
 
         for var in read_variables:
             # reader_map should ignore reads that happen before writes, so
-            # ignore if this instruction also reads *var*.
+            # ignore if this statement also reads *var*.
             if var in written_variables:
                 continue
             self._reader_map.setdefault(var, set()).add(stmt_id)
