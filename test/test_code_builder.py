@@ -148,21 +148,25 @@ def test_CodeBuilder_nested_condition_with_else_not_taken(python_method_impl):
 
 
 def test_CodeBuilder_restart_step(python_method_impl):
+    with CodeBuilder("init") as builder_init:
+        builder_init("<p>x", "0")
+
     with CodeBuilder("state1") as builder1:
-        builder1("<p>x", 1)
-        builder1.restart_step()
-        builder1("<p>x", 2)
+        builder1("<p>x", "<p>x + 1")
+        with builder1.if_("<p>x == 1"):
+            builder1.restart_step()
 
     with CodeBuilder("state2") as builder2:
-        builder2.yield_state(var('<p>x'), 'x', 0, 'final')
+        builder2.yield_state(var("<p>x"), "x", 0, "final")
 
     code = DAGCode({
+        "init": builder_init.as_execution_phase("state1"),
         "state1": builder1.as_execution_phase("state2"),
         "state2": builder2.as_execution_phase("state2")
-        }, "state1")
+        }, "init")
 
-    result = execute_and_return_single_result(python_method_impl, code)
-    assert result == 1
+    result = execute_and_return_single_result(python_method_impl, code, max_steps=4)
+    assert result == 2
 
 
 if __name__ == "__main__":
