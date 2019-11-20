@@ -148,12 +148,12 @@ def test_CodeBuilder_nested_condition_with_else_not_taken(python_method_impl):
 
 
 def test_CodeBuilder_restart_step(python_method_impl):
-    with CodeBuilder() as builder1:
+    with CodeBuilder("state1") as builder1:
         builder1("<p>x", 1)
         builder1.restart_step()
         builder1("<p>x", 2)
 
-    with CodeBuilder() as builder2:
+    with CodeBuilder("state2") as builder2:
         builder2.yield_state(var('<p>x'), 'x', 0, 'final')
 
     code = DAGCode({
