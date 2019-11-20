@@ -31,10 +31,6 @@ class FailStepException(Exception):
     pass
 
 
-class RestartStepException(Exception):
-    pass
-
-
 class TransitionEvent(Exception):
 
     def __init__(self, next_phase):
@@ -152,9 +148,6 @@ class NumpyInterpreter(object):
                 yield StepFailed(t=self.context["<t>"])
                 continue
 
-            except RestartStepException:
-                continue
-
             except TransitionEvent as evt:
                 self.next_phase = evt.next_phase
 
@@ -267,9 +260,6 @@ class NumpyInterpreter(object):
 
     def exec_FailStep(self, stmt):
         raise FailStepException()
-
-    def exec_RestartStep(self, stmt):
-        raise RestartStepException()
 
     def exec_Nop(self, stmt):
         pass

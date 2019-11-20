@@ -121,7 +121,6 @@ with user code.
 .. autoclass:: YieldState
 .. autoclass:: Raise
 .. autoclass:: FailStep
-.. autoclass:: RestartStep
 .. autoclass:: SwitchPhase
 
 Miscellaneous Statements
@@ -589,19 +588,6 @@ class FailStep(Statement):
 
     exec_method = six.moves.intern("exec_FailStep")
 
-
-class RestartStep(Statement):
-    """Exits the current step. Execution resumes with the next step as normal.
-    """
-
-    def get_written_variables(self):
-        return frozenset()
-
-    def __str__(self):
-        return "RestartStep{cond}".format(cond=self._condition_printing_suffix())
-
-    exec_method = six.moves.intern("exec_RestartStep")
-
 # }}}
 
 
@@ -814,27 +800,41 @@ class ExecutionController(object):
 
 class CodeBuilder(object):
     """
+    .. attribute:: label
+
+       The name of the phase being generated
+
     .. attribute:: statements
 
        The set of statements generated for the phase
 
-    .. automethod:: if_
-    .. automethod:: else_
-    .. method:: __call__
-        Alias for :func:`CodeBuilder.assign`.
+    Language support:
 
     .. automethod:: assign
-    .. automethod:: fresh_var_name
-    .. automethod:: fresh_var
     .. automethod:: assign_implicit
-    .. automethod:: assign_implicit_1
     .. automethod:: yield_state
     .. automethod:: fail_step
-    .. automethod:: restart_step
     .. automethod:: raise_
     .. automethod:: switch_phase
+
+    Control flow:
+
+    .. automethod:: if_
+    .. automethod:: else_
+
+    Context manager:
+
     .. automethod:: __enter__
     .. automethod:: __exit__
+
+    Convenience functions:
+
+    .. method:: __call__
+        Alias for :func:`CodeBuilder.assign`.
+    .. automethod:: assign_implicit_1
+    .. automethod:: fresh_var_name
+    .. automethod:: fresh_var
+    .. automethod:: restart_step
     """
 
     # This is a dummy variable name representing the "system state", which is
@@ -1123,11 +1123,12 @@ class CodeBuilder(object):
     def fail_step(self):
         self._add_statement(FailStep())
 
-    def restart_step(self):
-        self._add_statement(RestartStep())
-
     def raise_(self, error_condition, error_message=None):
         self._add_statement(Raise(error_condition, error_message))
+
+    def restart_step(self):
+        """Equivalent to *switch_phase(self.label)*."""
+        self.switch_phase(self.label)
 
     def switch_phase(self, next_phase):
         self._add_statement(SwitchPhase(next_phase))
