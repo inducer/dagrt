@@ -144,10 +144,10 @@ class PythonExpressionMapper(StringifyMapper):
         self._numpy = numpy
 
     def map_constant(self, expr, *args):
-        if isinstance(constant, (float, np.number)):
-            if np.isinf(constant) or np.isnan(constant):
-                return "float('" + repr(constant) + "')"
-        return repr(constant)
+        if isinstance(expr, (float, np.number)):
+            if np.isinf(expr) or np.isnan(expr):
+                return "float('" + repr(expr) + "')"
+        return repr(expr)
 
     def map_foreign(self, expr, *args):
         if expr is None:
