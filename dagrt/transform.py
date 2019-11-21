@@ -38,6 +38,7 @@ def fuse_two_phases(phase_name, phase1, phase2):
                 phase1.statements, phase2.statements)
 
         return ExecutionPhase(
+                name=phase1.name,
                 next_phase=phase1.next_phase,
                 statements=new_statements
                 )

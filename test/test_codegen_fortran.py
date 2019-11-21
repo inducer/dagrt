@@ -26,12 +26,14 @@ THE SOFTWARE.
 import sys
 
 from dagrt.language import YieldState
-from dagrt.language import DAGCode, CodeBuilder
+from dagrt.language import CodeBuilder
 import dagrt.codegen.fortran as f
 
 from utils import RawCodeBuilder
 
 from dagrt.utils import run_fortran
+
+from utils import create_DAGCode_with_steady_phase
 
 #skip = pytest.mark.skipif(True, reason="not fully implemented")
 
@@ -52,7 +54,7 @@ def test_basic_codegen():
                     expression=0, component_id='state',
         depends_on=[]))
     cbuild.commit()
-    code = DAGCode.create_with_steady_phase(cbuild.statements)
+    code = create_DAGCode_with_steady_phase(cbuild.statements)
     codegen = f.CodeGenerator("simple",
             user_type_map={
                 "state": f.ArrayType(
@@ -69,7 +71,7 @@ class MatrixInversionFailure(object):
 def test_arrays_and_linalg():
     from dagrt.function_registry import base_function_registry as freg
 
-    with CodeBuilder(label="primary") as cb:
+    with CodeBuilder(name="primary") as cb:
         cb("n", "4")
         cb("nodes", "`<builtin>array`(n)")
         cb("vdm", "`<builtin>array`(n*n)")
@@ -93,7 +95,7 @@ def test_arrays_and_linalg():
         with cb.if_("`<builtin>norm_2`(myzero) > 10**(-8)"):
             cb.raise_(MatrixInversionFailure)
 
-    code = DAGCode.create_with_steady_phase(cb.statements)
+    code = create_DAGCode_with_steady_phase(cb.statements)
 
     codegen = f.CodeGenerator(
             'arrays',

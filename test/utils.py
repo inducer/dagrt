@@ -24,6 +24,7 @@ THE SOFTWARE.
 """
 
 import numpy as np  # noqa
+import dagrt.language as lang
 
 
 # {{{ things to pass for python_method_impl
@@ -54,6 +55,39 @@ def execute_and_return_single_result(python_method_impl, code, initial_context={
             state_component = event.state_component
     assert has_state_component
     return state_component
+
+
+# {{{ create a DAGCode with a single, repeatedly executed phase
+
+def create_DAGCode_with_steady_phase(statements):
+    name = "main"
+    phases = [
+            lang.ExecutionPhase(
+                name=name,
+                next_phase=name,
+                statements=statements)
+    ]
+    return lang.DAGCode.from_phases_list(phases, name)
+
+# }}}
+
+
+# {{{ create a DAGCode with an "init" phase and a "main" phase
+
+def create_DAGCode_with_init_and_main_phases(init_statements, main_statements):
+    phases = [
+            lang.ExecutionPhase(
+                name="init",
+                next_phase="main",
+                statements=init_statements),
+            lang.ExecutionPhase(
+                name="main",
+                next_phase="main",
+                statements=main_statements)
+    ]
+    return lang.DAGCode.from_phases_list(phases, "init")
+
+# }}}
 
 
 # {{{ low-level code building utility
