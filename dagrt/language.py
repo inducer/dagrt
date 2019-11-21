@@ -655,6 +655,8 @@ class DAGCode(RecordWithoutPickling):
     def from_phases_list(cls, phases, initial_phase):
         name_to_phase = dict()
         for phase in phases:
+            if phase.name in name_to_phase:
+                raise ValueError("duplicate phase name '%s'" % phase.name)
             name_to_phase[phase.name] = phase
         return cls(name_to_phase, initial_phase)
 
