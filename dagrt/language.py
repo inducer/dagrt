@@ -595,6 +595,10 @@ class FailStep(Statement):
 
 class ExecutionPhase(RecordWithoutPickling):
     """
+    .. attribute:: name
+
+        name of this phase
+
     .. attribute:: depends_on
 
         a list of statement IDs that need to be accomplished
@@ -613,8 +617,9 @@ class ExecutionPhase(RecordWithoutPickling):
         will actually be executed.
     """
 
-    def __init__(self, next_phase, statements):
+    def __init__(self, name, next_phase, statements):
         super(ExecutionPhase, self).__init__(
+                name=name,
                 next_phase=next_phase,
                 statements=statements)
 
@@ -647,23 +652,11 @@ class DAGCode(RecordWithoutPickling):
     """
 
     @classmethod
-    def create_with_steady_phase(cls, statements):
-        phases = {'main': ExecutionPhase(
-            next_phase='main', statements=statements)}
-        return cls(phases, 'main')
-
-    @classmethod
-    def _create_with_init_and_step(cls, init_statements, main_statements):
-        phases = {}
-        phases['initialization'] = ExecutionPhase(
-                next_phase='main',
-                statements=init_statements)
-
-        phases['main'] = ExecutionPhase(
-                next_phase='main',
-                statements=main_statements)
-
-        return cls(phases, 'initialization')
+    def from_phases_list(cls, phases, initial_phase):
+        name_to_phase = dict()
+        for phase in phases:
+            name_to_phase[phase.name] = phase
+        return cls(name_to_phase, initial_phase)
 
     def __init__(self, phases, initial_phase):
         assert not isinstance(phases, list)
@@ -800,7 +793,7 @@ class ExecutionController(object):
 
 class CodeBuilder(object):
     """
-    .. attribute:: label
+    .. attribute:: name
 
        The name of the phase being generated
 
@@ -842,11 +835,11 @@ class CodeBuilder(object):
     # side effects.
     _EXECUTION_STATE = "<exec>"
 
-    def __init__(self, label="phase"):
+    def __init__(self, name):
         """
-        :arg label: The name of the phase to generate
+        :arg name: The name of the phase to generate
         """
-        self.label = label
+        self.name = name
         self.statements = []
 
         # Maps variables to the sequentially last statement to write them
@@ -932,7 +925,7 @@ class CodeBuilder(object):
         self._seen_var_names |= read_variables | written_variables
 
     def next_statement_id(self):
-        return "%s_%d" % (self.label, len(self.statements))
+        return "%s_%d" % (self.name, len(self.statements))
 
     @memoize_method
     def _var_name_generator(self, prefix):
@@ -1127,8 +1120,8 @@ class CodeBuilder(object):
         self._add_statement(Raise(error_condition, error_message))
 
     def restart_step(self):
-        """Equivalent to *switch_phase(self.label)*."""
-        self.switch_phase(self.label)
+        """Equivalent to *switch_phase(self.name)*."""
+        self.switch_phase(self.name)
 
     def switch_phase(self, next_phase):
         self._add_statement(SwitchPhase(next_phase))
@@ -1145,6 +1138,7 @@ class CodeBuilder(object):
         :arg next_phase: The name of the default next phase
         """
         return ExecutionPhase(
+                name=self.name,
                 next_phase=next_phase,
                 statements=frozenset(self.statements))
 

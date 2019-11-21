@@ -11,7 +11,10 @@ from dagrt.codegen.analysis import verify_code
 
 from pymbolic import var
 
-from utils import RawCodeBuilder
+from utils import (
+        RawCodeBuilder,
+        create_DAGCode_with_init_and_main_phases,
+        create_DAGCode_with_steady_phase)
 
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
@@ -57,7 +60,7 @@ def test_circular_dependency_detection():
             expression=var('<state>y'), component_id='<state>',
         depends_on=['assign']))
     cbuild.commit()
-    code = DAGCode._create_with_init_and_step(
+    code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
     with pytest.raises(CodeGenerationError):
@@ -74,7 +77,7 @@ def test_missing_dependency_detection():
             expression=var('<state>y'), component_id='<state>',
             depends_on=['assign'])
         ])
-    code = DAGCode._create_with_init_and_step(
+    code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=statements)
     with pytest.raises(CodeGenerationError):
@@ -85,10 +88,10 @@ def test_missing_state_detection():
     """Check that the code generator detects there is a missing state."""
     from dagrt.language import CodeBuilder
 
-    with CodeBuilder(label="state_1") as cb:
+    with CodeBuilder(name="state_1") as cb:
         cb.switch_phase("state_2")
 
-    code = DAGCode.create_with_steady_phase(statements=cb.statements)
+    code = create_DAGCode_with_steady_phase(statements=cb.statements)
     with pytest.raises(CodeGenerationError):
         verify_code(code)
 
@@ -115,7 +118,7 @@ def test_cond_detection():
             component_id='<state>',
             depends_on=['assign2']))
     cbuild.commit()
-    code = DAGCode._create_with_init_and_step(
+    code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
     with pytest.raises(CodeGenerationError):

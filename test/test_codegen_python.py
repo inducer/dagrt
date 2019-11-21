@@ -36,7 +36,9 @@ from pymbolic import var
 
 from utils import (  # noqa
         RawCodeBuilder, python_method_impl_interpreter as pmi_int,
-        python_method_impl_codegen as pmi_cg)
+        python_method_impl_codegen as pmi_cg,
+        create_DAGCode_with_init_and_main_phases,
+        create_DAGCode_with_steady_phase)
 
 
 def test_basic_codegen():
@@ -48,7 +50,7 @@ def test_basic_codegen():
                     expression=0, component_id='<state>',
         depends_on=[]))
     cbuild.commit()
-    code = DAGCode._create_with_init_and_step(
+    code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
     codegen = PythonCodeGenerator(class_name='Method')
@@ -59,7 +61,7 @@ def test_basic_codegen():
     hist = [s for s in method.run(max_steps=2)]
     assert len(hist) == 3
     assert isinstance(hist[0], method.StepCompleted)
-    assert hist[0].current_phase == 'initialization'
+    assert hist[0].current_phase == 'init'
     assert isinstance(hist[1], method.StateComputed)
     assert hist[1].state_component == 0
     assert isinstance(hist[2], method.StepCompleted)
@@ -82,7 +84,7 @@ def test_basic_conditional_codegen():
             expression=var('<state>y'), component_id='<state>',
         depends_on=['branch']))
     cbuild.commit()
-    code = DAGCode._create_with_init_and_step(
+    code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
     codegen = PythonCodeGenerator(class_name='Method')
@@ -116,7 +118,7 @@ def test_basic_assign_rhs_codegen():
             depends_on=['assign_rhs2'])
         )
     cbuild.commit()
-    code = DAGCode._create_with_init_and_step(
+    code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
     codegen = PythonCodeGenerator(class_name='Method')
@@ -146,7 +148,7 @@ def test_basic_raise_codegen():
 
     cbuild.add_and_get_ids(Raise(TimeStepUnderflow, "underflow", id="raise"))
     cbuild.commit()
-    code = DAGCode._create_with_init_and_step(
+    code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
     codegen = PythonCodeGenerator(class_name="Method")
@@ -173,7 +175,7 @@ def test_basic_fail_step_codegen():
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(FailStep(id="fail"))
     cbuild.commit()
-    code = DAGCode._create_with_init_and_step(
+    code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
     codegen = PythonCodeGenerator(class_name="Method")
@@ -204,7 +206,7 @@ def test_local_name_distinctness():
             expression=var('y^') + var('y*'),
             component_id='y', depends_on=['assign_y^', 'assign_y*']))
     cbuild.commit()
-    code = DAGCode._create_with_init_and_step(
+    code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
     codegen = PythonCodeGenerator(class_name='Method')
@@ -231,7 +233,7 @@ def test_global_name_distinctness():
             expression=var('<p>y^') + var('<p>y*'),
             component_id='y', depends_on=['assign_y^', 'assign_y*']))
     cbuild.commit()
-    code = DAGCode._create_with_init_and_step(
+    code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
     codegen = PythonCodeGenerator(class_name='Method')
@@ -252,7 +254,7 @@ def test_function_name_distinctness():
             expression=var('<func>y^')() + var('<func>y*')(),
             component_id='y'))
     cbuild.commit()
-    code = DAGCode._create_with_init_and_step(
+    code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
     codegen = PythonCodeGenerator(class_name='Method')
@@ -269,18 +271,20 @@ def test_function_name_distinctness():
 def test_switch_phases(python_method_impl):
     from dagrt.language import CodeBuilder, ExecutionPhase
 
-    with CodeBuilder(label="state_1") as builder_1:
+    with CodeBuilder(name="state_1") as builder_1:
         builder_1(var("<state>x"), 1)
         builder_1.switch_phase("state_2")
-    with CodeBuilder(label="state_2") as builder_2:
+    with CodeBuilder(name="state_2") as builder_2:
         builder_2.yield_state(var("<state>x"), 'x', 0, 'final')
 
     code = DAGCode(
         phases={
             "state_1": ExecutionPhase(
+                name="state_1",
                 next_phase="state_1",
                 statements=builder_1.statements),
             "state_2": ExecutionPhase(
+                name="state_2",
                 next_phase="state_2",
                 statements=builder_2.statements)
         },
@@ -295,7 +299,7 @@ def test_switch_phases(python_method_impl):
 def get_IfThenElse_test_code_and_expected_result():
     from dagrt.expression import IfThenElse
 
-    with CodeBuilder(label="primary") as cb:
+    with CodeBuilder(name="primary") as cb:
         cb(var("c1"), IfThenElse(True, 0, 1))
         cb(var("c2"), IfThenElse(False, 0, 1))
         cb(var("c3"), IfThenElse(IfThenElse(True, True, False), 0, 1))
@@ -309,7 +313,7 @@ def get_IfThenElse_test_code_and_expected_result():
         cb.yield_state(tuple(var("c" + str(i)) for i in range(1, 11)),
                        "result", 0, "final")
 
-    code = DAGCode.create_with_steady_phase(cb.statements)
+    code = create_DAGCode_with_steady_phase(cb.statements)
 
     return (code, (0, 1, 0, 1, 0, 1, 1, 2, 1, 2))
 
@@ -331,20 +335,20 @@ def test_IfThenElse_expansion(python_method_impl):
 
 
 def test_arrays_and_looping(python_method_impl):
-    with CodeBuilder(label="primary") as cb:
+    with CodeBuilder(name="primary") as cb:
         cb("myarray", "`<builtin>array`(20)")
         cb("myarray[i]", "i", loops=[("i", 0, 20)])
         cb.yield_state("myarray[15]", "result", 0, "final")
 
     from utils import execute_and_return_single_result
 
-    code = DAGCode.create_with_steady_phase(cb.statements)
+    code = create_DAGCode_with_steady_phase(cb.statements)
     result = execute_and_return_single_result(python_method_impl, code)
     assert result == 15
 
 
 def test_arrays_and_linalg(python_method_impl):
-    with CodeBuilder(label="primary") as cb:
+    with CodeBuilder(name="primary") as cb:
         cb("n", "4")
         cb("nodes", "`<builtin>array`(n)")
         cb("vdm", "`<builtin>array`(n*n)")
@@ -369,7 +373,7 @@ def test_arrays_and_linalg(python_method_impl):
 
     from utils import execute_and_return_single_result
 
-    code = DAGCode.create_with_steady_phase(cb.statements)
+    code = create_DAGCode_with_steady_phase(cb.statements)
     result = execute_and_return_single_result(python_method_impl, code)
 
     result = result.reshape(4, 4, order="F")
@@ -378,7 +382,7 @@ def test_arrays_and_linalg(python_method_impl):
 
 
 def test_svd(python_method_impl):
-    with CodeBuilder(label="primary") as cb:
+    with CodeBuilder(name="primary") as cb:
         cb("n", 3)
         cb("nodes", "`<builtin>array`(n)")
         cb("vdm", "`<builtin>array`(n*n)")
@@ -407,7 +411,7 @@ def test_svd(python_method_impl):
 
     from utils import execute_and_return_single_result
 
-    code = DAGCode.create_with_steady_phase(cb.statements)
+    code = create_DAGCode_with_steady_phase(cb.statements)
     result = execute_and_return_single_result(python_method_impl, code)
 
     assert la.norm(result) < 1e-10
@@ -416,11 +420,11 @@ def test_svd(python_method_impl):
 def test_class_preamble():
     from dagrt.language import CodeBuilder
 
-    with CodeBuilder(label="primary") as cb:
+    with CodeBuilder(name="primary") as cb:
         cb.assign("<t>", "<t> + <dt>")
         cb.yield_state("f()", "f", 0, "final")
 
-    code = DAGCode.create_with_steady_phase(cb.statements)
+    code = create_DAGCode_with_steady_phase(cb.statements)
 
     from dagrt.codegen import PythonCodeGenerator
     import dagrt.function_registry as freg
