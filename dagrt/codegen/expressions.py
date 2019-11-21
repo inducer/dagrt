@@ -36,7 +36,7 @@ class FortranExpressionMapper(StringifyMapper):
         """name_manager is a map from a variable name (as a string) to its
         representation (as a string).
         """
-        super(FortranExpressionMapper, self).__init__(repr)
+        super(FortranExpressionMapper, self).__init__()
         self._name_manager = name_manager
 
     def map_constant(self, expr, enclosing_prec):
