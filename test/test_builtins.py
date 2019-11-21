@@ -28,7 +28,6 @@ import pytest
 import sys
 
 from dagrt.language import Assign, YieldState
-from dagrt.language import DAGCode
 from pymbolic import var
 
 from utils import (  # noqa

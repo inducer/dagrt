@@ -29,7 +29,7 @@ from pymbolic.primitives import LogicalNot
 
 from dagrt.codegen.dag_ast import (IfThen, IfThenElse, Block, StatementWrapper,
                                create_ast_from_phase, simplify_ast)
-from dagrt.language import Statement, DAGCode
+from dagrt.language import Statement
 
 from utils import create_DAGCode_with_steady_phase
 

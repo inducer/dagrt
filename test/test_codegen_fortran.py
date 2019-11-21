@@ -26,7 +26,7 @@ THE SOFTWARE.
 import sys
 
 from dagrt.language import YieldState
-from dagrt.language import DAGCode, CodeBuilder
+from dagrt.language import CodeBuilder
 import dagrt.codegen.fortran as f
 
 from utils import RawCodeBuilder

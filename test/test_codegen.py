@@ -5,7 +5,6 @@ import pytest
 import sys
 
 from dagrt.language import Assign, YieldState
-from dagrt.language import DAGCode
 from dagrt.codegen import CodeGenerationError
 from dagrt.codegen.analysis import verify_code
 
