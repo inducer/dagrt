@@ -128,13 +128,6 @@ class FortranExpressionMapper(StringifyMapper):
 
 # {{{ python
 
-def _map_python_constant(constant):
-    if isinstance(constant, (float, np.number)):
-        if np.isinf(constant) or np.isnan(constant):
-            return "float('" + repr(constant) + "')"
-    return repr(constant)
-
-
 class PythonExpressionMapper(StringifyMapper):
     """Converts expressions to Python code."""
 
@@ -145,10 +138,16 @@ class PythonExpressionMapper(StringifyMapper):
 
         numpy is the name of the numpy module.
         """
-        super(PythonExpressionMapper, self).__init__(_map_python_constant)
+        super(PythonExpressionMapper, self).__init__()
         self._name_manager = name_manager
         self._function_registry = function_registry
         self._numpy = numpy
+
+    def map_constant(self, expr, *args):
+        if isinstance(constant, (float, np.number)):
+            if np.isinf(constant) or np.isnan(constant):
+                return "float('" + repr(constant) + "')"
+        return repr(constant)
 
     def map_foreign(self, expr, *args):
         if expr is None:
