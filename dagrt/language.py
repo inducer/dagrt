@@ -803,7 +803,7 @@ class CodeBuilder(object):
 
        The set of statements generated for the phase
 
-    Language support:
+    **Language support:**
 
     .. automethod:: assign
     .. automethod:: assign_implicit
@@ -812,20 +812,26 @@ class CodeBuilder(object):
     .. automethod:: raise_
     .. automethod:: switch_phase
 
-    Control flow:
+    **Control flow:**
 
     .. automethod:: if_
     .. automethod:: else_
 
-    Context manager:
+    **Context manager:**
 
     .. automethod:: __enter__
     .. automethod:: __exit__
 
-    Convenience functions:
+    **Graph generation:**
+
+    .. automethod:: as_execution_phase
+
+    **Convenience functions:**
 
     .. method:: __call__
+
         Alias for :func:`CodeBuilder.assign`.
+
     .. automethod:: assign_implicit_1
     .. automethod:: fresh_var_name
     .. automethod:: fresh_var
@@ -849,7 +855,7 @@ class CodeBuilder(object):
         # Maps variables to the set of statements that read them between the
         # last time the var was written and the current statement
         self._reader_map = {}
-        # Stack of conditional expressions used to implemented nested ifs
+        # Stack of conditional expressions used to implement nested ifs
         self._conditional_expression_stack = []
         # Used to implement if/else
         self._last_if_block_conditional_expression = None
@@ -1008,7 +1014,7 @@ class CodeBuilder(object):
         assignee unless *expression* is a function call.
 
         *loops* is a list of tuples of the form
-        *(array, start_index, stop_index)*.
+        *(identifier, start_index, stop_index)*.
         """
 
         from dagrt.expression import parse
@@ -1135,8 +1141,8 @@ class CodeBuilder(object):
         pass
 
     def as_execution_phase(self, next_phase):
-        """
-        :arg cb: A :class:`CodeBuilder` instance
+        """Return the generated graph as an :class:`ExecutionPhase`.
+
         :arg next_phase: The name of the default next phase
         """
         return ExecutionPhase(
