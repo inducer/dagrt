@@ -28,6 +28,20 @@ Python 3:
     reports:
       junit: test/pytest.xml
 
+Python 3 Examples:
+  script:
+  - py_version=3
+  - EXTRA_INSTALL=numpy
+  - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-py-project-and-run-examples.sh
+  - ". ./build-py-project-and-run-examples.sh"
+  tags:
+  - python3
+  except:
+  - tags
+  artifacts:
+    reports:
+      junit: test/pytest.xml
+
 Documentation:
   script:
   - EXTRA_INSTALL="numpy"

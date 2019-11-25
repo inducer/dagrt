@@ -23,6 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import numpy as np
+
 from dagrt.language import DAGCode, CodeBuilder
 from pymbolic import var
 
@@ -59,7 +61,7 @@ def adaptive_rk_method(tol):
         return Min(((tol / Max((1.0e-16, norm(err)))) ** (1 / 2), 2.0))
 
     # Code for the main state
-    with CodeBuilder(label="adaptrk") as cb:
+    with CodeBuilder("adaptrk") as cb:
         # Euler
         cb(y_e, y + dt * g(t, y))
 
@@ -68,7 +70,6 @@ def adaptive_rk_method(tol):
 
         # Adaptation
         cb(dt_old, dt)
-        cb.reset_dep_tracking()
         cb(dt, dt * dt_scaling(tol, y_h - y_e))
 
         # Accept or reject step
@@ -78,13 +79,11 @@ def adaptive_rk_method(tol):
             cb(y, y_h)
             cb(t, t + dt_old)
 
-    return DAGCode.create_with_steady_phase(cb.phase_dependencies, cb.statements)
+    return DAGCode.from_phases_list(
+            [cb.as_execution_phase("adaptrk")], "adaptrk")
 
 
-if __name__ == "__main__":
-    from dagrt.codegen import PythonCodeGenerator
-    import numpy as np
-
+def main():
     def rhs(t, y):
         u, v = y
         return np.array([v, -u/t**2], dtype=np.float64)
@@ -94,8 +93,9 @@ if __name__ == "__main__":
         return np.sqrt(t)*(
                 5*np.sqrt(3)/3*np.sin(inner)
                 + np.cos(inner)
-                )
+        )
 
+    from dagrt.codegen import PythonCodeGenerator
     codegen = PythonCodeGenerator("AdaptiveRK")
 
     tolerances = [1.0e-1, 1.0e-2, 1.0e-3, 1.0e-5]
@@ -107,10 +107,14 @@ if __name__ == "__main__":
         solver = AdaptiveRK({"<func>g": rhs})
         solver.set_up(t_start=1.0, dt_start=0.1, context={"y": np.array([1., 3.])})
         for evt in solver.run(t_end=10.0):
-            pass
-        errors.append(solver.global_state_y[0] - soln(10.0))
+            final_time = evt.t
+        errors.append(np.abs(solver.global_state_y[0] - soln(final_time)))
 
     print("Tolerance\tError")
     print("-" * 25)
     for tol, error in zip(tolerances, errors):
         print("{:.2e}\t{:.2e}".format(tol, error))
+
+
+if __name__ == "__main__":
+    main()
