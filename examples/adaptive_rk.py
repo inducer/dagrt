@@ -107,8 +107,8 @@ def main():
         solver = AdaptiveRK({"<func>g": rhs})
         solver.set_up(t_start=1.0, dt_start=0.1, context={"y": np.array([1., 3.])})
         for evt in solver.run(t_end=10.0):
-            pass
-        errors.append(solver.global_state_y[0] - soln(10.0))
+            final_time = evt.t
+        errors.append(solver.global_state_y[0] - soln(final_time))
 
     print("Tolerance\tError")
     print("-" * 25)
