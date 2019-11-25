@@ -23,6 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import numpy as np
+
 from dagrt.language import DAGCode, CodeBuilder
 from pymbolic import var
 
@@ -81,10 +83,7 @@ def adaptive_rk_method(tol):
             [cb.as_execution_phase("adaptrk")], "adaptrk")
 
 
-if __name__ == "__main__":
-    from dagrt.codegen import PythonCodeGenerator
-    import numpy as np
-
+def main():
     def rhs(t, y):
         u, v = y
         return np.array([v, -u/t**2], dtype=np.float64)
@@ -94,8 +93,9 @@ if __name__ == "__main__":
         return np.sqrt(t)*(
                 5*np.sqrt(3)/3*np.sin(inner)
                 + np.cos(inner)
-                )
+        )
 
+    from dagrt.codegen import PythonCodeGenerator
     codegen = PythonCodeGenerator("AdaptiveRK")
 
     tolerances = [1.0e-1, 1.0e-2, 1.0e-3, 1.0e-5]
@@ -114,3 +114,7 @@ if __name__ == "__main__":
     print("-" * 25)
     for tol, error in zip(tolerances, errors):
         print("{:.2e}\t{:.2e}".format(tol, error))
+
+
+if __name__ == "__main__":
+    main()
