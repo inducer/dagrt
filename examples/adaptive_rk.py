@@ -59,7 +59,7 @@ def adaptive_rk_method(tol):
         return Min(((tol / Max((1.0e-16, norm(err)))) ** (1 / 2), 2.0))
 
     # Code for the main state
-    with CodeBuilder(label="adaptrk") as cb:
+    with CodeBuilder("adaptrk") as cb:
         # Euler
         cb(y_e, y + dt * g(t, y))
 
@@ -68,7 +68,6 @@ def adaptive_rk_method(tol):
 
         # Adaptation
         cb(dt_old, dt)
-        cb.reset_dep_tracking()
         cb(dt, dt * dt_scaling(tol, y_h - y_e))
 
         # Accept or reject step
@@ -78,7 +77,8 @@ def adaptive_rk_method(tol):
             cb(y, y_h)
             cb(t, t + dt_old)
 
-    return DAGCode.create_with_steady_phase(cb.phase_dependencies, cb.statements)
+    return DAGCode.from_phases_list(
+            [cb.as_execution_phase("adaptrk")], "adaptrk")
 
 
 if __name__ == "__main__":
