@@ -25,6 +25,8 @@ jobs:
         script: |
             set -e
             EXTRA_INSTALL="numpy"
+            sudo apt install gfortran-7
+            sudo ln -s /usr/bin/gfortran-7 /usr/bin/gfortran
             curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
             . ./build-and-test-py-project.sh
 
@@ -61,6 +63,8 @@ jobs:
         script: |
             set -e
             EXTRA_INSTALL="numpy"
+            sudo apt install gfortran-7
+            sudo ln -s /usr/bin/gfortran-7 /usr/bin/gfortran
             curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-py-project-and-run-examples.sh
             . ./build-py-project-and-run-examples.sh
 
