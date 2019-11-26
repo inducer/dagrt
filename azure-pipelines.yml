@@ -27,7 +27,7 @@ jobs:
             EXTRA_INSTALL="numpy"
             sudo apt update
             sudo apt install gfortran-7 liblapack-dev libblas-dev
-            sudo ln -s /usr/bin/gfortran-7 /usr/bin/gfortran
+            sudo ln -sf /usr/bin/gfortran-7 /usr/bin/gfortran
             curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-and-test-py-project.sh
             . ./build-and-test-py-project.sh
 
@@ -66,7 +66,7 @@ jobs:
             EXTRA_INSTALL="numpy"
             sudo apt update
             sudo apt install gfortran-7 liblapack-dev libblas-dev
-            sudo ln -s /usr/bin/gfortran-7 /usr/bin/gfortran
+            sudo ln -sf /usr/bin/gfortran-7 /usr/bin/gfortran
             curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-py-project-and-run-examples.sh
             . ./build-py-project-and-run-examples.sh
 
