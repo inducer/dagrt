@@ -70,13 +70,8 @@ jobs:
             curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/build-py-project-and-run-examples.sh
             . ./build-py-project-and-run-examples.sh
 
-        displayName: 'Pytest'
+        displayName: 'RunExamples'
 
-    -
-        task: PublishTestResults@2
-        inputs:
-            testResultsFormat: 'JUnit'
-            testResultsFiles: 'test/pytest.xml'
 -
     job: 'Flake8'
     pool:
