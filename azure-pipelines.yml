@@ -94,7 +94,7 @@ jobs:
         script: |
             set -e
             curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-flake8.sh
-            . ./prepare-and-run-flake8.sh pytools test
+            . ./prepare-and-run-flake8.sh dagrt test
 
         displayName: 'Flake8'
 
@@ -116,9 +116,9 @@ jobs:
     -
         script: |
             set -e
-            EXTRA_INSTALL="pymbolic matplotlib"
+            EXTRA_INSTALL="pymbolic"
             curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
-            . ./prepare-and-run-pylint.sh pytools test/test_*.py
+            . ./prepare-and-run-pylint.sh dagrt test/test_*.py
 
         displayName: 'Pylint'
 
