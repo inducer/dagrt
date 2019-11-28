@@ -42,12 +42,11 @@ def verify_switch_phases(phases, errors):
     :arg phases: A map from phase names to phases
     :arg errors: An error list to which new errors get appended
     """
-    phase_names = [key for key in phases.keys()]
     for phase in six.itervalues(phases):
         for inst in phase.statements:
             if not isinstance(inst, SwitchPhase):
                 continue
-            if inst.next_phase not in phase_names:
+            if inst.next_phase not in phases:
                 errors.append(
                     "Phase \"{0}\" referenced by statement \"{1}:{2}\" not found"
                     .format(inst.next_phase, phase, inst))
