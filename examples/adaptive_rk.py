@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """Example of implementing a simple adaptive Runge-Kutta method."""
 from __future__ import division
 
