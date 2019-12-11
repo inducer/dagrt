@@ -31,7 +31,7 @@ from pymbolic.imperative.statement import (
         ConditionalAssignment as AssignBase,
         Nop as NopBase)
 
-from dagrt.utils import get_variables
+from dagrt.utils import get_variables, natsorted
 from contextlib import contextmanager
 
 import logging
@@ -162,7 +162,7 @@ def _stringify_statements(roots, id_to_stmt, prefix=""):
             return
         printed_stmt_ids.add(stmt.id)
 
-        for dep_id in stmt.depends_on:
+        for dep_id in natsorted(stmt.depends_on):
             print_stmt(id_to_stmt[dep_id])
 
         lines.append(
@@ -693,14 +693,17 @@ class DAGCode(RecordWithoutPickling):
     def __str__(self):
         lines = []
         for phase_name, phase in sorted(six.iteritems(self.phases)):
-            lines.append("STAGE %s" % phase_name)
+            phase_title = "PHASE \"%s\"" % phase_name
+            if phase_name == self.initial_phase:
+                phase_title += " (initial_phase)"
+            lines.append(phase_title)
 
-            for root_id in phase.depends_on:
+            for root_id in natsorted(phase.depends_on):
                 lines.extend(_stringify_statements(
                     [phase.id_to_stmt[root_id]],
                     phase.id_to_stmt, prefix="    "))
 
-            lines.append("    -> (next phase) %s" % phase.next_phase)
+            lines.append("    -> (next phase) \"%s\"" % phase.next_phase)
             lines.append("")
 
         return "\n".join(lines)
@@ -1165,14 +1168,14 @@ def get_dot_dependency_graph(code, use_stmt_ids=False):
     def additional_lines_hook():
         for i, (name, phase) in enumerate(six.iteritems(code.phases)):
             yield "subgraph cluster_%d { label=\"%s\"" % (i, name)
-            for dep in phase.depends_on:
+            for dep in natsorted(phase.depends_on):
                 yield dep
             yield "}"
 
     statements = [
             stmt if use_stmt_ids else stmt.copy(id=stmt.id)
             for phase_name, phase in six.iteritems(code.phases)
-            for stmt in phase.statements]
+            for stmt in natsorted(phase.statements, key=lambda stmt: stmt.id)]
 
     return get_dot_dependency_graph(
             statements, use_stmt_ids=use_stmt_ids,
