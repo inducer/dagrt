@@ -643,6 +643,31 @@ def register_ode_rhs(
         output_type_id, identifier=None, input_type_ids=None,
         input_names=None):
     """Register a function as an ODE right-hand side.
+
+    Functions registered through this call have the following characteristics.
+    First, there is a single return value of the user type whose type identifier
+    is *output_type_id*. Second, the function has as its first argument a scalar
+    named *t*. Last, the remaining argument list to the function consists of
+    user type values.
+
+    For example, considering the ODE :math:`y' = f(t, y)`, the following call
+    registers a right-hand side function with name *f* and user type *y*::
+
+        freg = register_ode_rhs(freg, UserType("y"), identifier="f")
+
+    :arg function_registry: the base function registry
+    :arg output_type_id: a string, the user type ID returned by the call.
+    :arg identifier: the full name of the function. If not provided, defaults
+       to *<func> + output_type_id*.
+    :arg input_type_ids: a tuple of strings, the identifiers of the user types
+       which are the arguments to the right-hand side function. An automatically
+       added *t* argument occurs before these arguments. If not provided,
+       defaults to *(output_type_id,)*.
+    :arg input_names: a tuple of strings, the names of the inputs. If not provided,
+       defaults to *input_type_ids*.
+
+    :returns: a new :class:`FunctionRegistry`
+
     """
     if identifier is None:
         identifier = "<func>"+output_type_id
