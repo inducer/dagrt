@@ -653,7 +653,7 @@ def register_ode_rhs(
     For example, considering the ODE :math:`y' = f(t, y)`, the following call
     registers a right-hand side function with name *f* and user type *y*::
 
-        freg = register_ode_rhs(freg, UserType("y"), identifier="f")
+        freg = register_ode_rhs(freg, "y", identifier="f")
 
     :arg function_registry: the base function registry
     :arg output_type_id: a string, the user type ID returned by the call.
