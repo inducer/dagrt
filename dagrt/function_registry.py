@@ -33,8 +33,8 @@ from dagrt.codegen.data import (
 NoneType = type(None)
 
 __doc__ = """
-The function registry is used by targets to resolve external
-functions and invoke user-specified code, including but not limited ODE right-hand sides.
+The function registry is used by targets to resolve external functions and
+invoke user-specified code, including but not limited ODE right-hand sides.
 
 .. autoclass:: Function
 .. autoclass:: FunctionRegistry
