@@ -28,11 +28,7 @@ Fortran
 Function registry
 ~~~~~~~~~~~~~~~~~
 
-The function registry is used by targets to register external
-functions and customized function call code.
-
 .. automodule:: dagrt.function_registry
-   :members:
 
 Transformations
 ~~~~~~~~~~~~~~~
