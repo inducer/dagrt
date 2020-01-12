@@ -25,13 +25,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools import RecordWithoutPickling, memoize_method
+from pytools import RecordWithoutPickling, memoize_method, natsorted
 from pymbolic.imperative.statement import (
         ConditionalStatement as StatementBase,
         ConditionalAssignment as AssignBase,
         Nop as NopBase)
 
-from dagrt.utils import get_variables, natsorted
+from dagrt.utils import get_variables
 from contextlib import contextmanager
 
 import logging

@@ -41,7 +41,7 @@ def main():
           packages=find_packages(),
           install_requires=[
               "numpy>=1.5",
-              "pytools>=2014.1",
+              "pytools>=2020.1",
               "pymbolic>=2016.2",
               "pytest>=2.3",
               "mako",
