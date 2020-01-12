@@ -34,7 +34,7 @@ NoneType = type(None)
 
 __doc__ = """
 The function registry is used by targets to register external
-functions and customized function call code.
+functions and invoke user-specified code, including but not limited ODE right-hand sides.
 
 .. autoclass:: Function
 .. autoclass:: FunctionRegistry
