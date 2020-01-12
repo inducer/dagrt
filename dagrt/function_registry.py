@@ -363,7 +363,7 @@ class IsNaN(Function):
         return (Boolean(),)
 
 
-class Array_(Function):
+class Array_(Function):  # noqa
     """``array(n)`` returns an empty array with *n* entries in it.
     *n* must be an integer.
     """
