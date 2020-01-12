@@ -43,7 +43,7 @@ functions and customized function call code.
 .. data:: base_function_registry
 
 The default function registry, containing all the built-in functions (see
-:ref:`builtins`).
+:ref:`built-ins`).
 
 Registering new functions
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -51,7 +51,7 @@ Registering new functions
 .. autofunction:: register_ode_rhs
 .. autofunction:: register_function
 
-.. _builtins:
+.. _built-ins:
 
 Built-ins
 ^^^^^^^^^
