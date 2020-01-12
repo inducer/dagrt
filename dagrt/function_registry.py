@@ -74,6 +74,7 @@ documentation.
 
 """
 
+
 # {{{ function
 
 class FunctionNotFound(KeyError):
@@ -362,7 +363,7 @@ class IsNaN(Function):
         return (Boolean(),)
 
 
-class Array(Function):
+class Array_(Function):
     """``array(n)`` returns an empty array with *n* entries in it.
     *n* must be an integer.
     """
@@ -443,8 +444,9 @@ class Transpose(Function):
 
 class LinearSolve(Function):
     """``linear_solve(a, b, a_cols, b_cols)`` returns a 1D array containing the
-    matrix resulting from multiplying the matrix inverse of *a* by *b*, both interpreted
-    as matrices, with a number of columns *a_cols* and *b_cols* respectively.
+    matrix resulting from multiplying the matrix inverse of *a* by *b*, both
+    interpreted as matrices, with a number of columns *a_cols* and *b_cols*
+    respectively.
     """
 
     result_names = ("result",)
@@ -542,7 +544,7 @@ def _make_bfr():
             (DotProduct(), "{numpy}.vdot({args})"),
             (Len(), "{numpy}.size({args})"),
             (IsNaN(), "{numpy}.isnan({args})"),
-            (Array(), "self._builtin_array({args})"),
+            (Array_(), "self._builtin_array({args})"),
             (MatMul(), "self._builtin_matmul({args})"),
             (Transpose(), "self._builtin_transpose({args})"),
             (LinearSolve(), "self._builtin_linear_solve({args})"),
@@ -565,7 +567,7 @@ def _make_bfr():
             f.codegen_builtin_len)
     bfr = bfr.register_codegen(IsNaN.identifier, "fortran",
             f.codegen_builtin_isnan)
-    bfr = bfr.register_codegen(Array.identifier, "fortran",
+    bfr = bfr.register_codegen(Array_.identifier, "fortran",
             f.builtin_array)
     bfr = bfr.register_codegen(MatMul.identifier, "fortran",
             f.builtin_matmul)
