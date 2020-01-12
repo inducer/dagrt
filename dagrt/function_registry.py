@@ -65,7 +65,7 @@ documentation.
 .. autoclass:: DotProduct
 .. autoclass:: Len
 .. autoclass:: IsNaN
-.. autoclass:: Array
+.. autoclass:: Array_
 .. autoclass:: MatMul
 .. autoclass:: Transpose
 .. autoclass:: LinearSolve
