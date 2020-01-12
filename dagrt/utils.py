@@ -224,33 +224,4 @@ def run_fortran(sources, fortran_options=None, fortran_libraries=None):
 
 # }}}
 
-
-# {{{ sorting in natural order
-
-def natorder(key):
-    # Return natural ordering for strings, as opposed to dictionary order.
-    # E.g. will result in
-    #  'abc1' < 'abc9' < 'abc10'
-    # rather than
-    #  'abc1' < 'abc10' < 'abc9'
-    # Based on
-    # http://code.activestate.com/recipes/285264-natural-string-sorting/#c7
-    import re
-    result = []
-    for (int_val, string_val) in re.findall(r"(\d+)|(\D+)", key):
-        if int_val:
-            result.append(int(int_val))
-            # Tie-breaker in case leading zeros in *int_val* cause distinct
-            # values to compare equally.
-            result.append(len(int_val))
-        else:
-            result.append(string_val)
-    return result
-
-
-def natsorted(seq, key=lambda x: x):
-    return sorted(seq, key=lambda y: natorder(key(y)))
-
-# }}}
-
 # vim: foldmethod=marker
