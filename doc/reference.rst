@@ -30,6 +30,11 @@ Function registry
 
 .. automodule:: dagrt.function_registry
 
+Data
+~~~~~~~~~~~~~~~~~
+
+.. automodule:: dagrt.data
+
 Transformations
 ~~~~~~~~~~~~~~~
 

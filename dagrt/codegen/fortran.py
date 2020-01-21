@@ -31,7 +31,7 @@ import six
 from dagrt.codegen.expressions import FortranExpressionMapper
 from dagrt.codegen.codegen_base import StructuredCodeGenerator
 from dagrt.utils import is_state_variable
-from dagrt.codegen.data import UserType
+from dagrt.data import UserType
 from pytools.py_codegen import (
         # It's the same code. So sue me.
         PythonCodeGenerator as FortranEmitterBase)
@@ -236,7 +236,7 @@ class CallCode(object):
             code_generator.declaration_emitter(decl_without_name + " :: " + new_name)
             return new_name
 
-        import dagrt.codegen.data as kinds
+        import dagrt.data as kinds
 
         template_names = dict(
                 real_scalar_kind=code_generator.real_scalar_kind,
@@ -1062,11 +1062,11 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # }}}
 
-        from dagrt.codegen.data import SymbolKindFinder
+        from dagrt.data import SymbolKindFinder
 
         self.sym_kind_table = SymbolKindFinder(self.function_registry)(
             [fd.name for fd in fdescrs],
-            [fd.ast for fd in fdescrs])
+            [get_statements_in_ast(fd.ast) for fd in fdescrs])
 
         from dagrt.codegen.analysis import (
                 collect_ode_component_names_from_dag,
@@ -1082,7 +1082,7 @@ class CodeGenerator(StructuredCodeGenerator):
             raise RuntimeError("User type missing from user type map: %r"
                     % (component_ids - set(self.user_type_map)))
 
-        from dagrt.codegen.data import Scalar, UserType
+        from dagrt.data import Scalar, UserType
         for comp_id in component_ids:
             self.sym_kind_table.set(
                     None, "<ret_time_id>"+comp_id, Scalar(is_real_valued=True))
@@ -1151,7 +1151,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ emit variable deinit
 
-        sym_table = self.sym_kind_table.per_function_table.get(
+        sym_table = self.sym_kind_table.per_phase_table.get(
                 self.current_function, {})
 
         for identifier, sym_kind in sorted(six.iteritems(sym_table)):
@@ -1305,7 +1305,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ memory management routines
 
-        from dagrt.codegen.data import collect_user_types
+        from dagrt.data import collect_user_types
         user_types = collect_user_types(self.sym_kind_table)
 
         # {{{ allocation checks
@@ -1430,11 +1430,11 @@ class CodeGenerator(StructuredCodeGenerator):
         if emit is None:
             emit = self.emit
 
-        from dagrt.codegen.data import Boolean, Scalar, Array, Integer
+        from dagrt.data import Boolean, Scalar, Array, Integer
 
         type_specifiers = other_specifiers
 
-        from dagrt.codegen.data import UserType
+        from dagrt.data import UserType
         if isinstance(sym_kind, Boolean):
             type_name = 'logical'
 
@@ -1482,7 +1482,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 id=fortran_name))
 
     def emit_variable_init(self, name, sym_kind):
-        from dagrt.codegen.data import UserType
+        from dagrt.data import UserType
         if isinstance(sym_kind, UserType):
             ftype = self.get_fortran_type_for_user_type(sym_kind.identifier)
             InitializationEmitter(self)(ftype, self.name_manager[name], {})
@@ -1491,7 +1491,7 @@ class CodeGenerator(StructuredCodeGenerator):
         fortran_name = self.name_manager[name]
         refcnt_name = self.name_manager.name_refcount(name)
 
-        from dagrt.codegen.data import UserType
+        from dagrt.data import UserType
         if not isinstance(sym_kind, UserType):
             return
 
@@ -1508,7 +1508,7 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_refcounted_allocation(self, sym, sym_kind):
         fortran_name = self.name_manager[sym]
 
-        from dagrt.codegen.data import UserType
+        from dagrt.data import UserType
         if not isinstance(sym_kind, UserType):
             return
 
@@ -1583,7 +1583,7 @@ class CodeGenerator(StructuredCodeGenerator):
                         subscript_str=subscript_str,
                         expr=str(expr)[:50]))
 
-            from dagrt.codegen.data import UserType
+            from dagrt.data import UserType
             if not isinstance(sym_kind, UserType):
                 self.emit(
                         "{name}{subscript_str} = {expr}"
@@ -1677,7 +1677,7 @@ class CodeGenerator(StructuredCodeGenerator):
             # All our scalars are floating-point numbers for now,
             # so initializing them all to NaN is fine.
 
-            from dagrt.codegen.data import Scalar
+            from dagrt.data import Scalar
             if sym.startswith("<ret") and isinstance(sym_kind, Scalar):
                 self.emit('{fortran_name} = dagrt_nan'.format(
                     fortran_name=tgt_fortran_name))
@@ -1696,7 +1696,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     self.emitter, 'present(%s)' % fortran_name, self):
                 self.emit_refcounted_allocation(sym, sym_kind)
 
-                from dagrt.codegen.data import UserType
+                from dagrt.data import UserType
                 if not isinstance(sym_kind, UserType):
                     self.emit(
                             "{lhs} = {rhs}"
@@ -1757,7 +1757,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.current_function = phase_id
 
-        from dagrt.codegen.data import UserType
+        from dagrt.data import UserType
 
         for sym, sym_kind in sorted(six.iteritems(self.sym_kind_table.global_table)):
             self.emit_variable_deinit(sym, sym_kind)
@@ -2012,7 +2012,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emitters.append(body_emitter)
 
         if phase_id is not None:
-            sym_table = self.sym_kind_table.per_function_table.get(phase_id, {})
+            sym_table = self.sym_kind_table.per_phase_table.get(phase_id, {})
             for identifier, sym_kind in sorted(six.iteritems(sym_table)):
                 self.emit_variable_decl(
                         self.name_manager[identifier], sym_kind,
@@ -2056,7 +2056,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emitter.emit_else()  # pylint:disable=no-member
 
     def emit_assign_expr(self, assignee_sym, assignee_subscript, expr):
-        from dagrt.codegen.data import UserType, Array
+        from dagrt.data import UserType, Array
 
         assignee_fortran_name = self.name_manager[assignee_sym]
 
@@ -2169,7 +2169,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         from pymbolic.mapper.dependency import DependencyMapper
         from pymbolic import var
-        from dagrt.codegen.data import UserType
+        from dagrt.data import UserType
 
         for assignee_sym in inst.assignees:
             sym_kind = self.sym_kind_table.get(
@@ -2321,7 +2321,7 @@ def codegen_builtin_norm_2(results, function, args, arg_kinds,
         code_generator):
     result, = results
 
-    from dagrt.codegen.data import Scalar, UserType, Array
+    from dagrt.data import Scalar, UserType, Array
     x_kind = arg_kinds[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
@@ -2365,7 +2365,7 @@ def codegen_builtin_len(results, function, args, arg_kinds,
         code_generator):
     result, = results
 
-    from dagrt.codegen.data import Scalar, Array, UserType
+    from dagrt.data import Scalar, Array, UserType
     x_kind = arg_kinds[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
@@ -2402,7 +2402,7 @@ def codegen_builtin_isnan(results, function, args, arg_kinds,
         code_generator):
     result, = results
 
-    from dagrt.codegen.data import Scalar, UserType
+    from dagrt.data import Scalar, UserType
     x_kind = arg_kinds[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
