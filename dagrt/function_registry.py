@@ -27,7 +27,7 @@ THE SOFTWARE.
 
 
 from pytools import RecordWithoutPickling
-from dagrt.codegen.data import (
+from dagrt.data import (
         UserType, Integer, Boolean, Scalar, Array, UnableToInferKind)
 
 NoneType = type(None)
@@ -119,7 +119,7 @@ class Function(RecordWithoutPickling):
                 **kwargs)
 
     def get_result_kinds(self, arg_kinds, check):
-        """Return a tuple of the :class:`dagrt.codegen.data.SymbolKind`
+        """Return a tuple of the :class:`dagrt.data.SymbolKind`
         instances for the values this function returns if arguments of the
         kinds *arg_kinds* are supplied.
 
@@ -128,7 +128,7 @@ class Function(RecordWithoutPickling):
 
         :arg arg_kinds: a dictionary mapping numbers (for positional arguments)
             or identifiers (for keyword arguments) to
-            :class:`dagrt.codegen.data.SymbolKind` instances indicating the
+            :class:`dagrt.data.SymbolKind` instances indicating the
             types of the arguments being passed to the function.
             Some elements of *arg_kinds* may be None if their kinds
             have yet not been determined.
@@ -696,7 +696,7 @@ def register_function(
     :arg default_dict: a dictionary mapping argument names to default
         values
     :arg result_names: a list of strings, the names of the output(s)
-    :arg result_kinds: a list of :class:`dagrt.codegen.data.SymbolKinds`,
+    :arg result_kinds: a list of :class:`dagrt.data.SymbolKinds`,
         the kinds of the output(s)
 
     :returns: a new :class:`FunctionRegistry`

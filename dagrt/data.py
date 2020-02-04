@@ -35,6 +35,36 @@ from pytools import RecordWithoutPickling
 from pymbolic.mapper import Mapper
 
 
+__doc__ = """
+The module :mod:`dagrt.data` provides symbol kind information and kind
+inference.
+
+Symbol kinds
+^^^^^^^^^^^^
+
+.. autoclass:: SymbolKind
+.. autoclass:: Boolean
+.. autoclass:: Integer
+.. autoclass:: Scalar
+.. autoclass:: Array
+.. autoclass:: UserType
+
+Symbol kind inference
+^^^^^^^^^^^^^^^^^^^^^
+
+.. autoclass:: SymbolKindTable
+.. autoclass:: UnableToInferKind
+.. autoclass:: SymbolKindFinder
+
+Helper functions
+^^^^^^^^^^^^^^^^
+
+.. autofunction:: infer_kinds
+.. autofunction:: collect_user_types
+
+"""
+
+
 def _get_arg_dict_from_call_stmt(stmt):
     arg_dict = {}
     for i, arg_val in enumerate(stmt.parameters):
@@ -48,6 +78,8 @@ def _get_arg_dict_from_call_stmt(stmt):
 # {{{ symbol information
 
 class SymbolKind(RecordWithoutPickling):
+    """Base class for kinds encountered in the :mod:`dagrt` language."""
+
     def __eq__(self, other):
         return (
                 type(self) == type(other)
@@ -56,28 +88,26 @@ class SymbolKind(RecordWithoutPickling):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def __getinitargs__(self):
-        return ()
-
-    def __repr__(self):
-        return "%s(%s)" % (
-                type(self).__name__,
-                ", ".join(repr(arg) for arg in self.__getinitargs__()))
-
     def __hash__(self):
         return hash((type(self), self.__getinitargs__()))
 
+    def __getinitargs__(self):
+        return ()
+
 
 class Boolean(SymbolKind):
+    """A boolean."""
     pass
 
 
 class Integer(SymbolKind):
+    """An integer."""
     pass
 
 
 class Scalar(SymbolKind):
-    """
+    """A (real or complex) floating-point value.
+
     .. attribute:: is_real_valued
 
         Whether the value is definitely real-valued
@@ -91,7 +121,7 @@ class Scalar(SymbolKind):
 
 
 class Array(SymbolKind):
-    """A variable-sized one-dimensional array.
+    """A variable-sized one-dimensional scalar array.
 
     .. attribute:: is_real_valued
 
@@ -106,6 +136,13 @@ class Array(SymbolKind):
 
 
 class UserType(SymbolKind):
+    """Represents user state belonging to a normed vector space.
+
+    .. attribute:: identifier
+
+        A unique identifier for this type
+    """
+
     def __init__(self, identifier):
         super(UserType, self).__init__(identifier=identifier)
 
@@ -116,14 +153,17 @@ class UserType(SymbolKind):
 
 
 class SymbolKindTable(object):
-    """
+    """A mapping from symbol names to kinds for a program.
+
     .. attribute:: global_table
 
         a mapping from symbol names to :class:`SymbolKind` instances,
         for global symbols
 
-    .. attribute:: a nested mapping ``[function][symbol_name]``
-        to :class:`SymbolKind` instances
+    .. attribute:: per_phase_table
+
+        a nested mapping ``[phase_name][symbol_name]`` to :class:`SymbolKind`
+        instances
     """
 
     def __init__(self):
@@ -131,7 +171,7 @@ class SymbolKindTable(object):
                 "<t>": Scalar(is_real_valued=True),
                 "<dt>": Scalar(is_real_valued=True),
                 }
-        self.per_function_table = {}
+        self.per_phase_table = {}
         self._changed = False
 
     def reset_change_flag(self):
@@ -140,11 +180,11 @@ class SymbolKindTable(object):
     def is_changed(self):
         return self._changed
 
-    def set(self, func_name, name, kind):
+    def set(self, phase_name, name, kind):
         if is_state_variable(name):
             tbl = self.global_table
         else:
-            tbl = self.per_function_table.setdefault(func_name, {})
+            tbl = self.per_phase_table.setdefault(phase_name, {})
 
         if name in tbl:
             if tbl[name] != kind:
@@ -154,7 +194,7 @@ class SymbolKindTable(object):
                     print(
                         "trying to derive 'kind' for '%s' in "
                         "'%s': '%s' vs '%s'"
-                        % (name, func_name,
+                        % (name, phase_name,
                             repr(kind),
                             repr(tbl[name])))
                 else:
@@ -165,11 +205,11 @@ class SymbolKindTable(object):
         else:
             tbl[name] = kind
 
-    def get(self, func_name, name):
+    def get(self, phase_name, name):
         if is_state_variable(name):
             tbl = self.global_table
         else:
-            tbl = self.per_function_table.setdefault(func_name, {})
+            tbl = self.per_phase_table.setdefault(phase_name, {})
 
         return tbl[name]
 
@@ -181,8 +221,8 @@ class SymbolKindTable(object):
 
         return "\n".join(
                 ["global:\n%s" % format_table(self.global_table)] + [
-                    "func '%s':\n%s" % (func_name, format_table(tbl))
-                    for func_name, tbl in self.per_function_table.items()])
+                    "phase '%s':\n%s" % (phase_name, format_table(tbl))
+                    for phase_name, tbl in self.per_phase_table.items()])
 
 
 # {{{ kind inference mapper
@@ -250,8 +290,7 @@ class KindInferenceMapper(Mapper):
 
     .. attribute:: local_table
 
-        The :class:`SymbolKindTable` for the :class:`dagrt.ir.Function`
-        currently being processed.
+        The :class:`SymbolKindTable` for the phase currently being processed.
     """
 
     def __init__(self, global_table, local_table, function_registry, check):
@@ -401,30 +440,42 @@ class KindInferenceMapper(Mapper):
 # {{{ symbol kind finder
 
 class SymbolKindFinder(object):
+    """
+    .. automethod:: __call__
+    """
     def __init__(self, function_registry):
         self.function_registry = function_registry
 
-    def __call__(self, names, functions):
-        """Return a :class:`SymbolKindTable`.
+    def __call__(self, names, phases):
+        """Infer the kinds of all the symbols in a program.
+
+        :arg names: a list of phase names
+        :arg phases: a list of iterables, each yielding the statements in a
+            phase
+
+        :returns: a :class:`SymbolKindTable`
+
+        :raises UnableToInferKind: kind inference could not complete sucessfully
         """
+
+        expanded_phases = []
+        for phase in phases:
+            expanded_phases.append(list(phase))
+        phases = expanded_phases
 
         result = SymbolKindTable()
 
-        from dagrt.codegen.dag_ast import get_statements_in_ast
-
-        def make_kim(func_name, check):
+        def make_kim(phase_name, check):
             return KindInferenceMapper(
                     result.global_table,
-                    result.per_function_table.get(func_name, {}),
+                    result.per_phase_table.get(phase_name, {}),
                     self.function_registry,
                     check=False)
 
         while True:
             stmt_queue = []
-            for name, func in zip(names, functions):
-                stmt_queue.extend(
-                        (name, stmt)
-                        for stmt in get_statements_in_ast(func))
+            for name, phase in zip(names, phases):
+                stmt_queue.extend((name, stmt) for stmt in phase)
 
             stmt_queue_push_buffer = []
             made_progress = False
@@ -437,10 +488,10 @@ class SymbolKindFinder(object):
 
                     if not made_progress:
                         print("Left-over statements in kind inference:")
-                        for func_name, stmt in stmt_queue_push_buffer:
-                            print("[%s] %s" % (func_name, stmt))
+                        for phase_name, stmt in stmt_queue_push_buffer:
+                            print("[%s] %s" % (phase_name, stmt))
 
-                            kim = make_kim(func_name, check=False)
+                            kim = make_kim(phase_name, check=False)
 
                             try:
                                 if isinstance(stmt, lang.Assign):
@@ -472,13 +523,13 @@ class SymbolKindFinder(object):
                     stmt_queue_push_buffer = []
                     made_progress = False
 
-                func_name, stmt = stmt_queue.pop()
+                phase_name, stmt = stmt_queue.pop()
 
                 if isinstance(stmt, lang.Assign):
-                    kim = make_kim(func_name, check=False)
+                    kim = make_kim(phase_name, check=False)
 
                     for ident, _, _ in stmt.loops:
-                        result.set(func_name, ident, kind=Integer())
+                        result.set(phase_name, ident, kind=Integer())
 
                     if stmt.assignee_subscript:
                         continue
@@ -486,24 +537,24 @@ class SymbolKindFinder(object):
                     try:
                         kind = kim(stmt.expression)
                     except UnableToInferKind:
-                        stmt_queue_push_buffer.append((func_name, stmt))
+                        stmt_queue_push_buffer.append((phase_name, stmt))
                     else:
                         made_progress = True
-                        result.set(func_name, stmt.assignee, kind=kind)
+                        result.set(phase_name, stmt.assignee, kind=kind)
 
                 elif isinstance(stmt, lang.AssignFunctionCall):
-                    kim = make_kim(func_name, check=False)
+                    kim = make_kim(phase_name, check=False)
 
                     try:
                         kinds = kim.map_generic_call(stmt.function_id,
                                 _get_arg_dict_from_call_stmt(stmt),
                                 single_return_only=False)
                     except UnableToInferKind:
-                        stmt_queue_push_buffer.append((func_name, stmt))
+                        stmt_queue_push_buffer.append((phase_name, stmt))
                     else:
                         made_progress = True
                         for assignee, kind in zip(stmt.assignees, kinds):
-                            result.set(func_name, assignee, kind=kind)
+                            result.set(phase_name, assignee, kind=kind)
 
                 elif isinstance(stmt, lang.AssignmentBase):
                     raise TODO()
@@ -517,10 +568,10 @@ class SymbolKindFinder(object):
 
         # {{{ check consistency of obtained kinds
 
-        for func_name, func in zip(names, functions):
-            kim = make_kim(func_name, check=True)
+        for phase_name, phase in zip(names, phases):
+            kim = make_kim(phase_name, check=True)
 
-            for stmt in get_statements_in_ast(func):
+            for stmt in phase:
                 if isinstance(stmt, lang.Assign):
                     kim(stmt.expression)
 
@@ -551,16 +602,44 @@ class SymbolKindFinder(object):
 # }}}
 
 
+# {{{ infer kinds of a DAGCode object
+
+def infer_kinds(dag, function_registry=None):
+    """Run kind inference on a :class:`dagrt.language.DAGCode`.
+
+    :arg dag: a :class:`dagrt.language.DAGCode`
+    :arg function_registry: if not *None*, the function registry to use
+
+    :returns: a :class:`SymbolKindTable`
+    """
+    if function_registry is None:
+        from dagrt.function_registry import base_function_registry
+        function_registry = base_function_registry
+
+    kind_finder = SymbolKindFinder(function_registry)
+    names = list(dag.phases)
+    phases = [phase.statements for phase in dag.phases.values()]
+
+    return kind_finder(names, phases)
+
+# }}}
+
+
 # {{{ collect user types
 
 def collect_user_types(skt):
+    """Collect all of the of :class:`UserType` identifiers in a table.
+
+    :arg skt: a :class:`SymbolKindTable`
+    :returns: a set of strings
+    """
     result = set()
 
     for kind in six.itervalues(skt.global_table):
         if isinstance(kind, UserType):
             result.add(kind.identifier)
 
-    for tbl in six.itervalues(skt.per_function_table):
+    for tbl in six.itervalues(skt.per_phase_table):
         for kind in six.itervalues(tbl):
             if isinstance(kind, UserType):
                 result.add(kind.identifier)
