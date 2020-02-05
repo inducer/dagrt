@@ -1334,7 +1334,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
                 self.emit_allocate_refcount("refcount")
 
-                emit_if.emit_else()
+                # https://github.com/PyCQA/pylint/issues/3234
+                emit_if.emit_else()  # pylint:disable=no-member
 
                 # If the refcount is 1, then nobody else is referring to
                 # the memory, and we might as well repurpose/overwrite it,
@@ -1387,7 +1388,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
                     self.emit_traceable('deallocate(refcount)')
 
-                    if_emit.emit_else()
+                    # https://github.com/PyCQA/pylint/issues/3234
+                    if_emit.emit_else()  # pylint:disable=no-member
 
                     InitializationEmitter(self)(ftype, val_name, {})
                     self.emit_traceable('refcount = refcount - 1')
