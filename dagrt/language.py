@@ -601,8 +601,9 @@ class ExecutionPhase(RecordWithoutPickling):
 
     .. attribute:: depends_on
 
-        a list of statement IDs that need to be accomplished
-        for successful execution of one round of this state
+        a list of statement IDs that need to be executed
+        to complete a successful execution of one round of
+        this phase, excluding their dependencies.
 
     .. attribute:: next_phase
 
@@ -611,10 +612,8 @@ class ExecutionPhase(RecordWithoutPickling):
 
     .. attribute:: statements
 
-        is a list of Statement instances, in no particular
-        order. Only statements referred to by :attr:`depends_on`
-        or the transitive closure of their dependency relations
-        will actually be executed.
+        is a list of statement instances in no particular
+        order.
     """
 
     def __init__(self, name, next_phase, statements):
