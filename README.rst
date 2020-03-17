@@ -4,9 +4,9 @@ dagrt: A Concurrent Runtime for Time Integration
 .. image:: https://gitlab.tiker.net/inducer/dagrt/badges/master/pipeline.svg
     :alt: Gitlab Build Status
     :target: https://gitlab.tiker.net/inducer/dagrt/commits/master
-.. image:: https://dev.azure.com/ak-spam/inducer/_apis/build/status/inducer.dagrt?branchName=master
-    :alt: Azure Build Status
-    :target: https://dev.azure.com/ak-spam/inducer/_build/latest?definitionId=20&branchName=master
+.. image:: https://github.com/inducer/dagrt/workflows/CI/badge.svg?branch=master
+    :alt: Github Build Status
+    :target: https://github.com/inducer/dagrt/actions?query=branch%3Amaster+workflow%3ACI
 .. image:: https://badge.fury.io/py/dagrt.png
     :alt: Python Package Index Release Page
     :target: https://pypi.org/project/dagrt/
