@@ -276,10 +276,10 @@ class CodeGenerator(StructuredCodeGenerator):
         with open(builtins_source_file) as srcf:
             builtins_source = srcf.read()
 
-        for l in builtins_source.split("\n"):
-            if l.startswith("def builtin"):
+        for line in builtins_source.split("\n"):
+            if line.startswith("def builtin"):
                 emit("@staticmethod")
-            emit(l.replace("builtin", "_builtin"))
+            emit(line.replace("builtin", "_builtin"))
 
         self._class_emitter.incorporate(emit)
 

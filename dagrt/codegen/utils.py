@@ -78,17 +78,17 @@ def exec_in_new_namespace(code):
 
 
 def remove_redundant_blank_lines(lines):
-    def is_blank(l):
-        return not l.strip()
+    def is_blank(line):
+        return not line.strip()
 
     pending_blanks = []
     at_start = True
 
     result = []
-    for l in lines:
-        if is_blank(l):
+    for line in lines:
+        if is_blank(line):
             if not pending_blanks:
-                pending_blanks.append(l)
+                pending_blanks.append(line)
 
         else:
             if not at_start:
@@ -97,7 +97,7 @@ def remove_redundant_blank_lines(lines):
             pending_blanks = []
             at_start = False
 
-            result.append(l)
+            result.append(line)
 
     return result
 
