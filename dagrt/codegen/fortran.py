@@ -270,8 +270,8 @@ class CallCode(object):
         lines = remove_redundant_blank_lines(
                 remove_common_indentation(rendered))
 
-        for l in lines:
-            code_generator.emit(l)
+        for line in lines:
+            code_generator.emit(line)
 
 # }}}
 
@@ -1192,15 +1192,15 @@ class CodeGenerator(StructuredCodeGenerator):
         indentation = indent_spaces*' '
 
         wrapped_lines = []
-        for l in self.module_emitter.code:
-            line_leading_spaces = (len(l) - len(l.lstrip(" ")))
+        for line in self.module_emitter.code:
+            line_leading_spaces = (len(line) - len(line.lstrip(" ")))
             level = line_leading_spaces // indent_spaces
             line_ind = level*indentation
-            if l[line_leading_spaces:].startswith("!"):
-                wrapped_lines.append(l)
+            if line[line_leading_spaces:].startswith("!"):
+                wrapped_lines.append(line)
             else:
                 for wrapped_line in wrap_line(
-                        l[line_leading_spaces:],
+                        line[line_leading_spaces:],
                         level, indentation=indentation):
                     wrapped_lines.append(line_ind+wrapped_line)
 
@@ -1212,8 +1212,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def begin_emit(self, dag):
         if self.module_preamble:
-            for l in self.module_preamble:
-                self.emit(l)
+            for line in self.module_preamble:
+                self.emit(line)
             self.emit('')
 
         from dagrt.codegen.analysis import collect_time_ids_from_dag
@@ -1608,8 +1608,8 @@ class CodeGenerator(StructuredCodeGenerator):
         if not self.extra_argument_decl:
             return
 
-        for l in self.extra_argument_decl:
-            emitter(l)
+        for line in self.extra_argument_decl:
+            emitter(line)
 
         self.emit('')
 
@@ -2359,8 +2359,7 @@ class LenComputer(TypeVisitorWithResult):
         self.code_generator.emit(
                 "{result} = {result} + 1"
                 .format(
-                    result=self.result_expr,
-                    expr=fortran_expr_str))
+                    result=self.result_expr))
 
 
 def codegen_builtin_len(results, function, args, arg_kinds,
