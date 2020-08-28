@@ -100,11 +100,11 @@ function namespace and the variable namespace are distinct. No user-defined
 identifiers should start with `dagrt_`.
 
 Statements
-~~~~~~~~~~~~
+~~~~~~~~~~
 .. autoclass:: Statement
 
 Assignment Statements
-^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^
 
 These statements perform updates to the execution state, i.e. the variables.
 
@@ -113,7 +113,7 @@ These statements perform updates to the execution state, i.e. the variables.
 .. autoclass:: AssignFunctionCall
 
 Control Statements
-^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^
 
 These statements affect the execution of a phase, or cause a phase to interact
 with user code.
@@ -394,7 +394,7 @@ class AssignFunctionCall(AssignmentBase):
         into individual statements. This statement provides a
         natural way to encode them.
 
-        See :class:`leam.vm.codegen.transform.FunctionCallIsolator` for
+        See :class:`dagrt.codegen.transform.isolate_function_calls` for
         a transform that accomplishes this.
 
     *   Calling functions with multiple return values is not supported

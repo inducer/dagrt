@@ -688,7 +688,7 @@ def register_function(
         default_dict=None,
         result_names=(),
         result_kinds=()):
-    """Register a function returning output(s) of fixed kind.
+    r"""Register a function returning output(s) of fixed kind.
 
     :arg function_registry: the base :class:`FunctionRegistry`
     :arg identifier: a string, the function identifier
@@ -696,7 +696,7 @@ def register_function(
     :arg default_dict: a dictionary mapping argument names to default
         values
     :arg result_names: a list of strings, the names of the output(s)
-    :arg result_kinds: a list of :class:`dagrt.data.SymbolKinds`,
+    :arg result_kinds: a list of :class:`dagrt.data.SymbolKind`\ s,
         the kinds of the output(s)
 
     :returns: a new :class:`FunctionRegistry`
