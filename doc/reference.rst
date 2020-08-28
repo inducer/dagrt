@@ -21,9 +21,7 @@ Python
 Fortran
 ~~~~~~~
 
-.. automodule::	dagrt.codegen.fortran
-
-.. autoclass:: CodeGenerator
+.. automodule:: dagrt.codegen.fortran
 
 Function registry
 ~~~~~~~~~~~~~~~~~
@@ -31,7 +29,7 @@ Function registry
 .. automodule:: dagrt.function_registry
 
 Data
-~~~~~~~~~~~~~~~~~
+~~~~
 
 .. automodule:: dagrt.data
 
@@ -39,7 +37,6 @@ Transformations
 ~~~~~~~~~~~~~~~
 
 .. automodule:: dagrt.codegen.transform
-   :members:
 
 Utilities
 ~~~~~~~~~
@@ -55,4 +52,3 @@ Utilities
 ---------------------------------
 
 .. automodule:: dagrt.exec_numpy
-   :members:

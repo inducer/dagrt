@@ -27,6 +27,13 @@ from dagrt.expression import EvaluationMapper
 import six
 
 
+__doc__ = """
+.. autoexception:: FailStepException
+.. autoclass:: TransitionEvent
+.. autoclass:: NumpyInterpreter
+"""
+
+
 class FailStepException(Exception):
     pass
 
@@ -97,7 +104,7 @@ class NumpyInterpreter(object):
 
     def __init__(self, code, function_map):
         """
-        :arg code: an instance of :class:`dagrt.DAGCode`
+        :arg code: an instance of :class:`dagrt.language.DAGCode`
         :arg function_map: a mapping from function identifiers to functions
         """
         self.code = code

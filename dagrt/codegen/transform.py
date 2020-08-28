@@ -27,6 +27,13 @@ THE SOFTWARE.
 import six
 from pymbolic.mapper import IdentityMapper
 
+__doc__ = """
+.. autofunction:: eliminate_self_dependencies
+.. autofunction:: isolate_function_arguments
+.. autofunction:: isolate_function_calls
+.. autofunction:: expand_IfThenElse
+"""
+
 
 # {{{ eliminate self dependencies
 

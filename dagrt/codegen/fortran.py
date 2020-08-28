@@ -42,6 +42,22 @@ from dagrt.codegen.utils import (wrap_line_base, KeyToUniqueNameMap,
         make_identifier_from_name)
 
 
+__doc__ = """
+Types
+-----
+.. autoclass: TypeBase
+.. autoclass: BuiltinType
+.. autoclass: ArrayType
+.. autoclass: PointerType
+.. autoclass: StructureType
+
+Code Generator
+--------------
+
+.. autoclass: CodeGenerator
+"""
+
+
 def pad_fortran(line, width):
     line += ' ' * (width - 1 - len(line))
     line += '&'
@@ -888,7 +904,7 @@ class CodeGenerator(StructuredCodeGenerator):
         :arg module_preamble: A string to include at the beginning of the
             emitted module
         :arg user_type_map: a map from user type names
-            to :class:`FortranType` instances
+            to :class:`TypeBase` instances
         :arg call_before_state_update: The name of a function that should
             be called before each state update. The function must be known
             to *function_registry*.
