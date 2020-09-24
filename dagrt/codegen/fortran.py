@@ -59,8 +59,8 @@ Code Generator
 
 
 def pad_fortran(line, width):
-    line += ' ' * (width - 1 - len(line))
-    line += '&'
+    line += " " * (width - 1 - len(line))
+    line += "&"
     return line
 
 
@@ -78,7 +78,7 @@ class FortranNameManager(object):
         self.name_generator = UniqueNameGenerator()
         self.local_map = KeyToUniqueNameMap(name_generator=self.name_generator)
         self.global_map = KeyToUniqueNameMap(start={
-                '<t>': 'dagrt_t', '<dt>': 'dagrt_dt'},
+                "<t>": "dagrt_t", "<dt>": "dagrt_dt"},
                 name_generator=self.name_generator)
         self.function_map = KeyToUniqueNameMap(name_generator=self.name_generator)
 
@@ -109,16 +109,16 @@ class FortranNameManager(object):
         the name of a local or global variable.
         """
         if is_state_variable(name):
-            return 'dagrt_state%'+self.name_global(name)
+            return "dagrt_state%"+self.name_global(name)
         else:
             return self.name_local(name)
 
     def name_refcount(self, name, qualified_with_state=True):
         if is_state_variable(name):
             if qualified_with_state:
-                return 'dagrt_state%dagrt_refcnt_'+self.name_global(name)
+                return "dagrt_state%dagrt_refcnt_"+self.name_global(name)
             else:
-                return 'dagrt_refcnt_'+self.name_global(name)
+                return "dagrt_refcnt_"+self.name_global(name)
         else:
             return self.name_local("dagrt_refcnt_"+name)
 
@@ -150,15 +150,15 @@ class FortranBlockEmitter(FortranEmitter):
         self.dedent()
         if self.code_generator is not None:
             self.code_generator.emitters.pop()
-        self('end {what}'.format(what=self.what))
-        self('')
+        self("end {what}".format(what=self.what))
+        self("")
 
 
 class FortranModuleEmitter(FortranBlockEmitter):
     def __init__(self, module_name):
-        super(FortranModuleEmitter, self).__init__('module')
+        super(FortranModuleEmitter, self).__init__("module")
         self.module_name = module_name
-        self('module {module_name}'.format(module_name=module_name))
+        self("module {module_name}".format(module_name=module_name))
 
 
 class FortranSubblockEmitter(FortranBlockEmitter):
@@ -181,7 +181,7 @@ class FortranIfEmitter(FortranSubblockEmitter):
 
     def emit_else(self):
         self.dedent()
-        self('else')
+        self("else")
         self.indent()
 
     def emit_else_if(self, expr):
@@ -205,17 +205,17 @@ class FortranDoEmitter(FortranSubblockEmitter):
 class FortranSubroutineEmitter(FortranSubblockEmitter):
     def __init__(self, parent_emitter, name, args, code_generator=None):
         super(FortranSubroutineEmitter, self).__init__(
-                parent_emitter, 'subroutine', code_generator)
+                parent_emitter, "subroutine", code_generator)
         self.name = name
 
-        self('subroutine %s(%s)' % (name, ", ".join(args)))
+        self("subroutine %s(%s)" % (name, ", ".join(args)))
 
 
 class FortranTypeEmitter(FortranSubblockEmitter):
     def __init__(self, parent_emitter, type_name, code_generator=None):
         super(FortranTypeEmitter, self).__init__(
-                parent_emitter, 'type', code_generator)
-        self('type {type_name}'.format(type_name=type_name))
+                parent_emitter, "type", code_generator)
+        self("type {type_name}".format(type_name=type_name))
 
 # }}}
 
@@ -340,7 +340,7 @@ class ArraySubscriptAppender(UserTypeReferenceTransformer):
 # }}}
 
 
-# {{{ fortran 'vector-ish' types
+# {{{ fortran "vector-ish" types
 
 class TypeBase(object):
     """
@@ -543,8 +543,8 @@ class _ArrayLoopManager(object):
         for iloop, (dim, index_name, dim_name) in enumerate(
                 reversed(list(zip(atype.dimension, self.f_index_names,
                     self.f_dim_names)))):
-            cg.declaration_emitter('integer %s' % index_name)
-            cg.declaration_emitter('integer %s' % dim_name)
+            cg.declaration_emitter("integer %s" % index_name)
+            cg.declaration_emitter("integer %s" % dim_name)
 
             pdp = None
             if allow_parallel_do and iloop + 1 == len(atype.dimension):
@@ -787,15 +787,15 @@ class AllocationEmitter(CodeGeneratingTypeVisitor):
         dimension = ""
         if isinstance(pointee_type, ArrayType):
             if pointee_type.dimension:
-                dimension = '(%s)' % ', '.join(
+                dimension = "(%s)" % ", ".join(
                         str(dim_axis) for dim_axis in pointee_type.dimension)
 
         code_generator.emit_traceable(
-                'allocate({name}{dimension}, stat=dagrt_ierr)'.format(
+                "allocate({name}{dimension}, stat=dagrt_ierr)".format(
                     name=fortran_expr_str,
                     dimension=_replace_indices(index_expr_map, dimension)))
         with FortranIfEmitter(
-                code_generator.emitter, 'dagrt_ierr.ne.0', code_generator):
+                code_generator.emitter, "dagrt_ierr.ne.0", code_generator):
             code_generator.emit(
                     "write(dagrt_stderr,*) 'failed to allocate {name}'".format(
                         name=fortran_expr_str))
@@ -820,7 +820,7 @@ class DeallocationEmitter(CodeGeneratingTypeVisitor):
             self.rec(pointee_type, fortran_expr_str, index_expr_map)
         self.deinitializer(pointee_type, fortran_expr_str, index_expr_map)
 
-        code_generator.emit_traceable('deallocate({id})'.format(id=fortran_expr_str))
+        code_generator.emit_traceable("deallocate({id})".format(id=fortran_expr_str))
         code_generator.emit_traceable("nullify(%s)" % fortran_expr_str)
 
 
@@ -1135,11 +1135,11 @@ class CodeGenerator(StructuredCodeGenerator):
         self.current_function = function_name
 
         self.emit_def_begin(
-                'dagrt_phase_func_' + function_name,
-                self.extra_arguments + ('dagrt_state',),
+                "dagrt_phase_func_" + function_name,
+                self.extra_arguments + ("dagrt_state",),
                 phase_id=function_name)
-        self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
-        self.declaration_emitter('')
+        self.declaration_emitter("type(dagrt_state_type), pointer :: dagrt_state")
+        self.declaration_emitter("")
 
         # {{{ instrumentation
 
@@ -1163,7 +1163,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.lower_ast(ast)
 
-        self.emit('999 continue ! exit label')
+        self.emit("999 continue ! exit label")
 
         # {{{ emit variable deinit
 
@@ -1176,7 +1176,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # }}}
 
-        self.emit_trace('leave %s' % self.current_function)
+        self.emit_trace("leave %s" % self.current_function)
 
         # {{{ instrumentation
 
@@ -1205,7 +1205,7 @@ class CodeGenerator(StructuredCodeGenerator):
         assert not self.module_emitter.preamble
 
         indent_spaces = 1
-        indentation = indent_spaces*' '
+        indentation = indent_spaces*" "
 
         wrapped_lines = []
         for line in self.module_emitter.code:
@@ -1230,14 +1230,14 @@ class CodeGenerator(StructuredCodeGenerator):
         if self.module_preamble:
             for line in self.module_preamble:
                 self.emit(line)
-            self.emit('')
+            self.emit("")
 
         from dagrt.codegen.analysis import collect_time_ids_from_dag
         for i, time_id in enumerate(sorted(collect_time_ids_from_dag(dag))):
             self.emit("integer dagrt_time_{time_id}".format(time_id=time_id))
             self.emit("parameter (dagrt_time_{time_id} = {i})".format(
                 time_id=time_id, i=i))
-        self.emit('')
+        self.emit("")
 
         # {{{ phase name constants
 
@@ -1248,7 +1248,7 @@ class CodeGenerator(StructuredCodeGenerator):
             self.emit("parameter ({phase_sym_name} = {i})".format(
                 phase_sym_name=phase_sym_name, i=i))
 
-        self.emit('')
+        self.emit("")
 
         # }}}
 
@@ -1265,7 +1265,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 comp_sym_name=comp_sym_name,
                 i=i))
 
-        self.emit('')
+        self.emit("")
 
         # }}}
 
@@ -1273,10 +1273,10 @@ class CodeGenerator(StructuredCodeGenerator):
 
         with FortranTypeEmitter(
                 self.emitter,
-                'dagrt_state_type',
+                "dagrt_state_type",
                 self) as emit:
-            emit('integer dagrt_next_phase')
-            emit('')
+            emit("integer dagrt_next_phase")
+            emit("")
 
             for identifier, sym_kind in sorted(six.iteritems(
                     self.sym_kind_table.global_table)):
@@ -1289,35 +1289,35 @@ class CodeGenerator(StructuredCodeGenerator):
             # {{{ instrumentation
 
             if self.emit_instrumentation:
-                emit('')
-                emit('! {{{ instrumentation')
-                emit('')
+                emit("")
+                emit("! {{{ instrumentation")
+                emit("")
 
                 for phase_name in sorted(dag.phases):
-                    emit('integer dagrt_phase_%s_count' % phase_name)
-                    emit('integer dagrt_phase_%s_failures' % phase_name)
-                    emit('real*8 dagrt_phase_%s_time' % phase_name)
+                    emit("integer dagrt_phase_%s_count" % phase_name)
+                    emit("integer dagrt_phase_%s_failures" % phase_name)
+                    emit("real*8 dagrt_phase_%s_time" % phase_name)
 
-                emit('')
+                emit("")
 
                 for func_name in self.get_called_function_names(dag):
                     func_id = make_identifier_from_name(func_name)
-                    emit('integer dagrt_func_%s_count' % func_id)
-                    emit('real*8 dagrt_func_%s_time' % func_id)
+                    emit("integer dagrt_func_%s_count" % func_id)
+                    emit("real*8 dagrt_func_%s_time" % func_id)
 
-                emit('')
-                emit('! }}}')
-                emit('')
+                emit("")
+                emit("! }}}")
+                emit("")
 
             # }}}
 
         # }}}
 
-        self.emit('integer dagrt_stderr')
-        self.emit('parameter (dagrt_stderr=0)')
-        self.emit('')
-        self.emit('contains')
-        self.emit('')
+        self.emit("integer dagrt_stderr")
+        self.emit("parameter (dagrt_stderr=0)")
+        self.emit("")
+        self.emit("contains")
+        self.emit("")
 
         # {{{ memory management routines
 
@@ -1337,12 +1337,12 @@ class CodeGenerator(StructuredCodeGenerator):
             self.emit_variable_decl(val_name, sym_kind,
                     is_argument=True, emit=self.declaration_emitter,
                     other_specifiers=("pointer",))
-            self.declaration_emitter('integer, pointer :: refcount')
-            self.declaration_emitter('')
+            self.declaration_emitter("integer, pointer :: refcount")
+            self.declaration_emitter("")
 
             with FortranIfEmitter(
                     self.emitter,
-                    '.not.associated(%s)' % val_name,
+                    ".not.associated(%s)" % val_name,
                     self) as emit_if:
 
                 ftype = self.get_fortran_type_for_user_type(utype_id)
@@ -1358,17 +1358,17 @@ class CodeGenerator(StructuredCodeGenerator):
                 # so there's nothing more to do in that case.
 
                 with FortranIfEmitter(
-                        self.emitter, 'refcount.ne.1', self) as emit_if:
+                        self.emitter, "refcount.ne.1", self) as emit_if:
 
                     self.emit_traceable(
-                            'refcount = refcount - 1')
+                            "refcount = refcount - 1")
 
                     # We get here if the refcount is not 1 initially, which
                     # means it's not zero here--someone else is still
                     # referring to the data. Let them have it, we'll make
                     # a new array.
 
-                    self.emit('')
+                    self.emit("")
 
                     AllocationEmitter(self)(ftype, val_name, {})
                     self.emit_allocate_refcount("refcount")
@@ -1390,25 +1390,25 @@ class CodeGenerator(StructuredCodeGenerator):
             self.emit_variable_decl(val_name, sym_kind,
                     is_argument=True, emit=self.declaration_emitter,
                     other_specifiers=("pointer",))
-            self.declaration_emitter('integer, pointer :: refcount')
-            self.declaration_emitter('')
+            self.declaration_emitter("integer, pointer :: refcount")
+            self.declaration_emitter("")
 
             with FortranIfEmitter(
-                    self.emitter, 'associated(%s)' % val_name, self):
+                    self.emitter, "associated(%s)" % val_name, self):
                 with FortranIfEmitter(
-                        self.emitter, 'refcount.eq.1', self) \
+                        self.emitter, "refcount.eq.1", self) \
                                 as if_emit:
                     ftype = self.get_fortran_type_for_user_type(sym_kind.identifier)
                     DeallocationEmitter(self, InitializationEmitter(self))(
                             ftype, val_name, {})
 
-                    self.emit_traceable('deallocate(refcount)')
+                    self.emit_traceable("deallocate(refcount)")
 
                     # https://github.com/PyCQA/pylint/issues/3234
                     if_emit.emit_else()  # pylint:disable=no-member
 
                     InitializationEmitter(self)(ftype, val_name, {})
-                    self.emit_traceable('refcount = refcount - 1')
+                    self.emit_traceable("refcount = refcount - 1")
 
             self.emit_def_end(function_name)
 
@@ -1454,23 +1454,23 @@ class CodeGenerator(StructuredCodeGenerator):
 
         from dagrt.data import UserType
         if isinstance(sym_kind, Boolean):
-            type_name = 'logical'
+            type_name = "logical"
 
         elif isinstance(sym_kind, Array):
             if sym_kind.is_real_valued or not self.use_complex_scalars:
-                type_name = 'real (kind=%s)' % self.real_scalar_kind
+                type_name = "real (kind=%s)" % self.real_scalar_kind
             else:
-                type_name = 'complex (kind=%s)' % self.complex_scalar_kind
+                type_name = "complex (kind=%s)" % self.complex_scalar_kind
             type_specifiers = type_specifiers + ("allocatable", "dimension(:)")
 
         elif isinstance(sym_kind, Scalar):
             if sym_kind.is_real_valued or not self.use_complex_scalars:
-                type_name = 'real (kind=%s)' % self.real_scalar_kind
+                type_name = "real (kind=%s)" % self.real_scalar_kind
             else:
-                type_name = 'complex (kind=%s)' % self.complex_scalar_kind
+                type_name = "complex (kind=%s)" % self.complex_scalar_kind
 
         elif isinstance(sym_kind, Integer):
-            type_name = 'integer'
+            type_name = "integer"
 
         elif isinstance(sym_kind, UserType):
             ftype = self.get_fortran_type_for_user_type(sym_kind.identifier,
@@ -1483,19 +1483,19 @@ class CodeGenerator(StructuredCodeGenerator):
 
             if not is_argument:
                 emit(
-                        'integer, pointer ::  {refcount_name}'.format(
+                        "integer, pointer ::  {refcount_name}".format(
                             refcount_name=refcount_name))
 
         else:
             raise ValueError("unknown variable kind: %s" % type(sym_kind).__name__)
 
         if type_specifiers:
-            emit('{type_name}, {type_specifier_list} :: {id}'.format(
+            emit("{type_name}, {type_specifier_list} :: {id}".format(
                 type_name=type_name,
                 type_specifier_list=", ".join(type_specifiers),
                 id=fortran_name))
         else:
-            emit('{type_name} {id}'.format(
+            emit("{type_name} {id}".format(
                 type_name=type_name,
                 id=fortran_name))
 
@@ -1536,14 +1536,14 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_allocate_refcount(self.name_manager.name_refcount(sym))
 
     def emit_allocate_refcount(self, refcnt_name):
-        self.emit_traceable('allocate({name}, stat=dagrt_ierr)'.format(
+        self.emit_traceable("allocate({name}, stat=dagrt_ierr)".format(
             name=refcnt_name))
-        with FortranIfEmitter(self.emitter, 'dagrt_ierr.ne.0', self):
+        with FortranIfEmitter(self.emitter, "dagrt_ierr.ne.0", self):
             self.emit("write(dagrt_stderr,*) 'failed to allocate {name}'".format(
                 name=refcnt_name))
             self.emit("stop")
 
-        self.emit_traceable('{refcnt} = 1'.format(refcnt=refcnt_name))
+        self.emit_traceable("{refcnt} = 1".format(refcnt=refcnt_name))
 
     def emit_allocation_check(self, sym, sym_kind):
         fortran_name = self.name_manager[sym]
@@ -1577,7 +1577,7 @@ class CodeGenerator(StructuredCodeGenerator):
             "{tgt_refcnt} = {tgt_refcnt} + 1"
             .format(
                 tgt_refcnt=self.name_manager.name_refcount(assignee_sym)))
-        self.emit('')
+        self.emit("")
 
     def emit_assign_expr_inner(self,
             assignee_fortran_name, assignee_subscript, expr, sym_kind):
@@ -1615,7 +1615,7 @@ class CodeGenerator(StructuredCodeGenerator):
                         ftype, assignee_fortran_name, {}, expr,
                         is_rhs_target=True)
 
-        self.emit('')
+        self.emit("")
 
     def emit_extra_arg_decl(self, emitter=None):
         if emitter is None:
@@ -1627,7 +1627,7 @@ class CodeGenerator(StructuredCodeGenerator):
         for line in self.extra_argument_decl:
             emitter(line)
 
-        self.emit('')
+        self.emit("")
 
     # }}}
 
@@ -1639,11 +1639,11 @@ class CodeGenerator(StructuredCodeGenerator):
                 for sym in self.sym_kind_table.global_table
                 if not sym.startswith("<ret"))
 
-        args = self.extra_arguments + ('dagrt_state',) + tuple(
+        args = self.extra_arguments + ("dagrt_state",) + tuple(
                 self.name_manager.name_global(sym)
                 for sym in init_symbols)
 
-        function_name = 'initialize'
+        function_name = "initialize"
         phase_id = "<dagrt>"+function_name
         self.emit_def_begin(function_name, args, phase_id=phase_id)
 
@@ -1652,8 +1652,8 @@ class CodeGenerator(StructuredCodeGenerator):
             fortran_name = self.name_manager.name_global(sym)
             self.sym_kind_table.set(phase_id, "<target>"+fortran_name, sym_kind)
 
-        self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
-        self.declaration_emitter('')
+        self.declaration_emitter("type(dagrt_state_type), pointer :: dagrt_state")
+        self.declaration_emitter("")
 
         self.current_function = phase_id
 
@@ -1665,7 +1665,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     fortran_name, sym_kind, is_argument=True,
                     other_specifiers=("optional",))
 
-        self.emit('')
+        self.emit("")
 
         self.emit("character :: dagrt_nan_str*3")
         self.emit("real :: dagrt_nan")
@@ -1683,9 +1683,9 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ initialize scalar outputs to NaN
 
-        self.emit('')
-        self.emit('! initialize scalar outputs to NaN')
-        self.emit('')
+        self.emit("")
+        self.emit("! initialize scalar outputs to NaN")
+        self.emit("")
 
         for sym in sorted(self.sym_kind_table.global_table):
             sym_kind = self.sym_kind_table.global_table[sym]
@@ -1697,10 +1697,10 @@ class CodeGenerator(StructuredCodeGenerator):
 
             from dagrt.data import Scalar
             if sym.startswith("<ret") and isinstance(sym_kind, Scalar):
-                self.emit('{fortran_name} = dagrt_nan'.format(
+                self.emit("{fortran_name} = dagrt_nan".format(
                     fortran_name=tgt_fortran_name))
 
-        self.emit('')
+        self.emit("")
 
         # }}}
 
@@ -1711,7 +1711,7 @@ class CodeGenerator(StructuredCodeGenerator):
             fortran_name = self.name_manager.name_global(sym)
 
             with FortranIfEmitter(
-                    self.emitter, 'present(%s)' % fortran_name, self):
+                    self.emitter, "present(%s)" % fortran_name, self):
                 self.emit_refcounted_allocation(sym, sym_kind)
 
                 from dagrt.data import UserType
@@ -1733,25 +1733,25 @@ class CodeGenerator(StructuredCodeGenerator):
         # {{{ instrumentation
 
         if self.emit_instrumentation:
-            self.emit('')
-            self.emit('! {{{ instrumentation')
-            self.emit('')
+            self.emit("")
+            self.emit("! {{{ instrumentation")
+            self.emit("")
 
             for phase_name in sorted(dag.phases):
-                self.emit('dagrt_state%%dagrt_phase_%s_count = 0' % phase_name)
-                self.emit('dagrt_state%%dagrt_phase_%s_failures = 0' % phase_name)
-                self.emit('dagrt_state%%dagrt_phase_%s_time = 0' % phase_name)
+                self.emit("dagrt_state%%dagrt_phase_%s_count = 0" % phase_name)
+                self.emit("dagrt_state%%dagrt_phase_%s_failures = 0" % phase_name)
+                self.emit("dagrt_state%%dagrt_phase_%s_time = 0" % phase_name)
 
-            self.emit('')
+            self.emit("")
 
             for func_name in self.get_called_function_names(dag):
                 func_id = make_identifier_from_name(func_name)
-                self.emit('dagrt_state%% dagrt_func_%s_count = 0' % func_id)
-                self.emit('dagrt_state%%dagrt_func_%s_time = 0' % func_id)
+                self.emit("dagrt_state%% dagrt_func_%s_count = 0" % func_id)
+                self.emit("dagrt_state%%dagrt_func_%s_time = 0" % func_id)
 
-            self.emit('')
-            self.emit('! }}}')
-            self.emit('')
+            self.emit("")
+            self.emit("! }}}")
+            self.emit("")
 
         # }}}
 
@@ -1764,14 +1764,14 @@ class CodeGenerator(StructuredCodeGenerator):
     # {{{ emit_shutdown
 
     def emit_shutdown(self):
-        args = self.extra_arguments + ('dagrt_state',)
+        args = self.extra_arguments + ("dagrt_state",)
 
-        function_name = 'shutdown'
+        function_name = "shutdown"
         phase_id = "<dagrt>"+function_name
         self.emit_def_begin(function_name, args, phase_id=phase_id)
 
-        self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
-        self.declaration_emitter('')
+        self.declaration_emitter("type(dagrt_state_type), pointer :: dagrt_state")
+        self.declaration_emitter("")
 
         self.current_function = phase_id
 
@@ -1785,7 +1785,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 fortran_name = self.name_manager[sym]
                 with FortranIfEmitter(
                         self.emitter,
-                        'associated({id})'.format(id=fortran_name), self):
+                        "associated({id})".format(id=fortran_name), self):
                     self.emit(
                             "write(dagrt_stderr,*) 'leaked reference in {name}'"
                             .format(name=fortran_name))
@@ -1802,14 +1802,14 @@ class CodeGenerator(StructuredCodeGenerator):
     # {{{ emit_run_step
 
     def emit_run_step(self, dag):
-        args = self.extra_arguments + ('dagrt_state',)
+        args = self.extra_arguments + ("dagrt_state",)
 
-        function_name = 'run'
+        function_name = "run"
         phase_id = "<dagrt>"+function_name
         self.emit_def_begin(function_name, args, phase_id=phase_id)
 
-        self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
-        self.declaration_emitter('')
+        self.declaration_emitter("type(dagrt_state_type), pointer :: dagrt_state")
+        self.declaration_emitter("")
 
         self.current_function = phase_id
 
@@ -1851,13 +1851,13 @@ class CodeGenerator(StructuredCodeGenerator):
     # {{{ emit_print_profile
 
     def emit_print_profile(self, dag):
-        args = ('dagrt_state',)
+        args = ("dagrt_state",)
 
-        function_name = 'print_profile'
+        function_name = "print_profile"
         self.emit_def_begin(function_name, args, with_extra_args=False)
 
-        self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
-        self.declaration_emitter('')
+        self.declaration_emitter("type(dagrt_state_type), pointer :: dagrt_state")
+        self.declaration_emitter("")
 
         if self.emit_instrumentation:
             delim = "-" * 75
@@ -1876,7 +1876,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     .format(phase=phase_name))
                 with FortranIfEmitter(
                         self.emitter,
-                        'dagrt_state%dagrt_phase_{phase}_count > 0'
+                        "dagrt_state%dagrt_phase_{phase}_count > 0"
                         .format(phase=phase_name),
                         self):
                     self.emit(
@@ -1889,9 +1889,9 @@ class CodeGenerator(StructuredCodeGenerator):
                     "dagrt_state%dagrt_phase_{phase}_time"
                     .format(phase=phase_name))
 
-            self.emit('')
+            self.emit("")
             self.emit("write(*,*) '%s'" % delim)
-            self.emit('')
+            self.emit("")
 
             for func_name in self.get_called_function_names(dag):
                 func_id = make_identifier_from_name(func_name)
@@ -1902,7 +1902,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
                 with FortranIfEmitter(
                         self.emitter,
-                        'dagrt_state%dagrt_func_{func_id}_count > 0'
+                        "dagrt_state%dagrt_func_{func_id}_count > 0"
                         .format(func_id=func_id),
                         self):
                     self.emit(
@@ -1941,8 +1941,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.emit_def_begin(fortran_name, args)
 
-        self.declaration_emitter('type(dagrt_state_type), pointer :: dagrt_state')
-        self.declaration_emitter('')
+        self.declaration_emitter("type(dagrt_state_type), pointer :: dagrt_state")
+        self.declaration_emitter("")
 
         for name, arg_kind in zip(function.arg_names, arg_kinds):
             if arg_kind is None:
@@ -2019,9 +2019,9 @@ class CodeGenerator(StructuredCodeGenerator):
                 argument_names,
                 self).__enter__()
 
-        self.declaration_emitter('implicit none')
-        self.declaration_emitter('integer dagrt_ierr')
-        self.declaration_emitter('')
+        self.declaration_emitter("implicit none")
+        self.declaration_emitter("integer dagrt_ierr")
+        self.declaration_emitter("")
 
         if with_extra_args:
             self.emit_extra_arg_decl(self.declaration_emitter)
@@ -2038,17 +2038,17 @@ class CodeGenerator(StructuredCodeGenerator):
                                 identifier, qualified_with_state=False))
 
             if sym_table:
-                self.emit('')
+                self.emit("")
 
-        self.emit_trace('================================================')
-        self.emit_trace('enter %s' % function_name)
+        self.emit_trace("================================================")
+        self.emit_trace("enter %s" % function_name)
 
         if phase_id is not None:
             for identifier, sym_kind in sorted(six.iteritems(sym_table)):
                 self.emit_variable_init(identifier, sym_kind)
 
             if sym_table:
-                self.emit('')
+                self.emit("")
 
     def emit_def_end(self, func_id):
         self.emitters[-2].incorporate(self.declaration_emitter)
@@ -2233,11 +2233,11 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def emit_inst_YieldState(self, inst):
         self.emit_assign_expr(
-                '<ret_time_id>'+inst.component_id,
+                "<ret_time_id>"+inst.component_id,
                 (),
                 Variable("dagrt_time_"+str(inst.time_id)))
         self.emit_assign_expr(
-                '<ret_time>'+inst.component_id,
+                "<ret_time>"+inst.component_id,
                 (),
                 inst.time)
 
@@ -2253,7 +2253,7 @@ class CodeGenerator(StructuredCodeGenerator):
                             inst.component_id)),)))
 
         self.emit_assign_expr(
-                '<ret_state>'+inst.component_id,
+                "<ret_state>"+inst.component_id,
                 (),
                 inst.expression)
 
@@ -2309,7 +2309,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def emit_inst_SwitchPhase(self, inst):
         self.emit(
-                'dagrt_state%dagrt_next_phase = '
+                "dagrt_state%dagrt_next_phase = "
                 + self.phase_name_to_phase_sym(inst.next_phase))
         self.emit("goto 999")
 

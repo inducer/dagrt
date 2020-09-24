@@ -31,7 +31,7 @@ from dagrt.language import YieldState, SwitchPhase, AssignFunctionCall
 
 
 def _quote(string):
-    return "\"{0}\"".format(string)
+    return '"{0}"'.format(string)
 
 
 def verify_switch_phases(phases, errors):
@@ -48,7 +48,7 @@ def verify_switch_phases(phases, errors):
                 continue
             if inst.next_phase not in phases:
                 errors.append(
-                    "Phase \"{0}\" referenced by statement \"{1}:{2}\" not found"
+                    'Phase "{0}" referenced by statement "{1}:{2}" not found'
                     .format(inst.next_phase, phase, inst))
 
 
@@ -70,7 +70,7 @@ def verify_all_dependencies_exist(phases, errors):
             deps = set(inst.depends_on)
             if not deps <= ids:
                 errors.extend(
-                    ["Dependency \"{0}\" referenced by statement \"{1}\" not found"
+                    ['Dependency "{0}" referenced by statement "{1}" not found'
                      .format(dep_name, inst) for dep_name in deps - ids])
 
     # Check phases.
@@ -78,7 +78,7 @@ def verify_all_dependencies_exist(phases, errors):
         deps = set(phase.depends_on)
         if not deps <= ids:
             errors.extend(
-                ["Dependencies {0} referenced by phase \"{1}\" not found"
+                ['Dependencies {0} referenced by phase "{1}" not found'
                  .format(", ".join(_quote(dep) for dep in ids - deps),
                          phase_name)])
 
@@ -132,7 +132,7 @@ def verify_single_definition_cond_rule(statements, errors):
     for varname, insts in six.iteritems(cond_variables):
         if len(insts) > 1:
             errors.append(
-                "Conditional variable \"{0}\" defined by multiple statements: {1}"
+                'Conditional variable "{0}" defined by multiple statements: {1}'
                 .format(varname, ", ".join(_quote(str(inst)) for inst in insts)))
 
 
@@ -141,8 +141,8 @@ class CodeGenerationError(Exception):
         self.errors = errors
 
     def __str__(self):
-        return 'Errors encountered in input to code generator.\n' + \
-            '\n'.join(self.errors)
+        return "Errors encountered in input to code generator.\n" + \
+            "\n".join(self.errors)
 
 
 def verify_code(code):

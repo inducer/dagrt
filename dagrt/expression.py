@@ -370,7 +370,7 @@ def match(template, expression, free_variable_names=None,
 
     if len(records) > 1:
         from warnings import warn
-        warn("Matching\n\"{expr}\"\nto\n\"{template}\"\n"
+        warn('Matching\n"{expr}"\nto\n"{template}"\n'
              "is ambiguous - using first match".format(
                  expr=expression, template=template))
 
@@ -425,7 +425,7 @@ def parse(expr):
         if not isinstance(expr, var):
             return expr
         varname = expr.name
-        if varname.startswith('`') and varname.endswith('`'):
+        if varname.startswith("`") and varname.endswith("`"):
             return var(varname[1:-1])
         return expr
 

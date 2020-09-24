@@ -692,7 +692,7 @@ class DAGCode(RecordWithoutPickling):
     def __str__(self):
         lines = []
         for phase_name, phase in sorted(six.iteritems(self.phases)):
-            phase_title = "PHASE \"%s\"" % phase_name
+            phase_title = 'PHASE "%s"' % phase_name
             if phase_name == self.initial_phase:
                 phase_title += " (initial_phase)"
             lines.append(phase_title)
@@ -702,7 +702,7 @@ class DAGCode(RecordWithoutPickling):
                     [phase.id_to_stmt[root_id]],
                     phase.id_to_stmt, prefix="    "))
 
-            lines.append("    -> (next phase) \"%s\"" % phase.next_phase)
+            lines.append('    -> (next phase) "%s"' % phase.next_phase)
             lines.append("")
 
         return "\n".join(lines)
@@ -1166,7 +1166,7 @@ def get_dot_dependency_graph(code, use_stmt_ids=False):
 
     def additional_lines_hook():
         for i, (name, phase) in enumerate(six.iteritems(code.phases)):
-            yield "subgraph cluster_%d { label=\"%s\"" % (i, name)
+            yield 'subgraph cluster_%d { label="%s"' % (i, name)
             for dep in natsorted(phase.depends_on):
                 yield dep
             yield "}"

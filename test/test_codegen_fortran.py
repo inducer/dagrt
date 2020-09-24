@@ -50,8 +50,8 @@ def test_basic_codegen():
     generated method always returns 0."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        YieldState(id='return', time=0, time_id='final',
-                    expression=0, component_id='state',
+        YieldState(id="return", time=0, time_id="final",
+                    expression=0, component_id="state",
         depends_on=[]))
     cbuild.commit()
     code = create_DAGCode_with_steady_phase(cbuild.statements)
@@ -59,7 +59,7 @@ def test_basic_codegen():
             user_type_map={
                 "state": f.ArrayType(
                     (200,),
-                    f.BuiltinType('real (kind=8)'),)
+                    f.BuiltinType("real (kind=8)"),)
                 })
     print(codegen(code))
 
@@ -98,7 +98,7 @@ def test_arrays_and_linalg():
     code = create_DAGCode_with_steady_phase(cb.statements)
 
     codegen = f.CodeGenerator(
-            'arrays',
+            "arrays",
             function_registry=freg,
             user_type_map={},
             emit_instrumentation=True,

@@ -117,20 +117,20 @@ def test_match_with_pre_match_invalid_arg():
 
 def test_get_variables():
     from pymbolic import var
-    f = var('f')
-    x = var('x')
+    f = var("f")
+    x = var("x")
     from dagrt.utils import get_variables
-    assert get_variables(f(x)) == frozenset(['x'])
-    assert get_variables(f(t=x)) == frozenset(['x'])
+    assert get_variables(f(x)) == frozenset(["x"])
+    assert get_variables(f(t=x)) == frozenset(["x"])
 
 
 def test_get_variables_with_function_symbols():
     from pymbolic import var
-    f = var('f')
-    x = var('x')
+    f = var("f")
+    x = var("x")
     from dagrt.utils import get_variables
     assert get_variables(f(x), include_function_symbols=True) == \
-        frozenset(['f', 'x'])
+        frozenset(["f", "x"])
 
 
 def test_substitute():

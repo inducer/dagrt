@@ -27,7 +27,7 @@ def run_script_from_commandline():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("script", metavar="SCRIPT.PY")
-    parser.add_argument("args", metavar="ARG", nargs='*')
+    parser.add_argument("args", metavar="ARG", nargs="*")
     args = parser.parse_args()
 
     from os.path import abspath, dirname
@@ -41,4 +41,4 @@ def run_script_from_commandline():
         script_contents = s.read()
 
     namespace = {"__name__": "__main__"}
-    exec(compile(script_contents, args.script, 'exec'), namespace)
+    exec(compile(script_contents, args.script, "exec"), namespace)

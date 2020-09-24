@@ -28,7 +28,7 @@ import six
 from pytools import UniqueNameGenerator
 
 
-def wrap_line_base(line, level=0, width=80, indentation='    ',
+def wrap_line_base(line, level=0, width=80, indentation="    ",
                    pad_func=lambda string, amount: string,
                    lex_func=functools.partial(shlex.split, posix=False)):
     """
@@ -45,7 +45,7 @@ def wrap_line_base(line, level=0, width=80, indentation='    ',
     resulting_lines = []
     at_line_start = True
     indentation_len = len(level * indentation)
-    current_line = ''
+    current_line = ""
     padding_width = width - indentation_len
     for index, word in enumerate(tokens):
         has_next_word = index < len(tokens) - 1
@@ -54,7 +54,7 @@ def wrap_line_base(line, level=0, width=80, indentation='    ',
             next_len = indentation_len + len(current_line) + 1 + word_len
             if next_len < width or (not has_next_word and next_len == width):
                 # The word goes on the same line.
-                current_line += ' ' + word
+                current_line += " " + word
             else:
                 # The word goes on the next line.
                 resulting_lines.append(pad_func(current_line, padding_width))
@@ -105,7 +105,7 @@ def remove_redundant_blank_lines(lines):
 from string import ascii_letters, digits
 
 
-_ident_chars = set('_' + ascii_letters + digits)
+_ident_chars = set("_" + ascii_letters + digits)
 
 
 def make_identifier_from_name(name, default_identifier="dagrt_var"):

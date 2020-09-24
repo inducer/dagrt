@@ -35,8 +35,8 @@ import six
 
 
 def pad_python(line, width):
-    line += ' ' * (width - 1 - len(line))
-    line += '\\'
+    line += " " * (width - 1 - len(line))
+    line += "\\"
     return line
 
 
@@ -110,10 +110,10 @@ class _function_symbol_container(object):
 class PythonClassEmitter(PythonEmitter):
     """Emits code for a Python class."""
 
-    def __init__(self, class_name, superclass='object'):
+    def __init__(self, class_name, superclass="object"):
         super(PythonClassEmitter, self).__init__()
-        self('from __future__ import division, print_function')
-        self('class {cls}({superclass}):'.format(cls=class_name,
+        self("from __future__ import division, print_function")
+        self("class {cls}({superclass}):".format(cls=class_name,
                                                  superclass=superclass))
         self.indent()
 
@@ -130,10 +130,10 @@ class PythonNameManager(object):
     """
 
     def __init__(self):
-        self._local_map = KeyToUniqueNameMap(forced_prefix='local')
-        self._global_map = KeyToUniqueNameMap(forced_prefix='self.global_',
-                                              start={'<t>': 'self.t',
-                                                     '<dt>': 'self.dt'})
+        self._local_map = KeyToUniqueNameMap(forced_prefix="local")
+        self._global_map = KeyToUniqueNameMap(forced_prefix="self.global_",
+                                              start={"<t>": "self.t",
+                                                     "<dt>": "self.dt"})
         self.function_map = KeyToUniqueNameMap(forced_prefix="self._functions.")
 
     def name_global(self, name):
@@ -142,7 +142,7 @@ class PythonNameManager(object):
 
     def clear_locals(self):
         del self._local_map
-        self._local_map = KeyToUniqueNameMap(forced_prefix='local')
+        self._local_map = KeyToUniqueNameMap(forced_prefix="local")
 
     def name_local(self, local):
         """Return the identifier for a local variable."""
@@ -203,7 +203,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self._name_manager = PythonNameManager()
 
         self._expr_mapper = PythonExpressionMapper(
-                self._name_manager, function_registry, numpy='self._numpy')
+                self._name_manager, function_registry, numpy="self._numpy")
 
     def __call__(self, dag):
         from dagrt.codegen.analysis import verify_code
@@ -285,13 +285,13 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def _emit_constructor(self, dag):
         """Emit the constructor."""
-        emit = PythonFunctionEmitter('__init__', ('self', 'function_map'))
+        emit = PythonFunctionEmitter("__init__", ("self", "function_map"))
         # Perform necessary imports.
-        emit('import numpy')
-        emit('self._numpy = numpy')
+        emit("import numpy")
+        emit("self._numpy = numpy")
 
         # Make function symbols available
-        emit('self._functions = self._function_symbol_container()')
+        emit("self._functions = self._function_symbol_container()")
         for function_id in self._name_manager.function_map:
             py_function_id = self._name_manager.name_function(function_id)
             emit('{py_function_id} = function_map["{function_id}"]'
@@ -310,14 +310,14 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def _emit_set_up(self, dag):
         """Emit the set_up() method."""
-        emit = PythonFunctionEmitter('set_up',
-                                     ('self', 't_start', 'dt_start', 'context'))
-        emit('self.t = t_start')
-        emit('self.dt = dt_start')
+        emit = PythonFunctionEmitter("set_up",
+                                     ("self", "t_start", "dt_start", "context"))
+        emit("self.t = t_start")
+        emit("self.dt = dt_start")
         # Save all the context components.
         for component_id in self._name_manager.get_global_ids():
             component = self._name_manager.name_global(component_id)
-            if not component_id.startswith('<state>'):
+            if not component_id.startswith("<state>"):
                 continue
             component_id = component_id[7:]
             emit('{component} = context.get("{component_id}")'.format(
@@ -329,7 +329,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self._class_emitter.incorporate(emit)
 
     def _emit_run(self):
-        emit = PythonFunctionEmitter('run', ('self', 't_end=None', 'max_steps=None'))
+        emit = PythonFunctionEmitter("run", ("self", "t_end=None", "max_steps=None"))
         emit("""
             n_steps = 0
             while True:
@@ -360,7 +360,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self._class_emitter.incorporate(emit)
 
     def _emit_run_single_step(self):
-        emit = PythonFunctionEmitter('run_single_step', ('self',))
+        emit = PythonFunctionEmitter("run_single_step", ("self",))
 
         emit("""
             self.next_phase, phase_func = (
@@ -381,7 +381,7 @@ class CodeGenerator(StructuredCodeGenerator):
         return self._class_emitter.get()
 
     def emit_def_begin(self, name):
-        self._emitter = PythonFunctionEmitter('phase_' + name, ('self',))
+        self._emitter = PythonFunctionEmitter("phase_" + name, ("self",))
         self._name_manager.clear_locals()
 
     def emit_def_end(self):
@@ -390,7 +390,7 @@ class CodeGenerator(StructuredCodeGenerator):
         del self._emitter
 
     def emit_if_begin(self, expr):
-        self._emit('if {expr}:'.format(expr=self._expr(expr)))
+        self._emit("if {expr}:".format(expr=self._expr(expr)))
         self._emitter.indent()
 
     def emit_if_end(self):
@@ -398,11 +398,11 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def emit_else_begin(self):
         self._emitter.dedent()
-        self._emit('else:')
+        self._emit("else:")
         self._emitter.indent()
 
     def emit_return(self):
-        self._emit('return')
+        self._emit("return")
         # Ensure that Python recognizes this method as a generator function by
         # adding a yield statement. Otherwise, calling methods that do not
         # yield any values may result in raising a naked StopIteration instead
@@ -412,7 +412,7 @@ class CodeGenerator(StructuredCodeGenerator):
         # TODO: Python 3.3+ has "yield from ()" which results in slightly less
         # awkward syntax.
         if not self._has_yield_inst:
-            self._emit('yield')
+            self._emit("yield")
 
     # {{{ statements
 
@@ -436,7 +436,7 @@ class CodeGenerator(StructuredCodeGenerator):
             subscript_code = ""
 
         self._emit(
-                '{name}{sub} = {expr}'
+                "{name}{sub} = {expr}"
                 .format(
                     name=self._name_manager[inst.assignee],
                     sub=subscript_code,
@@ -459,7 +459,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         from pymbolic import var
         self._emit(
-                '{assign_code}{expr}'
+                "{assign_code}{expr}"
                 .format(
                     assign_code=assign_code,
                     expr=self._expr_mapper.map_generic_call(
@@ -468,30 +468,30 @@ class CodeGenerator(StructuredCodeGenerator):
                         inst.kw_parameters)))
 
     def emit_inst_YieldState(self, inst):
-        self._emit('yield self.StateComputed(t={t}, time_id={time_id}, '
-                   'component_id={component_id}, '
-                   'state_component={state_component})'.format(
+        self._emit("yield self.StateComputed(t={t}, time_id={time_id}, "
+                   "component_id={component_id}, "
+                   "state_component={state_component})".format(
                        t=self._expr(inst.time),
                        time_id=repr(inst.time_id),
                        component_id=repr(inst.component_id),
                        state_component=self._expr(inst.expression)))
 
     def emit_inst_Raise(self, inst):
-        self._emit('raise self.StepError({condition}, {message})'.format(
+        self._emit("raise self.StepError({condition}, {message})".format(
                    condition=repr(inst.error_condition.__name__),
                    message=repr(inst.error_message)))
         if not self._has_yield_inst:
-            self._emit('yield')
+            self._emit("yield")
 
     def emit_inst_FailStep(self, inst):
-        self._emit('raise self.FailStepException()')
+        self._emit("raise self.FailStepException()")
         if not self._has_yield_inst:
-            self._emit('yield')
+            self._emit("yield")
 
     def emit_inst_SwitchPhase(self, inst):
-        assert '\'' not in inst.next_phase
-        self._emit('raise self.TransitionEvent(\'' + inst.next_phase + '\')')
+        assert "'" not in inst.next_phase
+        self._emit('raise self.TransitionEvent("' + inst.next_phase + '")')
         if not self._has_yield_inst:
-            self._emit('yield')
+            self._emit("yield")
 
     # }}}
