@@ -38,18 +38,18 @@ from utils import (  # noqa
         create_DAGCode_with_steady_phase)
 
 
-@pytest.mark.parametrize(('obj, len_'), [(np.ones(0), 0),
+@pytest.mark.parametrize(("obj, len_"), [(np.ones(0), 0),
                                          (np.ones(1), 1),
                                          (np.ones(2), 2),
                                          (6.0, 1)])
 def test_len(python_method_impl, obj, len_):
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        Assign(id='assign_1', assignee='x', assignee_subscript=(),
-                         expression=var('<builtin>len')(obj)),
-        YieldState(id='return', time=0, time_id='final',
-                   expression=var('x'), component_id='<state>',
-                   depends_on=['assign_1']))
+        Assign(id="assign_1", assignee="x", assignee_subscript=(),
+                         expression=var("<builtin>len")(obj)),
+        YieldState(id="return", time=0, time_id="final",
+                   expression=var("x"), component_id="<state>",
+                   depends_on=["assign_1"]))
     cbuild.commit()
     code = create_DAGCode_with_steady_phase(cbuild.statements)
 
@@ -57,15 +57,15 @@ def test_len(python_method_impl, obj, len_):
     assert result == len_
 
 
-@pytest.mark.parametrize(('value'), [0, float('nan')])
+@pytest.mark.parametrize(("value"), [0, float("nan")])
 def test_isnan(python_method_impl, value):
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        Assign(id='assign_1', assignee='x', assignee_subscript=(),
-                         expression=var('<builtin>isnan')(value)),
-        YieldState(id='return', time=0, time_id='final',
-                   expression=var('x'), component_id='<state>',
-                   depends_on=['assign_1']))
+        Assign(id="assign_1", assignee="x", assignee_subscript=(),
+                         expression=var("<builtin>isnan")(value)),
+        YieldState(id="return", time=0, time_id="final",
+                   expression=var("x"), component_id="<state>",
+                   depends_on=["assign_1"]))
     cbuild.commit()
     code = create_DAGCode_with_steady_phase(cbuild.statements)
 
@@ -73,11 +73,11 @@ def test_isnan(python_method_impl, value):
     assert result == np.isnan(value)
 
 
-@pytest.mark.parametrize(('order', 'norm_suffix'), [
-    (2, '2'),
-    (np.inf, 'inf'),
+@pytest.mark.parametrize(("order", "norm_suffix"), [
+    (2, "2"),
+    (np.inf, "inf"),
     ])
-@pytest.mark.parametrize(('test_vector'),
+@pytest.mark.parametrize(("test_vector"),
                          [6, 1j, np.array([-3]), np.array([-3, 4])])
 def test_norm(python_method_impl, order, norm_suffix, test_vector):
 
@@ -88,15 +88,15 @@ def test_norm(python_method_impl, order, norm_suffix, test_vector):
 
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        Assign(id='assign_1', assignee='x', assignee_subscript=(),
+        Assign(id="assign_1", assignee="x", assignee_subscript=(),
                          expression=test_vector),
-        Assign(id='assign_2', assignee='n', assignee_subscript=(),
+        Assign(id="assign_2", assignee="n", assignee_subscript=(),
                          expression=(
-                             var('<builtin>norm_%s' % norm_suffix)(var('x'))),
-                         depends_on=['assign_1']),
-        YieldState(id='return', time=0, time_id='final',
-                   expression=var('n'), component_id='<state>',
-                   depends_on=['assign_2']))
+                             var("<builtin>norm_%s" % norm_suffix)(var("x"))),
+                         depends_on=["assign_1"]),
+        YieldState(id="return", time=0, time_id="final",
+                   expression=var("n"), component_id="<state>",
+                   depends_on=["assign_2"]))
     cbuild.commit()
     code = create_DAGCode_with_steady_phase(cbuild.statements)
 
@@ -104,16 +104,16 @@ def test_norm(python_method_impl, order, norm_suffix, test_vector):
     assert np.allclose(result, true_norm(test_vector))
 
 
-@pytest.mark.parametrize(('x, y'), [(1.0, 1.0j), (1.0j, 1.0),
+@pytest.mark.parametrize(("x, y"), [(1.0, 1.0j), (1.0j, 1.0),
                                     (1.0, 1.0), (1.0j, 1.0j)])
 def test_dot_product(python_method_impl, x, y):
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        Assign(id='assign_1', assignee='x', assignee_subscript=(),
-                         expression=var('<builtin>dot_product')(x, y)),
-        YieldState(id='return', time=0, time_id='final',
-                   expression=var('x'), component_id='<state>',
-                   depends_on=['assign_1']))
+        Assign(id="assign_1", assignee="x", assignee_subscript=(),
+                         expression=var("<builtin>dot_product")(x, y)),
+        YieldState(id="return", time=0, time_id="final",
+                   expression=var("x"), component_id="<state>",
+                   depends_on=["assign_1"]))
     cbuild.commit()
     code = create_DAGCode_with_steady_phase(cbuild.statements)
 

@@ -45,19 +45,19 @@ def test_circular_dependency_detection():
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         Assign(
-            id='assign',
-            assignee='<state>y',
+            id="assign",
+            assignee="<state>y",
             assignee_subscript=(),
             expression=1,
-            depends_on=['assign2']),
-        Assign(id='assign2',
-            assignee='<state>y',
+            depends_on=["assign2"]),
+        Assign(id="assign2",
+            assignee="<state>y",
             assignee_subscript=(),
             expression=1,
-            depends_on=['assign']),
-        YieldState(id='return', time=0, time_id='final',
-            expression=var('<state>y'), component_id='<state>',
-        depends_on=['assign']))
+            depends_on=["assign"]),
+        YieldState(id="return", time=0, time_id="final",
+            expression=var("<state>y"), component_id="<state>",
+        depends_on=["assign"]))
     cbuild.commit()
     code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
@@ -70,11 +70,11 @@ def test_missing_dependency_detection():
     """Check that the code generator detects that there is a missing
     dependency."""
     statements = set([
-        Assign(id='assign', assignee='<state>y', assignee_subscript=(),
-            expression=1, depends_on=['assign2']),
-        YieldState(id='return', time=0, time_id='final',
-            expression=var('<state>y'), component_id='<state>',
-            depends_on=['assign'])
+        Assign(id="assign", assignee="<state>y", assignee_subscript=(),
+            expression=1, depends_on=["assign2"]),
+        YieldState(id="return", time=0, time_id="final",
+            expression=var("<state>y"), component_id="<state>",
+            depends_on=["assign"])
         ])
     code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
@@ -100,22 +100,22 @@ def test_cond_detection():
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         Assign(
-            id='assign1',
-            assignee='<cond>c',
+            id="assign1",
+            assignee="<cond>c",
             assignee_subscript=(),
             expression=1,
             depends_on=[]),
         Assign(
-            id='assign2',
-            assignee='<cond>c',
+            id="assign2",
+            assignee="<cond>c",
             assignee_subscript=(),
             expression=2,
-            depends_on=['assign1']),
-        YieldState(id='return',
-            time=0, time_id='final',
+            depends_on=["assign1"]),
+        YieldState(id="return",
+            time=0, time_id="final",
             expression=1,
-            component_id='<state>',
-            depends_on=['assign2']))
+            component_id="<state>",
+            depends_on=["assign2"]))
     cbuild.commit()
     code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
@@ -128,9 +128,9 @@ def test_python_line_wrapping():
     """Check that the line wrapper breaks a line up correctly."""
     from dagrt.codegen.python import wrap_line
     line = "x += str('' + x + y + zzzzzzzzz)"
-    result = wrap_line(line, level=1, width=14, indentation='    ')
-    assert result == ['x +=     \\', "    str(''\\", '    + x +\\',
-                      '    y +  \\', '    zzzzzzzzz)']
+    result = wrap_line(line, level=1, width=14, indentation="    ")
+    assert result == ["x +=     \\", "    str(''\\", "    + x +\\",
+                      "    y +  \\", "    zzzzzzzzz)"]
 
 
 def test_line_wrapping_line_with_string():
@@ -146,12 +146,12 @@ def test_line_wrapping_line_with_string():
 def test_KeyToUniqueNameMap():
     from dagrt.codegen.utils import KeyToUniqueNameMap
 
-    map_prefilled = KeyToUniqueNameMap(start={'a': 'b'})
-    assert map_prefilled.get_or_make_name_for_key('a') == 'b'
-    assert map_prefilled.get_or_make_name_for_key('b') != 'b'
+    map_prefilled = KeyToUniqueNameMap(start={"a": "b"})
+    assert map_prefilled.get_or_make_name_for_key("a") == "b"
+    assert map_prefilled.get_or_make_name_for_key("b") != "b"
 
-    map_with_prefix = KeyToUniqueNameMap(forced_prefix='prefix')
-    assert map_with_prefix.get_or_make_name_for_key('a') == 'prefixa'
+    map_with_prefix = KeyToUniqueNameMap(forced_prefix="prefix")
+    assert map_with_prefix.get_or_make_name_for_key("a") == "prefixa"
 
 
 if __name__ == "__main__":

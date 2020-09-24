@@ -46,14 +46,14 @@ def test_basic_codegen():
     generated method always returns 0."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        YieldState(id='return', time=0, time_id='final',
-                    expression=0, component_id='<state>',
+        YieldState(id="return", time=0, time_id="final",
+                    expression=0, component_id="<state>",
         depends_on=[]))
     cbuild.commit()
     code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
-    codegen = PythonCodeGenerator(class_name='Method')
+    codegen = PythonCodeGenerator(class_name="Method")
     print(codegen(code))
     Method = codegen.get_class(code)  # noqa
     method = Method({})
@@ -61,11 +61,11 @@ def test_basic_codegen():
     hist = [s for s in method.run(max_steps=2)]
     assert len(hist) == 3
     assert isinstance(hist[0], method.StepCompleted)
-    assert hist[0].current_phase == 'init'
+    assert hist[0].current_phase == "init"
     assert isinstance(hist[1], method.StateComputed)
     assert hist[1].state_component == 0
     assert isinstance(hist[2], method.StepCompleted)
-    assert hist[2].current_phase == 'main'
+    assert hist[2].current_phase == "main"
 
 
 def test_basic_conditional_codegen():
@@ -73,24 +73,24 @@ def test_basic_conditional_codegen():
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         Assign(
-            id='then_branch',
-            assignee='<state>y', assignee_subscript=(),
+            id="then_branch",
+            assignee="<state>y", assignee_subscript=(),
             expression=1, condition=True),
-        Assign(id='else_branch',
-            assignee='<state>y', assignee_subscript=(),
+        Assign(id="else_branch",
+            assignee="<state>y", assignee_subscript=(),
             expression=0, condition=False),
-        Nop(id='branch', depends_on=['then_branch', 'else_branch']),
-        YieldState(id='return', time=0, time_id='final',
-            expression=var('<state>y'), component_id='<state>',
-        depends_on=['branch']))
+        Nop(id="branch", depends_on=["then_branch", "else_branch"]),
+        YieldState(id="return", time=0, time_id="final",
+            expression=var("<state>y"), component_id="<state>",
+        depends_on=["branch"]))
     cbuild.commit()
     code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
-    codegen = PythonCodeGenerator(class_name='Method')
+    codegen = PythonCodeGenerator(class_name="Method")
     Method = codegen.get_class(code)  # noqa
     method = Method({})
-    method.set_up(t_start=0, dt_start=0, context={'y': 6})
+    method.set_up(t_start=0, dt_start=0, context={"y": 6})
     hist = [s for s in method.run(max_steps=2)]
     assert len(hist) == 3
     assert isinstance(hist[1], method.StateComputed)
@@ -103,25 +103,25 @@ def test_basic_assign_rhs_codegen():
     properly."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        Assign(id='assign_rhs1',
-                         assignee='<state>y',
+        Assign(id="assign_rhs1",
+                         assignee="<state>y",
                          assignee_subscript=(),
-                         expression=var('y')(t=var('<t>')),
+                         expression=var("y")(t=var("<t>")),
                          depends_on=[]),
-        Assign(id='assign_rhs2',
-                         assignee='<state>y',
+        Assign(id="assign_rhs2",
+                         assignee="<state>y",
                          assignee_subscript=(),
-                         expression=var('yy')(t=var('<t>'), y=var('<state>y')),
-                         depends_on=['assign_rhs1']),
-        YieldState(id='return', time=0, time_id='final',
-            expression=var('<state>y'), component_id='<state>',
-            depends_on=['assign_rhs2'])
+                         expression=var("yy")(t=var("<t>"), y=var("<state>y")),
+                         depends_on=["assign_rhs1"]),
+        YieldState(id="return", time=0, time_id="final",
+            expression=var("<state>y"), component_id="<state>",
+            depends_on=["assign_rhs2"])
         )
     cbuild.commit()
     code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
-    codegen = PythonCodeGenerator(class_name='Method')
+    codegen = PythonCodeGenerator(class_name="Method")
     Method = codegen.get_class(code)  # noqa
 
     def y(t):
@@ -130,8 +130,8 @@ def test_basic_assign_rhs_codegen():
     def yy(t, y):
         return y + 6
 
-    method = Method({'y': y, 'yy': yy})
-    method.set_up(t_start=0, dt_start=0, context={'y': 0})
+    method = Method({"y": y, "yy": yy})
+    method.set_up(t_start=0, dt_start=0, context={"y": 0})
     hist = [s for s in method.run(max_steps=2)]
     assert len(hist) == 3
     assert isinstance(hist[1], method.StateComputed)
@@ -197,19 +197,19 @@ def test_local_name_distinctness():
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         Assign(
-            id='assign_y^',
-            assignee='y^', assignee_subscript=(), expression=1),
+            id="assign_y^",
+            assignee="y^", assignee_subscript=(), expression=1),
         Assign(
-            id='assign_y*',
-            assignee='y*', assignee_subscript=(), expression=0),
-        YieldState(id='return', time=0, time_id='final',
-            expression=var('y^') + var('y*'),
-            component_id='y', depends_on=['assign_y^', 'assign_y*']))
+            id="assign_y*",
+            assignee="y*", assignee_subscript=(), expression=0),
+        YieldState(id="return", time=0, time_id="final",
+            expression=var("y^") + var("y*"),
+            component_id="y", depends_on=["assign_y^", "assign_y*"]))
     cbuild.commit()
     code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
-    codegen = PythonCodeGenerator(class_name='Method')
+    codegen = PythonCodeGenerator(class_name="Method")
     Method = codegen.get_class(code)  # noqa
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={})
@@ -224,19 +224,19 @@ def test_global_name_distinctness():
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
         Assign(
-            id='assign_y^',
-            assignee='<p>y^', assignee_subscript=(), expression=1),
+            id="assign_y^",
+            assignee="<p>y^", assignee_subscript=(), expression=1),
         Assign(
-            id='assign_y*',
-            assignee='<p>y*', assignee_subscript=(), expression=0),
-        YieldState(id='return', time=0, time_id='final',
-            expression=var('<p>y^') + var('<p>y*'),
-            component_id='y', depends_on=['assign_y^', 'assign_y*']))
+            id="assign_y*",
+            assignee="<p>y*", assignee_subscript=(), expression=0),
+        YieldState(id="return", time=0, time_id="final",
+            expression=var("<p>y^") + var("<p>y*"),
+            component_id="y", depends_on=["assign_y^", "assign_y*"]))
     cbuild.commit()
     code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
-    codegen = PythonCodeGenerator(class_name='Method')
+    codegen = PythonCodeGenerator(class_name="Method")
     Method = codegen.get_class(code)  # noqa
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={})
@@ -250,17 +250,17 @@ def test_function_name_distinctness():
     """Test whether the code generator gives functions distinct names."""
     cbuild = RawCodeBuilder()
     cbuild.add_and_get_ids(
-        YieldState(id='return', time=0, time_id='final',
-            expression=var('<func>y^')() + var('<func>y*')(),
-            component_id='y'))
+        YieldState(id="return", time=0, time_id="final",
+            expression=var("<func>y^")() + var("<func>y*")(),
+            component_id="y"))
     cbuild.commit()
     code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=cbuild.statements)
-    codegen = PythonCodeGenerator(class_name='Method')
+    codegen = PythonCodeGenerator(class_name="Method")
     Method = codegen.get_class(code)  # noqa
-    method = Method({'<func>y^': lambda: 0,
-                     '<func>y*': lambda: 1})
+    method = Method({"<func>y^": lambda: 0,
+                     "<func>y*": lambda: 1})
     method.set_up(t_start=0, dt_start=0, context={})
     hist = list(method.run(max_steps=2))
     assert len(hist) == 3
@@ -275,7 +275,7 @@ def test_switch_phases(python_method_impl):
         builder_1(var("<state>x"), 1)
         builder_1.switch_phase("state_2")
     with CodeBuilder(name="state_2") as builder_2:
-        builder_2.yield_state(var("<state>x"), 'x', 0, 'final')
+        builder_2.yield_state(var("<state>x"), "x", 0, "final")
 
     code = DAGCode(
         phases={
@@ -291,7 +291,7 @@ def test_switch_phases(python_method_impl):
         initial_phase="state_1")
     from utils import execute_and_return_single_result
     result = execute_and_return_single_result(python_method_impl, code,
-                                              initial_context={'x': 0},
+                                              initial_context={"x": 0},
                                               max_steps=2)
     assert result == 1
 

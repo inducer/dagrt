@@ -49,10 +49,10 @@ def get_variables(expr, include_function_symbols=False):
 
 def is_state_variable(var):
     """Check if the given name corresponds to a state variable."""
-    if var in ('<t>', '<dt>'):
+    if var in ("<t>", "<dt>"):
         return True
-    elif (var.startswith('<state>')
-            or var.startswith('<p>')
+    elif (var.startswith("<state>")
+            or var.startswith("<p>")
             or var.startswith("<ret_time_id>")
             or var.startswith("<ret_time>")
             or var.startswith("<ret_state>")
@@ -218,7 +218,7 @@ def run_fortran(sources, fortran_options=None, fortran_libraries=None):
         if stderr_data:
             raise RuntimeError(
                     "Fortran code has non-empty stderr:\n"
-                    + stderr_data.decode('ascii'))
+                    + stderr_data.decode("ascii"))
 
         return p.returncode, stdout_data, stderr_data
 
