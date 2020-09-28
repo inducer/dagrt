@@ -40,7 +40,7 @@ Pylint:
   - export PY_EXE=python3
   - EXTRA_INSTALL="numpy"
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-pylint.sh
-  - ". ./prepare-and-run-pylint.sh dagrt test/test_*.py"
+  - . ./prepare-and-run-pylint.sh "$CI_PROJECT_NAME" test/test_*.py
   tags:
   - python3
   except:
@@ -49,7 +49,7 @@ Pylint:
 Flake8:
   script:
   - curl -L -O -k https://gitlab.tiker.net/inducer/ci-support/raw/master/prepare-and-run-flake8.sh
-  - ". ./prepare-and-run-flake8.sh dagrt test"
+  - . ./prepare-and-run-flake8.sh "$CI_PROJECT_NAME" test examples
   tags:
   - python3
   except:
