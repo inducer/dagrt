@@ -171,7 +171,7 @@ class KeyToUniqueNameMap:
         return self._generator(name)
 
     def __iter__(self):
-        return self._dict.keys()
+        return iter(self._dict.keys())
 
 
 def remove_common_indentation(text):
