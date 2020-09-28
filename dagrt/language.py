@@ -1,5 +1,3 @@
-from __future__ import division, with_statement
-
 __copyright__ = """
 Copyright (C) 2013 Andreas Kloeckner
 Copyright (C) 2014 Matt Wala
@@ -35,8 +33,9 @@ from dagrt.utils import get_variables
 from contextlib import contextmanager
 
 import logging
-import six
-import six.moves
+
+from sys import intern
+
 
 logger = logging.getLogger(__name__)
 
@@ -166,7 +165,7 @@ def _stringify_statements(roots, id_to_stmt, prefix=""):
             print_stmt(id_to_stmt[dep_id])
 
         lines.append(
-                "%s{%s} %s" % (
+                "{}{{{}}} {}".format(
                     prefix, stmt.id, str(stmt).replace("\n", "\n        ")))
 
     for root_stmt in roots:
@@ -187,7 +186,7 @@ class Statement(StatementBase):
 
 
 class Nop(NopBase):
-    exec_method = six.moves.intern("exec_Nop")
+    exec_method = intern("exec_Nop")
 
 
 # {{{ assignments
@@ -237,7 +236,7 @@ class Assign(Statement, AssignBase):
         else:
             rhs = kwargs.pop("rhs")
 
-        super(Assign, self).__init__(
+        super().__init__(
                 lhs=lhs,
                 rhs=rhs,
                 loops=loops,
@@ -269,7 +268,7 @@ class Assign(Statement, AssignBase):
         return self.rhs
 
     def map_expressions(self, mapper, include_lhs=True):
-        return (super(Assign, self)
+        return (super()
                 .map_expressions(mapper, include_lhs=include_lhs)
                 .copy(
                     loops=[
@@ -277,7 +276,7 @@ class Assign(Statement, AssignBase):
                         for ident, start, end in self.loops]))
 
     def __str__(self):
-        result = super(Assign, self).__str__()
+        result = super().__str__()
 
         for ident, start, end in self.loops:
             result += " [{ident}={start}..{end}]".format(
@@ -329,7 +328,7 @@ class AssignImplicit(AssignmentBase):
                              solver_id=solver_id,
                              **kwargs)
 
-    exec_method = six.moves.intern("exec_AssignImplicit")
+    exec_method = intern("exec_AssignImplicit")
 
     def get_written_variables(self):
         return frozenset(self.assignees)
@@ -344,7 +343,7 @@ class AssignImplicit(AssignmentBase):
         def flatten(iter_arg):
             return chain(*list(iter_arg))
 
-        variables = super(AssignImplicit, self).get_read_variables()
+        variables = super().get_read_variables()
         variables |= set(flatten(get_variables(expr) for expr in self.expressions))
         variables -= set(self.solve_variables)
         variables |= set(flatten(get_variables(expr) for expr
@@ -361,7 +360,7 @@ class AssignImplicit(AssignmentBase):
         else:
             assignees = self.assignees
 
-        return (super(AssignImplicit, self)
+        return (super()
                 .map_expressions(mapper, include_lhs=include_lhs)
                 .copy(
                     assignees=assignees,
@@ -421,7 +420,7 @@ class AssignFunctionCall(AssignmentBase):
         if kw_parameters is None:
             kw_parameters = {}
 
-        super(AssignFunctionCall, self).__init__(
+        super().__init__(
                 assignees=assignees,
                 function_id=function_id,
                 parameters=parameters,
@@ -432,7 +431,7 @@ class AssignFunctionCall(AssignmentBase):
         return frozenset(self.assignees)
 
     def get_read_variables(self):
-        result = super(AssignFunctionCall, self).get_read_variables()
+        result = super().get_read_variables()
         for par in self.parameters:
             result |= get_variables(par)
         for par in self.kw_parameters.values():
@@ -459,7 +458,7 @@ class AssignFunctionCall(AssignmentBase):
         else:
             assignees = self.assignees
 
-        return (super(AssignFunctionCall, self)
+        return (super()
                 .map_expressions(mapper, include_lhs=include_lhs)
                 .copy(
                     assignees=assignees,
@@ -469,7 +468,7 @@ class AssignFunctionCall(AssignmentBase):
 
     def __str__(self):
         pars = list(str(p) for p in self.parameters) + [
-                "%s=%s" % (name, value)
+                f"{name}={value}"
                 for name, value in sorted(self.kw_parameters.items())]
 
         result = "{assignees} <- {func_id}({pars}){cond}".format(
@@ -502,12 +501,12 @@ class YieldState(Statement):
 
     def get_read_variables(self):
         return (
-                super(YieldState, self).get_read_variables()
+                super().get_read_variables()
                 | get_variables(self.expression)
                 | get_variables(self.time))
 
     def map_expressions(self, mapper, include_lhs=True):
-        return (super(YieldState, self)
+        return (super()
                 .map_expressions(mapper, include_lhs=include_lhs)
                 .copy(expression=mapper(self.expression),
                       time=mapper(self.time)))
@@ -521,7 +520,7 @@ class YieldState(Statement):
                     component_id=self.component_id,
                     cond=self._condition_printing_suffix()))
 
-    exec_method = six.moves.intern("exec_YieldState")
+    exec_method = intern("exec_YieldState")
 
 
 class Raise(Statement):
@@ -552,7 +551,7 @@ class Raise(Statement):
         return "Raise {error}{cond}".format(error=error,
                                             cond=self._condition_printing_suffix())
 
-    exec_method = six.moves.intern("exec_Raise")
+    exec_method = intern("exec_Raise")
 
 
 class SwitchPhase(Statement):
@@ -572,7 +571,7 @@ class SwitchPhase(Statement):
         return "Transition to {state}{cond}".format(state=self.next_phase,
             cond=self._condition_printing_suffix())
 
-    exec_method = six.moves.intern("exec_SwitchPhase")
+    exec_method = intern("exec_SwitchPhase")
 
 
 class FailStep(Statement):
@@ -584,9 +583,9 @@ class FailStep(Statement):
         return frozenset()
 
     def __str__(self):
-        return "FailStep{cond}".format(cond=self._condition_printing_suffix())
+        return f"FailStep{self._condition_printing_suffix()}"
 
-    exec_method = six.moves.intern("exec_FailStep")
+    exec_method = intern("exec_FailStep")
 
 # }}}
 
@@ -617,7 +616,7 @@ class ExecutionPhase(RecordWithoutPickling):
     """
 
     def __init__(self, name, next_phase, statements):
-        super(ExecutionPhase, self).__init__(
+        super().__init__(
                 name=name,
                 next_phase=next_phase,
                 statements=statements)
@@ -626,7 +625,7 @@ class ExecutionPhase(RecordWithoutPickling):
     @memoize_method
     def depends_on(self):
         # Get statement IDs which no other statement depends on.
-        result = set(stmt.id for stmt in self.statements)
+        result = {stmt.id for stmt in self.statements}
         for stmt in self.statements:
             result -= set(stmt.depends_on)
         return result
@@ -634,8 +633,8 @@ class ExecutionPhase(RecordWithoutPickling):
     @property
     @memoize_method
     def id_to_stmt(self):
-        return dict((stmt.id, stmt)
-                for stmt in self.statements)
+        return {stmt.id: stmt
+                for stmt in self.statements}
 
 
 class DAGCode(RecordWithoutPickling):
@@ -670,13 +669,13 @@ class DAGCode(RecordWithoutPickling):
     def get_stmt_id_generator(self):
         from pytools import UniqueNameGenerator
         return UniqueNameGenerator(
-                set(stmt.id
-                    for phase in six.itervalues(self.phases)
-                    for stmt in phase.statements))
+                {stmt.id
+                    for phase in self.phases.values()
+                    for stmt in phase.statements})
 
     def existing_var_names(self):
         result = set()
-        for state in six.itervalues(self.phases):
+        for state in self.phases.values():
             for stmt in state.statements:
                 result.update(stmt.get_written_variables())
                 result.update(stmt.get_read_variables())
@@ -691,7 +690,7 @@ class DAGCode(RecordWithoutPickling):
 
     def __str__(self):
         lines = []
-        for phase_name, phase in sorted(six.iteritems(self.phases)):
+        for phase_name, phase in sorted(self.phases.items()):
             phase_title = 'PHASE "%s"' % phase_name
             if phase_name == self.initial_phase:
                 phase_title += " (initial_phase)"
@@ -713,7 +712,7 @@ class DAGCode(RecordWithoutPickling):
 
 # {{{ interpreter foundation
 
-class ExecutionController(object):
+class ExecutionController:
 
     def __init__(self, code):
         self.code = code
@@ -775,7 +774,7 @@ class ExecutionController(object):
 
             stmt = id_to_stmt[stmt_id]
 
-            logger.debug("execution trace: [%s] %s" % (
+            logger.debug("execution trace: [{}] {}".format(
                 stmt.id, str(stmt).replace("\n", " | ")))
 
             if not target.evaluate_condition(stmt):
@@ -795,7 +794,7 @@ class ExecutionController(object):
 
 # {{{ code building utility
 
-class CodeBuilder(object):
+class CodeBuilder:
     """
     .. attribute:: name
 
@@ -862,7 +861,7 @@ class CodeBuilder(object):
         # Used to implement if/else
         self._last_if_block_conditional_expression = None
         # Set of seen variables
-        self._seen_var_names = set([self._EXECUTION_STATE])
+        self._seen_var_names = {self._EXECUTION_STATE}
 
     def _add_statement(self, stmt):
         stmt_id = self.next_statement_id()
@@ -895,9 +894,9 @@ class CodeBuilder(object):
         # variables have happened before a non-assignment.
         if is_non_assignment:
             from dagrt.utils import is_state_variable
-            read_variables |= set(
+            read_variables |= {
                     var for var in self._seen_var_names if
-                    is_state_variable(var))
+                    is_state_variable(var)}
             written_variables.add(self._EXECUTION_STATE)
 
         depends_on = set()
@@ -1165,15 +1164,14 @@ def get_dot_dependency_graph(code, use_stmt_ids=False):
     from pymbolic.imperative.utils import get_dot_dependency_graph
 
     def additional_lines_hook():
-        for i, (name, phase) in enumerate(six.iteritems(code.phases)):
+        for i, (name, phase) in enumerate(code.phases.items()):
             yield 'subgraph cluster_%d { label="%s"' % (i, name)
-            for dep in natsorted(phase.depends_on):
-                yield dep
+            yield from natsorted(phase.depends_on)
             yield "}"
 
     statements = [
             stmt if use_stmt_ids else stmt.copy(id=stmt.id)
-            for phase_name, phase in six.iteritems(code.phases)
+            for phase_name, phase in code.phases.items()
             for stmt in natsorted(phase.statements, key=lambda stmt: stmt.id)]
 
     return get_dot_dependency_graph(

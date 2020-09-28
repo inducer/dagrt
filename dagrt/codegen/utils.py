@@ -24,7 +24,6 @@ THE SOFTWARE.
 
 import functools
 import shlex
-import six
 from pytools import UniqueNameGenerator
 
 
@@ -116,7 +115,7 @@ def make_identifier_from_name(name, default_identifier="dagrt_var"):
     return result
 
 
-class _KeyTranslatingUniqueNameGeneratorWrapper(object):
+class _KeyTranslatingUniqueNameGeneratorWrapper:
 
     def __init__(self, generator, translate):
         self._generator = generator
@@ -129,7 +128,7 @@ class _KeyTranslatingUniqueNameGeneratorWrapper(object):
         return self._generator(self._translate(key))
 
 
-class KeyToUniqueNameMap(object):
+class KeyToUniqueNameMap:
     """Maps keys to unique names that are created on-the-fly.
 
     Before a unique name is created, a base name is first created. The base name
@@ -150,7 +149,7 @@ class KeyToUniqueNameMap(object):
                 raise TypeError("passing 'forced_prefix' is not allowed when "
                         "passing a pre-existing name generator")
 
-        for existing_name in six.itervalues(start):
+        for existing_name in start.values():
             if existing_name.startswith(name_generator.forced_prefix):
                 name_generator.add_name(existing_name)
 
@@ -172,7 +171,7 @@ class KeyToUniqueNameMap(object):
         return self._generator(name)
 
     def __iter__(self):
-        return six.iterkeys(self._dict)
+        return self._dict.keys()
 
 
 def remove_common_indentation(text):

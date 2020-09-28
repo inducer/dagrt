@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 """Example of implementing a simple adaptive Runge-Kutta method."""
-from __future__ import division
 
 __copyright__ = "Copyright (C) 2015 Matt Wala"
 
@@ -104,7 +103,7 @@ def main():
 
     for tol in tolerances:
         method = adaptive_rk_method(tol)
-        AdaptiveRK = codegen.get_class(method)
+        AdaptiveRK = codegen.get_class(method)  # noqa: N806
         solver = AdaptiveRK({"<func>g": rhs})
         solver.set_up(t_start=1.0, dt_start=0.1, context={"y": np.array([1., 3.])})
         for evt in solver.run(t_end=10.0):
@@ -114,7 +113,7 @@ def main():
     print("Tolerance\tError")
     print("-" * 25)
     for tol, error in zip(tolerances, errors):
-        print("{:.2e}\t{:.2e}".format(tol, error))
+        print(f"{tol:.2e}\t{error:.2e}")
 
 
 if __name__ == "__main__":

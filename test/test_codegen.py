@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-from __future__ import division, with_statement
 
 import pytest
 import sys
@@ -69,13 +68,13 @@ def test_circular_dependency_detection():
 def test_missing_dependency_detection():
     """Check that the code generator detects that there is a missing
     dependency."""
-    statements = set([
+    statements = {
         Assign(id="assign", assignee="<state>y", assignee_subscript=(),
             expression=1, depends_on=["assign2"]),
         YieldState(id="return", time=0, time_id="final",
             expression=var("<state>y"), component_id="<state>",
             depends_on=["assign"])
-        ])
+        }
     code = create_DAGCode_with_init_and_main_phases(
             init_statements=[],
             main_statements=statements)

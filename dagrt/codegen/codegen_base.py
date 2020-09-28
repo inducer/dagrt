@@ -25,7 +25,7 @@ THE SOFTWARE.
 from dagrt.codegen.dag_ast import Block, IfThen, IfThenElse, StatementWrapper
 
 
-class StructuredCodeGenerator(object):
+class StructuredCodeGenerator:
     """Code generation for structured languages"""
 
     def __call__(self, code):

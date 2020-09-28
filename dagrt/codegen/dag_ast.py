@@ -123,11 +123,10 @@ def get_statements_in_ast(ast):
     elif isinstance(ast, Block):
         children = ast.children
     else:
-        raise ValueError("Unknown node type: {}".format(ast.__class__.__name__))
+        raise ValueError(f"Unknown node type: {ast.__class__.__name__}")
 
     for child in children:
-        for inst in get_statements_in_ast(child):
-            yield inst
+        yield from get_statements_in_ast(child)
 
 
 def create_ast_from_phase(code, phase_name):
@@ -140,7 +139,7 @@ def create_ast_from_phase(code, phase_name):
 
     # Construct a topological order of the statements.
     stack = []
-    statement_map = dict((inst.id, inst) for inst in phase.statements)
+    statement_map = {inst.id: inst for inst in phase.statements}
     visiting = set()
     visited = set()
     topological_order = []
@@ -199,7 +198,7 @@ def create_ast_from_phase(code, phase_name):
 
 def simplify_ast(ast):
     """Return an optimized copy of the AST `ast`."""
-    from six.moves import reduce
+    from functools import reduce
 
     def apply_pass(ast, pass_):
         return pass_(ast)

@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-from __future__ import division, with_statement, print_function
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
 
@@ -41,7 +40,7 @@ from utils import create_DAGCode_with_steady_phase
 def read_file(rel_path):
     from os.path import join, abspath, dirname
     path = join(abspath(dirname(__file__)), rel_path)
-    with open(path, "r") as inf:
+    with open(path) as inf:
         return inf.read()
 
 
@@ -64,7 +63,7 @@ def test_basic_codegen():
     print(codegen(code))
 
 
-class MatrixInversionFailure(object):
+class MatrixInversionFailure:
     pass
 
 

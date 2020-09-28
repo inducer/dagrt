@@ -1,6 +1,5 @@
 """Some generic DAG transformation passes"""
 
-from __future__ import division
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
@@ -24,7 +23,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import six
 from pymbolic.mapper import IdentityMapper
 
 __doc__ = """
@@ -42,7 +40,7 @@ def eliminate_self_dependencies(dag):
     var_name_gen = dag.get_var_name_generator()
 
     new_phases = {}
-    for phase_name, phase in six.iteritems(dag.phases):
+    for phase_name, phase in dag.phases.items():
         new_statements = []
         for stmt in sorted(phase.statements, key=lambda stmt: stmt.id):
             read_and_written = (
@@ -96,7 +94,7 @@ def eliminate_self_dependencies(dag):
 class FunctionArgumentIsolator(IdentityMapper):
     def __init__(self, new_statements,
             stmt_id_gen, var_name_gen):
-        super(FunctionArgumentIsolator, self).__init__()
+        super().__init__()
         self.new_statements = new_statements
         self.stmt_id_gen = stmt_id_gen
         self.var_name_gen = var_name_gen
@@ -139,11 +137,9 @@ class FunctionArgumentIsolator(IdentityMapper):
                 expr.function,
                 tuple(self.isolate_arg(child, base_condition, base_deps, extra_deps)
                     for child in expr.parameters),
-                dict(
-                    (key,
-                     self.isolate_arg(val, base_condition, base_deps, extra_deps))
-                    for key, val in sorted(six.iteritems(expr.kw_parameters)))
-                    )
+                {key: self.isolate_arg(val, base_condition, base_deps, extra_deps)
+                    for key, val in sorted(expr.kw_parameters.items())}
+                )
 
 
 def isolate_function_arguments(dag):
@@ -151,7 +147,7 @@ def isolate_function_arguments(dag):
     var_name_gen = dag.get_var_name_generator()
 
     new_phases = {}
-    for phase_name, phase in six.iteritems(dag.phases):
+    for phase_name, phase in dag.phases.items():
         new_statements = []
 
         fai = FunctionArgumentIsolator(
@@ -182,7 +178,7 @@ def isolate_function_arguments(dag):
 class FunctionCallIsolator(IdentityMapper):
     def __init__(self, new_statements,
             stmt_id_gen, var_name_gen):
-        super(FunctionCallIsolator, self).__init__()
+        super().__init__()
         self.new_statements = new_statements
         self.stmt_id_gen = stmt_id_gen
         self.var_name_gen = var_name_gen
@@ -230,12 +226,12 @@ class FunctionCallIsolator(IdentityMapper):
     def map_call(self, expr, base_condition, base_deps, extra_deps):
         return self.isolate_call(
                 expr, base_condition, base_deps, extra_deps,
-                super(FunctionCallIsolator, self).map_call)
+                super().map_call)
 
     def map_call_with_kwargs(self, expr, base_condition, base_deps, extra_deps):
         return self.isolate_call(
                 expr, base_condition, base_deps, extra_deps,
-                super(FunctionCallIsolator, self)
+                super()
                 .map_call_with_kwargs)
 
 
@@ -277,7 +273,7 @@ def isolate_function_calls(dag):
     var_name_gen = dag.get_var_name_generator()
 
     new_phases = {}
-    for phase_name, phase in six.iteritems(dag.phases):
+    for phase_name, phase in dag.phases.items():
         new_phases[phase_name] = isolate_function_calls_in_phase(
                 phase, stmt_id_gen, var_name_gen)
 
@@ -302,7 +298,7 @@ def flat_LogicalAnd(*children):  # noqa
 class IfThenElseExpander(IdentityMapper):
 
     def __init__(self, new_statements, stmt_id_gen, var_name_gen):
-        super(IfThenElseExpander, self).__init__()
+        super().__init__()
         self.new_statements = new_statements
         self.stmt_id_gen = stmt_id_gen
         self.var_name_gen = var_name_gen
@@ -378,7 +374,7 @@ def expand_IfThenElse(dag):  # noqa
     var_name_gen = dag.get_var_name_generator()
 
     new_phases = {}
-    for phase_name, phase in six.iteritems(dag.phases):
+    for phase_name, phase in dag.phases.items():
         new_statements = []
 
         expander = IfThenElseExpander(

@@ -1,5 +1,4 @@
 """Various usefulness"""
-from __future__ import division, with_statement
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
 
@@ -92,7 +91,7 @@ def create_DAGCode_with_init_and_main_phases(init_statements, main_statements):
 
 # {{{ low-level code building utility
 
-class RawCodeBuilder(object):
+class RawCodeBuilder:
 
     def __init__(self):
         self.id_set = set()

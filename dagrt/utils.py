@@ -1,7 +1,5 @@
 """Dumping ground of miscellaneous helpfulness."""
 
-from __future__ import division, with_statement, print_function
-
 __copyright__ = """
 Copyright (C) 2014 Matt Wala
 Copyright (C) 2014 Andreas Kloeckner
@@ -124,7 +122,7 @@ def resolve_args(arg_names, default_dict, arg_dict):
 
 # {{{ temporary directory
 
-class TemporaryDirectory(object):
+class TemporaryDirectory:
     """Create and return a temporary directory.  This has the same
     behavior as mkdtemp but can be used as a context manager.  For
     example:
@@ -148,7 +146,7 @@ class TemporaryDirectory(object):
         self.name = mkdtemp(suffix, prefix, dirname)
 
     def __repr__(self):
-        return "<{} {!r}>".format(self.__class__.__name__, self.name)
+        return f"<{self.__class__.__name__} {self.name!r}>"
 
     def __enter__(self):
         return self.name
@@ -160,7 +158,7 @@ class TemporaryDirectory(object):
             rmtree(self.name)
             self._closed = True
             if _warn and warnings.warn:
-                warnings.warn("Implicitly cleaning up {!r}".format(self))
+                warnings.warn(f"Implicitly cleaning up {self!r}")
 
     def __exit__(self, exc, value, tb):
         self.cleanup()
