@@ -1,5 +1,3 @@
-from __future__ import division, with_statement
-
 __copyright__ = """
 Copyright (C) 2013 Andreas Kloeckner
 Copyright (C) 2014 Matt Wala
@@ -37,7 +35,7 @@ from pymbolic.mapper.stringifier import PREC_LOGICAL_OR
 import logging
 import operator
 import pytools.lex
-import six.moves
+from functools import reduce
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +53,7 @@ class ExtendedDependencyMapper(DependencyMapper):
         if expr is None or isinstance(expr, str):
             return frozenset()
         else:
-            return super(ExtendedDependencyMapper, self).map_foreign(expr)
+            return super().map_foreign(expr)
 
 
 class EvaluationMapper(EvaluationMapperBase):
@@ -80,9 +78,9 @@ class EvaluationMapper(EvaluationMapperBase):
         else:
             raise ValueError("Call to unknown function: " + str(function_name))
         evaluated_parameters = tuple(self.rec(param) for param in parameters)
-        evaluated_kw_parameters = dict(
-                (param_id, self.rec(param))
-                for param_id, param in six.iteritems(kw_parameters))
+        evaluated_kw_parameters = {
+                param_id: self.rec(param)
+                for param_id, param in kw_parameters.items()}
         return function(*evaluated_parameters, **evaluated_kw_parameters)
 
     def map_call(self, expr):
@@ -117,7 +115,7 @@ class _ConstantFindingMapper(CombineMapper):
 
     def combine(self, exprs):
         current_expr = self.node_stack.pop()
-        result = six.moves.reduce(operator.and_, exprs)
+        result = reduce(operator.and_, exprs)
         self.is_constant[current_expr] = result
         return result
 
@@ -292,10 +290,10 @@ class _ExtendedUnifier(UnidirectionalUnifier):
         if len(expr.children) != 2 or hasattr(other, "children"):
             return mapper(expr, other, urecs)
 
-        variables = set(
+        variables = {
             term for term in expr.children
             if isinstance(term, Variable)
-            and term.name in self.lhs_mapping_candidates)
+            and term.name in self.lhs_mapping_candidates}
 
         from pymbolic.mapper.unifier import unify_many
 
@@ -310,11 +308,11 @@ class _ExtendedUnifier(UnidirectionalUnifier):
         return new_urecs
 
     def map_sum(self, expr, other, urecs):
-        mapper = super(_ExtendedUnifier, self).map_sum
+        mapper = super().map_sum
         return self.map_modulo_identity(expr, other, urecs, mapper, 0)
 
     def map_product(self, expr, other, urecs):
-        mapper = super(_ExtendedUnifier, self).map_product
+        mapper = super().map_product
         return self.map_modulo_identity(expr, other, urecs, mapper, 1)
 
 
@@ -354,7 +352,7 @@ def match(template, expression, free_variable_names=None,
     urecs = None
     if pre_match is not None:
         eqns = []
-        for name, expr in six.iteritems(pre_match):
+        for name, expr in pre_match.items():
             if name not in free_variable_names:
                 raise ValueError(
                     "'%s' was given in 'pre_match' but is "
@@ -377,7 +375,7 @@ def match(template, expression, free_variable_names=None,
     if not records:
         raise ValueError("Cannot unify expressions.")
 
-    return dict((key.name, val) for key, val in records[0].equations)
+    return {key.name: val for key, val in records[0].equations}
 
 
 def _hack_lex_table(lex_table):
@@ -408,7 +406,7 @@ class _ExtendedParser(Parser):
 
             return primitives.Variable(identifier)
         else:
-            return super(_ExtendedParser, self).parse_terminal(pstate)
+            return super().parse_terminal(pstate)
 
     lex_table = _hack_lex_table(Parser.lex_table)
 

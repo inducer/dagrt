@@ -36,12 +36,12 @@ class FortranExpressionMapper(StringifyMapper):
         """name_manager is a map from a variable name (as a string) to its
         representation (as a string).
         """
-        super(FortranExpressionMapper, self).__init__()
+        super().__init__()
         self._name_manager = name_manager
 
     def map_constant(self, expr, enclosing_prec):
         if isinstance(expr, (complex, np.complex)):
-            return "(%s, %s)" % (
+            return "({}, {})".format(
                     self.rec(expr.real),
                     self.rec(expr.imag))
         elif isinstance(expr, bool):
@@ -63,7 +63,7 @@ class FortranExpressionMapper(StringifyMapper):
         elif isinstance(expr, str):
             return repr(expr)
         else:
-            return super(FortranExpressionMapper, self).map_foreign(
+            return super().map_foreign(
                     expr, enclosing_prec)
 
     TARGET_PREFIX = "<target>"
@@ -138,7 +138,7 @@ class PythonExpressionMapper(StringifyMapper):
 
         numpy is the name of the numpy module.
         """
-        super(PythonExpressionMapper, self).__init__()
+        super().__init__()
         self._name_manager = name_manager
         self._function_registry = function_registry
         self._numpy = numpy
@@ -155,7 +155,7 @@ class PythonExpressionMapper(StringifyMapper):
         elif isinstance(expr, str):
             return repr(expr)
         else:
-            return super(PythonExpressionMapper, self).map_foreign(expr, *args)
+            return super().map_foreign(expr, *args)
 
     def map_variable(self, expr, enclosing_prec):
         if expr.name.startswith("<func>"):

@@ -1,5 +1,4 @@
 """Mini-type inference for dagrt methods"""
-from __future__ import division, with_statement, print_function
 
 __copyright__ = """
 Copyright (C) 2013 Andreas Kloeckner
@@ -28,7 +27,6 @@ THE SOFTWARE.
 
 from dagrt.utils import TODO
 
-import six
 import dagrt.language as lang
 from dagrt.utils import is_state_variable
 from pytools import RecordWithoutPickling
@@ -114,7 +112,7 @@ class Scalar(SymbolKind):
     """
 
     def __init__(self, is_real_valued):
-        super(Scalar, self).__init__(is_real_valued=is_real_valued)
+        super().__init__(is_real_valued=is_real_valued)
 
     def __getinitargs__(self):
         return (self.is_real_valued,)
@@ -129,7 +127,7 @@ class Array(SymbolKind):
     """
 
     def __init__(self, is_real_valued):
-        super(Array, self).__init__(is_real_valued=is_real_valued)
+        super().__init__(is_real_valued=is_real_valued)
 
     def __getinitargs__(self):
         return (self.is_real_valued,)
@@ -144,7 +142,7 @@ class UserType(SymbolKind):
     """
 
     def __init__(self, identifier):
-        super(UserType, self).__init__(identifier=identifier)
+        super().__init__(identifier=identifier)
 
     def __getinitargs__(self):
         return (self.identifier,)
@@ -152,7 +150,7 @@ class UserType(SymbolKind):
 # }}}
 
 
-class SymbolKindTable(object):
+class SymbolKindTable:
     """A mapping from symbol names to kinds for a program.
 
     .. attribute:: global_table
@@ -216,12 +214,12 @@ class SymbolKindTable(object):
     def __str__(self):
         def format_table(tbl, indent="  "):
             return "\n".join(
-                    "%s%s: %s" % (indent, name, kind)
+                    f"{indent}{name}: {kind}"
                     for name, kind in tbl.items())
 
         return "\n".join(
                 ["global:\n%s" % format_table(self.global_table)] + [
-                    "phase '%s':\n%s" % (phase_name, format_table(tbl))
+                    "phase '{}':\n{}".format(phase_name, format_table(tbl))
                     for phase_name, tbl in self.per_phase_table.items()])
 
 
@@ -439,7 +437,7 @@ class KindInferenceMapper(Mapper):
 
 # {{{ symbol kind finder
 
-class SymbolKindFinder(object):
+class SymbolKindFinder:
     """
     .. automethod:: __call__
     """
@@ -489,7 +487,7 @@ class SymbolKindFinder(object):
                     if not made_progress:
                         print("Left-over statements in kind inference:")
                         for phase_name, stmt in stmt_queue_push_buffer:
-                            print("[%s] %s" % (phase_name, stmt))
+                            print(f"[{phase_name}] {stmt}")
 
                             kim = make_kim(phase_name, check=False)
 
@@ -635,12 +633,12 @@ def collect_user_types(skt):
     """
     result = set()
 
-    for kind in six.itervalues(skt.global_table):
+    for kind in skt.global_table.values():
         if isinstance(kind, UserType):
             result.add(kind.identifier)
 
-    for tbl in six.itervalues(skt.per_phase_table):
-        for kind in six.itervalues(tbl):
+    for tbl in skt.per_phase_table.values():
+        for kind in tbl.values():
             if isinstance(kind, UserType):
                 result.add(kind.identifier)
 

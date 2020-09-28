@@ -22,7 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import six
 from pymbolic.mapper import Collector
 from dagrt.language import YieldState, SwitchPhase, AssignFunctionCall
 
@@ -31,7 +30,7 @@ from dagrt.language import YieldState, SwitchPhase, AssignFunctionCall
 
 
 def _quote(string):
-    return '"{0}"'.format(string)
+    return f'"{string}"'
 
 
 def verify_switch_phases(phases, errors):
@@ -42,13 +41,13 @@ def verify_switch_phases(phases, errors):
     :arg phases: A map from phase names to phases
     :arg errors: An error list to which new errors get appended
     """
-    for phase in six.itervalues(phases):
+    for phase in phases.values():
         for inst in phase.statements:
             if not isinstance(inst, SwitchPhase):
                 continue
             if inst.next_phase not in phases:
                 errors.append(
-                    'Phase "{0}" referenced by statement "{1}:{2}" not found'
+                    'Phase "{}" referenced by statement "{}:{}" not found'
                     .format(inst.next_phase, phase, inst))
 
 
@@ -60,25 +59,25 @@ def verify_all_dependencies_exist(phases, errors):
     :arg phases: A map from phase names to phases
     :arg errors: An error list to which new errors get appended
     """
-    ids = set(inst.id
-            for phase in six.itervalues(phases)
-            for inst in phase.statements)
+    ids = {inst.id
+            for phase in phases.values()
+            for inst in phase.statements}
 
     # Check statements
-    for phase in six.itervalues(phases):
+    for phase in phases.values():
         for inst in phase.statements:
             deps = set(inst.depends_on)
             if not deps <= ids:
                 errors.extend(
-                    ['Dependency "{0}" referenced by statement "{1}" not found'
+                    ['Dependency "{}" referenced by statement "{}" not found'
                      .format(dep_name, inst) for dep_name in deps - ids])
 
     # Check phases.
-    for phase_name, phase in six.iteritems(phases):
+    for phase_name, phase in phases.items():
         deps = set(phase.depends_on)
         if not deps <= ids:
             errors.extend(
-                ['Dependencies {0} referenced by phase "{1}" not found'
+                ['Dependencies {} referenced by phase "{}" not found'
                  .format(", ".join(_quote(dep) for dep in ids - deps),
                          phase_name)])
 
@@ -90,7 +89,7 @@ def verify_no_circular_dependencies(statements, errors):
     :arg statements: A set of statements to verify
     :arg errors: An error list to which new errors get appended
     """
-    id_to_statement = dict((inst.id, inst) for inst in statements)
+    id_to_statement = {inst.id: inst for inst in statements}
     stack = list(statements)
     visiting = set()
     visited = set()
@@ -128,11 +127,10 @@ def verify_single_definition_cond_rule(statements, errors):
             else:
                 cond_variables[varname].append(statement)
 
-    import six
-    for varname, insts in six.iteritems(cond_variables):
+    for varname, insts in cond_variables.items():
         if len(insts) > 1:
             errors.append(
-                'Conditional variable "{0}" defined by multiple statements: {1}'
+                'Conditional variable "{}" defined by multiple statements: {}'
                 .format(varname, ", ".join(_quote(str(inst)) for inst in insts)))
 
 
@@ -153,12 +151,12 @@ def verify_code(code):
         # Wrap in a try block, since some verifier passes may fail due to badly
         # malformed code.
         verify_all_dependencies_exist(code.phases, errors)
-        for phase in six.itervalues(code.phases):
+        for phase in code.phases.values():
             verify_no_circular_dependencies(phase.statements, errors)
 
         verify_switch_phases(code.phases, errors)
 
-        for phase in six.itervalues(code.phases):
+        for phase in code.phases.values():
             verify_single_definition_cond_rule(phase.statements, errors)
 
     except Exception as e:
@@ -178,16 +176,16 @@ class _FunctionNameCollector(Collector):
 
     def map_variable(self, expr):
         if expr.name.startswith("<func>"):
-            return set([expr.name])
+            return {expr.name}
         return set()
 
     def map_call(self, expr):
-        return (set([expr.function])
-                | super(_FunctionNameCollector, self).map_call(expr))
+        return ({expr.function}
+                | super().map_call(expr))
 
     def map_call_with_kwargs(self, expr):
-        return (set([expr.function])
-                | super(_FunctionNameCollector, self).map_call_with_kwargs(expr))
+        return ({expr.function}
+                | super().map_call_with_kwargs(expr))
 
 
 def collect_function_names_from_dag(dag, no_expressions=False):
@@ -204,7 +202,7 @@ def collect_function_names_from_dag(dag, no_expressions=False):
     def mapper(expr):
         result.update(fnc(expr))
         return expr
-    for phase in six.itervalues(dag.phases):
+    for phase in dag.phases.values():
         for stmt in phase.statements:
             if isinstance(stmt, AssignFunctionCall):
                 result.add(stmt.function_id)
@@ -222,7 +220,7 @@ def collect_function_names_from_dag(dag, no_expressions=False):
 def collect_time_ids_from_dag(dag):
     result = set()
 
-    for phase in six.itervalues(dag.phases):
+    for phase in dag.phases.values():
         for stmt in phase.statements:
             if isinstance(stmt, YieldState):
                 result.add(stmt.time_id)
@@ -237,7 +235,7 @@ def collect_time_ids_from_dag(dag):
 def collect_ode_component_names_from_dag(dag):
     result = set()
 
-    for phase in six.itervalues(dag.phases):
+    for phase in dag.phases.values():
         for stmt in phase.statements:
             if isinstance(stmt, YieldState):
                 result.add(stmt.component_id)

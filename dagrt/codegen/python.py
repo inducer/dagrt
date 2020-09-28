@@ -31,7 +31,6 @@ from pytools.py_codegen import (
         PythonFunctionGenerator as PythonFunctionEmitter)
 from dagrt.utils import is_state_variable
 from functools import partial
-import six
 
 
 def pad_python(line, width):
@@ -111,7 +110,7 @@ class PythonClassEmitter(PythonEmitter):
     """Emits code for a Python class."""
 
     def __init__(self, class_name, superclass="object"):
-        super(PythonClassEmitter, self).__init__()
+        super().__init__()
         self("from __future__ import division, print_function")
         self("class {cls}({superclass}):".format(cls=class_name,
                                                  superclass=superclass))
@@ -125,7 +124,7 @@ class PythonClassEmitter(PythonEmitter):
             self(line)
 
 
-class PythonNameManager(object):
+class PythonNameManager:
     """Maps names that appear in intermediate code to Python identifiers.
     """
 
@@ -166,7 +165,7 @@ class PythonNameManager(object):
             return self.name_local(name)
 
 
-class BareExpression(object):
+class BareExpression:
     """The point of this class is to have a ``repr()`` that is exactly
     a given string. That way, ``repr()`` can be used as a helper for
     code generation on structured data.
@@ -212,7 +211,7 @@ class CodeGenerator(StructuredCodeGenerator):
         from dagrt.codegen.dag_ast import create_ast_from_phase
 
         self.begin_emit(dag)
-        for phase_name in six.iterkeys(dag.phases):
+        for phase_name in dag.phases.keys():
             ast = create_ast_from_phase(dag, phase_name)
             self._pre_lower(ast)
             self.lower_function(phase_name, ast)
@@ -299,11 +298,11 @@ class CodeGenerator(StructuredCodeGenerator):
                         py_function_id=py_function_id,
                         function_id=function_id))
         emit("")
-        emit("self.phase_transition_table = "+repr(dict(
-            (phase_name, (
+        emit("self.phase_transition_table = "+repr({
+            phase_name: (
                 phase.next_phase,
-                BareExpression("self.phase_"+phase_name)))
-            for phase_name, phase in six.iteritems(dag.phases))))
+                BareExpression("self.phase_"+phase_name))
+            for phase_name, phase in dag.phases.items()}))
         emit("")
 
         self._class_emitter.incorporate(emit)
@@ -447,7 +446,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         for ident, start, stop in inst.loops:
             managed_ident = self._name_manager[ident]
-            emitter("del {name}".format(name=managed_ident))
+            emitter(f"del {managed_ident}")
 
     def emit_inst_AssignFunctionCall(self, inst):
         if len(inst.assignees) == 0:

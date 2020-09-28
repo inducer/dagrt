@@ -1,5 +1,3 @@
-from __future__ import division
-
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner"
 
 __license__ = """
@@ -24,7 +22,6 @@ THE SOFTWARE.
 
 from collections import namedtuple
 from dagrt.expression import EvaluationMapper
-import six
 
 
 __doc__ = """
@@ -87,7 +84,7 @@ class StepFailed(namedtuple("StepFailed", ["t"])):
 
 # {{{ interpreter
 
-class NumpyInterpreter(object):
+class NumpyInterpreter:
     """A :mod:`numpy`-targeting interpreter for the time integration language
     defined in :mod:`dagrt.language`.
 
@@ -130,7 +127,7 @@ class NumpyInterpreter(object):
 
         self.context["<t>"] = t_start
         self.context["<dt>"] = dt_start
-        for key, val in six.iteritems(context):
+        for key, val in context.items():
             if key.startswith("<"):
                 raise ValueError("state variables may not start with '<'")
             self.context["<state>"+key] = val
@@ -172,12 +169,11 @@ class NumpyInterpreter(object):
             cur_state = self.code.phases[self.next_phase]
             self.next_phase = cur_state.next_phase
             self.exec_controller.update_plan(cur_state, cur_state.depends_on)
-            for event in self.exec_controller(cur_state, self):
-                yield event
+            yield from self.exec_controller(cur_state, self)
 
         finally:
             # discard non-permanent per-step state
-            for name in list(six.iterkeys(self.context)):
+            for name in list(self.context.keys()):
                 if (
                         not name.startswith("<state>")
                         and not name.startswith("<p>")
@@ -221,7 +217,7 @@ class NumpyInterpreter(object):
                     return
 
                 ident, start, stop = loops[0]
-                for i in six.moves.range(
+                for i in range(
                         self.eval_mapper(start), self.eval_mapper(stop)):
                     self.context[ident] = i
 
@@ -243,9 +239,9 @@ class NumpyInterpreter(object):
         parameters = [
                 self.eval_mapper(expr)
                 for expr in stmt.parameters]
-        kw_parameters = dict(
-                (name, self.eval_mapper(expr))
-                for name, expr in stmt.kw_parameters.items())
+        kw_parameters = {
+                name: self.eval_mapper(expr)
+                for name, expr in stmt.kw_parameters.items()}
 
         func = self.eval_mapper.functions[stmt.function_id]
 

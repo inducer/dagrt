@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-from __future__ import division, with_statement, print_function
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"
 

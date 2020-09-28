@@ -37,7 +37,7 @@ def run_script_from_commandline():
     sys.argv[1:] = args.args
     sys.path.append(scriptdir)
 
-    with open(args.script, "rt") as s:
+    with open(args.script) as s:
         script_contents = s.read()
 
     namespace = {"__name__": "__main__"}

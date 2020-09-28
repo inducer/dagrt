@@ -1,5 +1,3 @@
-from __future__ import division, with_statement
-
 __copyright__ = """
 Copyright (C) 2013 Andreas Kloeckner
 Copyright (C) 2014 Matt Wala
@@ -114,7 +112,7 @@ class Function(RecordWithoutPickling):
         if language_to_codegen is None:
             language_to_codegen = {}
 
-        super(Function, self).__init__(
+        super().__init__(
                 language_to_codegen=language_to_codegen,
                 **kwargs)
 
@@ -183,7 +181,7 @@ class FixedResultKindsFunction(Function):
         if result_kinds is None:
             raise TypeError("result_kinds argument must be specified")
 
-        super(FixedResultKindsFunction, self).__init__(**kwargs)
+        super().__init__(**kwargs)
 
     def get_result_kinds(self, arg_kinds, check):
         return self.result_kinds
@@ -205,7 +203,7 @@ class FunctionRegistry(RecordWithoutPickling):
         if id_to_function is None:
             id_to_function = {}
 
-        super(FunctionRegistry, self).__init__(
+        super().__init__(
                 id_to_function=id_to_function)
 
     def register(self, function):
@@ -522,7 +520,7 @@ class Print(Function):
         return ()
 
 
-class _PythonBuiltinFunctionCodeGenerator(object):
+class _PythonBuiltinFunctionCodeGenerator:
     def __init__(self, function, pattern):
         self.function = function
         self.pattern = pattern
@@ -599,15 +597,15 @@ class _ODERightHandSide(Function):
     # be inherited from the superclass if an instance of the superclass is
     # initialized first. We wish to exclude "arg_names" as a field, since this class
     # synthesizes it as a member.
-    fields = set(["identifier", "output_type_id", "input_type_ids",
-                  "language_to_codegen", "input_names"])
+    fields = {"identifier", "output_type_id", "input_type_ids",
+                  "language_to_codegen", "input_names"}
 
     def __init__(self, identifier, output_type_id, input_type_ids,
             language_to_codegen=None, input_names=None):
         if input_names is None:
             input_names = input_type_ids
 
-        super(_ODERightHandSide, self).__init__(
+        super().__init__(
                 identifier=identifier,
                 output_type_id=output_type_id,
                 input_type_ids=input_type_ids,

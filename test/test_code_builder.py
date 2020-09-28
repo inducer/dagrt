@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-from __future__ import division, with_statement
 
 import sys
 from dagrt.language import (CodeBuilder, DAGCode)
