@@ -23,33 +23,33 @@ import os  # noqa
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
-#needs_sphinx = '1.0'
+#needs_sphinx = "1.0"
 
 # Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
+# extensions coming with Sphinx (named "sphinx.ext.*") or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.doctest',
-    'sphinx.ext.intersphinx',
-    'sphinx.ext.mathjax',
+    "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.mathjax",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # The suffix of source filenames.
-source_suffix = '.rst'
+source_suffix = ".rst"
 
 # The encoding of source files.
-#source_encoding = 'utf-8-sig'
+#source_encoding = "utf-8-sig"
 
 # The master toctree document.
-master_doc = 'index'
+master_doc = "index"
 
 # General information about the project.
-project = u'dagrt'
-copyright = u'2014-6, Matt Wala and Andreas Kloeckner'
+project = u"dagrt"
+copyright = u"2014-6, Matt Wala and Andreas Kloeckner"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -62,7 +62,7 @@ _version_source = "../dagrt/version.py"
 with open(_version_source) as vpy_file:
     version_py = vpy_file.read()
 
-exec(compile(version_py, _version_source, 'exec'), _ver_dic)
+exec(compile(version_py, _version_source, "exec"), _ver_dic)
 
 # The full version, including alpha/beta/rc tags.
 release = _ver_dic["VERSION_TEXT"]
@@ -80,7 +80,7 @@ version = release
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ['_build']
+exclude_patterns = ["_build"]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -98,7 +98,7 @@ exclude_patterns = ['_build']
 #show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+pygments_style = "sphinx"
 
 # A list of ignored prefixes for module index sorting.
 #modindex_common_prefix = []
@@ -112,23 +112,14 @@ pygments_style = 'sphinx'
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 
-html_theme = "alabaster"
+html_theme = "furo"
 
 html_theme_options = {
-        "extra_nav_links": {
-            "🚀 Git": "https://gitlab.tiker.net/inducer/dagrt",
-            "💾 Download Releases": "https://pypi.python.org/pypi/dagrt",
-            }
         }
 
 html_sidebars = {
-    '**': [
-        'about.html',
-        'navigation.html',
-        'relations.html',
-        'searchbox.html',
-    ]
-}
+        }
+
 # Add any paths that contain custom themes here, relative to this directory.
 #html_theme_path = []
 
@@ -158,7 +149,7 @@ html_sidebars = {
 # directly to the root of the documentation.
 #html_extra_path = []
 
-# If not '', a 'Last updated on:' timestamp is inserted at every page bottom,
+# If not '', a "Last updated on:" timestamp is inserted at every page bottom,
 # using the given strftime format.
 #html_last_updated_fmt = '%b %d, %Y'
 
@@ -200,28 +191,28 @@ html_sidebars = {
 #html_file_suffix = None
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'dagrtdoc'
+htmlhelp_basename = "dagrtdoc"
 
 
 # -- Options for LaTeX output ---------------------------------------------
 
 latex_elements = {
-    # The paper size ('letterpaper' or 'a4paper').
-    #'papersize': 'letterpaper',
+    # The paper size ("letterpaper" or "a4paper").
+    #"papersize": "letterpaper",
 
-    # The font size ('10pt', '11pt' or '12pt').
-    #'pointsize': '10pt',
+    # The font size ("10pt", "11pt" or "12pt").
+    #"pointsize": "10pt",
 
     # Additional stuff for the LaTeX preamble.
-    #'preamble': '',
+    #"preamble": '',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    ('index', 'dagrt.tex', u'dagrt Documentation',
-    u'Andreas Kloeckner', 'manual'),
+    ("index", "dagrt.tex", u"dagrt Documentation",
+    u"Andreas Kloeckner", "manual"),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -250,8 +241,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    ('index', 'dagrt', u'dagrt Documentation',
-     [u'Andreas Kloeckner'], 1)
+    ("index", "dagrt", u"dagrt Documentation",
+     [u"Andreas Kloeckner"], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -264,9 +255,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    ('index', 'dagrt', u'dagrt Documentation',
-    u'Andreas Kloeckner', 'dagrt', 'One line description of project.',
-    'Miscellaneous'),
+    ("index", "dagrt", u"dagrt Documentation",
+    u"Andreas Kloeckner", "dagrt", "One line description of project.",
+    "Miscellaneous"),
 ]
 
 # Documents to append as an appendix to all manuals.
@@ -275,8 +266,8 @@ texinfo_documents = [
 # If false, no module index is generated.
 #texinfo_domain_indices = True
 
-# How to display URL addresses: 'footnote', 'no', or 'inline'.
-#texinfo_show_urls = 'footnote'
+# How to display URL addresses: "footnote", "no", or "inline".
+#texinfo_show_urls = "footnote"
 
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 #texinfo_no_detailmenu = False
@@ -284,9 +275,9 @@ texinfo_documents = [
 
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
-    'http://docs.python.org/': None,
-    'http://docs.scipy.org/doc/numpy/': None,
-    'http://documen.tician.de/pymbolic/': None,
+    "https://docs.python.org/3/": None,
+    "https://numpy.org/doc/stable/": None,
+    "https://documen.tician.de/pymbolic/": None,
     }
 
 autoclass_content = "both"
