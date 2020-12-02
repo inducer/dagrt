@@ -10,6 +10,8 @@ Contents:
 
     reference
     misc
+    🚀 Github <https://github.com/inducer/dagrt>
+    💾 Download Releases <https://pypi.python.org/pypi/dagrt>
 
 * :ref:`genindex`
 * :ref:`modindex`

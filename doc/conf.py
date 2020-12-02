@@ -112,17 +112,14 @@ pygments_style = "sphinx"
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 
-html_theme = "alabaster"
+html_theme = "furo"
 
 html_theme_options = {
-        "extra_nav_links": {
-            "🚀 Git": "https://gitlab.tiker.net/inducer/dagrt",
-            "💾 Download Releases": "https://pypi.python.org/pypi/dagrt",
-            }
         }
 
 html_sidebars = {
-}
+        }
+
 # Add any paths that contain custom themes here, relative to this directory.
 #html_theme_path = []
 
@@ -278,8 +275,8 @@ texinfo_documents = [
 
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
-    "https://docs.python.org/": None,
-    "https://docs.scipy.org/doc/numpy/": None,
+    "https://docs.python.org/3/": None,
+    "https://numpy.org/doc/stable/": None,
     "https://documen.tician.de/pymbolic/": None,
     }
 
