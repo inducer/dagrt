@@ -293,6 +293,27 @@ class Norm2(_NormBase):
     identifier = "<builtin>norm_2"
 
 
+class NormWRMS(_NormBase):
+    """``norm_wrms(x)`` returns the wrms-norm of *x*.
+    *x* is a user type or array, and *y* is also a user type
+    or array.
+    """
+    identifier = "<builtin>norm_wrms"
+    arg_names = ("x", "y", "ynew", "atol", "rtol")
+    default_dict = {}
+
+    def get_result_kinds(self, arg_kinds, check):
+        x_kind, y_kind, atol_kind, rtol_kind = self.resolve_args(arg_kinds)
+
+        if check and not isinstance(x_kind, (NoneType, Array, UserType)):
+            raise TypeError("argument 'x' of 'norm' is not a user type")
+
+        if check and not isinstance(y_kind, (NoneType, Array, UserType)):
+            raise TypeError("argument 'y' of 'norm' is not a user type")
+
+        return (Scalar(is_real_valued=True),)
+
+
 class NormInf(_NormBase):
     """``norm_inf(x)`` returns the infinity-norm of *x*.
     *x* is a user type or array.
@@ -319,6 +340,28 @@ class DotProduct(Function):
             raise TypeError("argument 'x' of 'dot_product' is not a user type")
         if check and not isinstance(y_kind, (NoneType, Array, UserType)):
             raise TypeError("argument 'y' of 'dot_product' is not a user type")
+
+        return (Scalar(is_real_valued=False),)
+
+
+class CumulativeProduct(Function):
+    """``cumulative_product(x, a)`` return the cumulative product of *x*.
+    *x* is an array or user type, and *a* is an integer indicating the
+    axis over which the cumulative product should be taken.
+    """
+
+    result_names = ("result",)
+    identifier = "<builtin>cumulative_product"
+    arg_names = ("x", "a")
+    default_dict = {}
+
+    def get_result_kinds(self, arg_kinds, check):
+        x_kind, a_kind = self.resolve_args(arg_kinds)
+
+        if check and not isinstance(x_kind, (NoneType, Array, UserType)):
+            raise TypeError("argument 'x' of 'cumulative_product' is not user type")
+        if check and not isinstance(a_kind, (NoneType, Scalar)):
+            raise TypeError("argument 'y' of 'cumulative_product' is not a scalar")
 
         return (Scalar(is_real_valued=False),)
 
@@ -380,6 +423,27 @@ class Array_(Function):  # noqa
         return (Array(is_real_valued=True),)
 
 
+class ArrayUType_(Function):  # noqa
+    """``array_utype(n, x)`` returns an empty array with *n* entries in it.
+    *n* must be an integer.
+    """
+
+    result_names = ("result",)
+    identifier = "<builtin>array_utype"
+    arg_names = ("n", "x")
+    default_dict = {}
+
+    def get_result_kinds(self, arg_kinds, check):
+        n_kind, x_kind = self.resolve_args(arg_kinds)
+
+        if check and not isinstance(n_kind, Scalar):
+            raise TypeError("argument 'n' of 'array_utype' is not a scalar")
+        if check and not isinstance(x_kind, (NoneType, Array, UserType)):
+            raise TypeError("argument 'x' of 'array_utype' is not a user type")
+
+        return (Array(),)
+
+
 class MatMul(Function):
     """``matmul(a, b, a_cols, b_cols)`` returns a 1D array containing the
     matrix resulting from multiplying the arrays *a* and *b* (both interpreted
@@ -412,6 +476,41 @@ class MatMul(Function):
         return (Array(is_real_valued),)
 
 
+class UserMatMul(Function):
+    """``matmul(a, b, a_cols, b_cols, c_cols)`` returns a 1D array containing the
+    matrix resulting from multiplying the arrays *a* and *b* (both interpreted
+    as matrices, with a number of columns *a_cols* and *b_cols* respectively).
+    """
+
+    result_names = ("result",)
+    identifier = "<builtin>user_matmul"
+    arg_names = ("a", "b", "a_cols", "b_cols", "c_cols")
+    default_dict = {}
+
+    def get_result_kinds(self, arg_kinds, check):
+        [a_kind, b_kind, a_cols_kind,
+                b_cols_kind, c_cols_kind] = self.resolve_args(arg_kinds)
+
+        if a_kind is None or b_kind is None:
+            raise UnableToInferKind(
+                    "matmul needs to know both arguments to infer result kind")
+
+        if check and not isinstance(a_kind, Array):
+            raise TypeError("argument 'a' of 'matmul' is not an array")
+        if check and not isinstance(b_kind, Array):
+            raise TypeError("argument 'a' of 'matmul' is not an array")
+        if check and not isinstance(a_cols_kind, Scalar):
+            raise TypeError("argument 'a_cols' of 'matmul' is not a scalar")
+        if check and not isinstance(b_cols_kind, Scalar):
+            raise TypeError("argument 'b_cols' of 'matmul' is not a scalar")
+        if check and not isinstance(c_cols_kind, Scalar):
+            raise TypeError("argument 'c_cols' of 'matmul' is not a scalar")
+
+        is_real_valued = a_kind.is_real_valued and b_kind.is_real_valued
+
+        return (Array(is_real_valued),)
+
+
 class Transpose(Function):
     """``transpose(a, a_cols)`` returns a 1D array containing the
     matrix resulting from transposing the array *a* (interpreted
@@ -420,6 +519,30 @@ class Transpose(Function):
 
     result_names = ("result",)
     identifier = "<builtin>transpose"
+    arg_names = ("a", "a_cols")
+    default_dict = {}
+
+    def get_result_kinds(self, arg_kinds, check):
+        a_kind, a_cols_kind = self.resolve_args(arg_kinds)
+
+        if a_kind is None:
+            raise UnableToInferKind(
+                    "transpose needs to know both arguments to infer result kind")
+
+        if check and not isinstance(a_kind, Array):
+            raise TypeError("argument 'a' of 'transpose' is not an array")
+        if check and not isinstance(a_cols_kind, Scalar):
+            raise TypeError("argument 'a_cols' of 'transpose' is not a scalar")
+
+        is_real_valued = a_kind.is_real_valued
+
+        return (Array(is_real_valued),)
+
+
+class Reshape(Function):
+
+    result_names = ("result",)
+    identifier = "<builtin>reshape"
     arg_names = ("a", "a_cols")
     default_dict = {}
 
@@ -538,13 +661,18 @@ def _make_bfr():
     for func, py_pattern in [
             (Norm1(), "self._builtin_norm_1({args})"),
             (Norm2(), "self._builtin_norm_2({args})"),
+            (NormWRMS(), "self._builtin_norm_wrms({args})"),
             (NormInf(), "self._builtin_norm_inf({args})"),
             (DotProduct(), "{numpy}.vdot({args})"),
+            (CumulativeProduct(), "{numpy}.cumprod({args})"),
             (Len(), "{numpy}.size({args})"),
             (IsNaN(), "{numpy}.isnan({args})"),
             (Array_(), "self._builtin_array({args})"),
+            (ArrayUType_(), "self._builtin_array_utype({args})"),
             (MatMul(), "self._builtin_matmul({args})"),
+            (UserMatMul(), "self._builtin_user_matmul({args})"),
             (Transpose(), "self._builtin_transpose({args})"),
+            (Reshape(), "self._builtin_reshape({args})"),
             (LinearSolve(), "self._builtin_linear_solve({args})"),
             (Print(), "self._builtin_print({args})"),
             (SVD(), "self._builtin_svd({args})"),
