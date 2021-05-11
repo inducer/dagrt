@@ -441,7 +441,7 @@ class ArrayUType_(Function):  # noqa
         if check and not isinstance(x_kind, (NoneType, Array, UserType)):
             raise TypeError("argument 'x' of 'array_utype' is not a user type")
 
-        return (Array(),)
+        return (Array(is_real_valued=True),)
 
 
 class MatMul(Function):
