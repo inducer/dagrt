@@ -1,14 +1,15 @@
 Welcome to dagrt's documentation!
 =================================
 
-TODO: Insert example here.
+.. module:: dagrt
 
 Contents:
 
 .. toctree::
     :maxdepth: 2
 
-    reference
+    language
+    codegen
     misc
     🚀 Github <https://github.com/inducer/dagrt>
     💾 Download Releases <https://pypi.python.org/pypi/dagrt>
