@@ -444,7 +444,7 @@ class CodeGenerator(StructuredCodeGenerator):
         for _ident, _start, _stop in inst.loops:
             emitter.dedent()
 
-        for _ident, _start, _stop in inst.loops:
+        for ident, _start, _stop in inst.loops:
             managed_ident = self._name_manager[ident]
             emitter(f"del {managed_ident}")
 
