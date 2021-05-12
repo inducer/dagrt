@@ -16,9 +16,6 @@ Python
 
 .. automodule:: dagrt.codegen.python
 
-.. autoclass:: CodeGenerator
-
-.. autoclass:: StepperInterface
 
 Fortran
 ~~~~~~~
