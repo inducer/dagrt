@@ -1,16 +1,10 @@
 Code Generation/Execution
 =========================
 
-Function registry
-~~~~~~~~~~~~~~~~~
-
-.. automodule:: dagrt.function_registry
-
 Python
 ~~~~~~
 
 .. automodule:: dagrt.codegen.python
-
 
 Fortran
 ~~~~~~~
