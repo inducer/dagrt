@@ -3,7 +3,10 @@ Welcome to dagrt's documentation!
 
 .. module:: dagrt
 
-Contents:
+dagrt is a DAG-based run-time system for evaluation of (mainly) time
+integration methods, capable of operator fusion and versatile code generation.
+
+See also its companion package `leap <https://github.com/inducer/leap>`__.
 
 .. toctree::
     :maxdepth: 2
