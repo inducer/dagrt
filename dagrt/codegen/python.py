@@ -1,4 +1,8 @@
-"""Python code generator"""
+"""
+.. autoclass:: CodeGenerator
+
+.. autoclass:: StepperInterface
+"""
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"
 
@@ -31,6 +35,7 @@ from pytools.py_codegen import (
         PythonFunctionGenerator as PythonFunctionEmitter)
 from dagrt.utils import is_state_variable
 from functools import partial
+from abc import ABC, abstractmethod
 
 
 def pad_python(line, width):
@@ -40,6 +45,51 @@ def pad_python(line, width):
 
 
 wrap_line = partial(wrap_line_base, pad_func=pad_python)
+
+
+class StepperInterface(ABC):
+    """The interface adhered to by :mod:`dagrt` steppers expressed in Python.
+
+    .. attribute:: next_phase
+
+    .. attribute:: StateComputed
+
+        An event yielded by :class:`run_single_step` and :class:`run`.
+        See :class:`dagrt.exec_numpy.StateComputed`.
+
+    .. attribute:: StepCompleted
+
+        An event yielded by :class:`run_single_step` and :class:`run`.
+        See :class:`dagrt.exec_numpy.StepCompleted`.
+
+    .. attribute:: StepFailed
+
+        An event yielded by :class:`run_single_step` and :class:`run`.
+        See :class:`dagrt.exec_numpy.StepFailed`.
+
+    .. automethod:: set_up
+    .. automethod:: run
+    .. automethod:: run_single_step
+    """
+
+    @abstractmethod
+    def set_up(self, t_start, dt_start, context):
+        pass
+
+    @abstractmethod
+    def run(self, t_end=None, max_steps=None):
+        """Execute the stepper until either time reaches *t_end* or *max_steps*
+        have been taken. Generates (in the Python ``yield`` sense) events that
+        occurred during execution along the way.
+        """
+
+    @abstractmethod
+    def run_single_step(self):
+        """Execute a single phase of the stepper. Generates (in the Python
+        ``yield`` sense) events that occurred during execution along the way.
+        """
+        pass
+
 
 _inner_class_code = '''from collections import namedtuple
 
@@ -179,6 +229,10 @@ class BareExpression:
 
 
 class CodeGenerator(StructuredCodeGenerator):
+    """
+    .. automethod:: __init__
+    .. automethod:: __call__
+    """
 
     def __init__(self, class_name, class_preamble=None, function_registry=None):
         """
@@ -205,6 +259,10 @@ class CodeGenerator(StructuredCodeGenerator):
                 self._name_manager, function_registry, numpy="self._numpy")
 
     def __call__(self, dag):
+        """
+        :returns: a class adhering to :class:`StepperInterface`.
+        """
+
         from dagrt.codegen.analysis import verify_code
         verify_code(dag)
 
@@ -441,10 +499,10 @@ class CodeGenerator(StructuredCodeGenerator):
                     sub=subscript_code,
                     expr=self._expr(inst.expression)))
 
-        for ident, start, stop in inst.loops:
+        for _ident, _start, _stop in inst.loops:
             emitter.dedent()
 
-        for ident, start, stop in inst.loops:
+        for ident, _start, _stop in inst.loops:
             managed_ident = self._name_manager[ident]
             emitter(f"del {managed_ident}")
 
@@ -494,3 +552,5 @@ class CodeGenerator(StructuredCodeGenerator):
             self._emit("yield")
 
     # }}}
+
+# vim: foldmethod=marker

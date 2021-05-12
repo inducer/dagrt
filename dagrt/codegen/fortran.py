@@ -2139,7 +2139,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_assign_expr(
                 inst.assignee, inst.assignee_subscript, inst.expression)
 
-        for ident, start, stop in inst.loops[::-1]:
+        for _ident, _start, _stop in inst.loops[::-1]:
             self.emitter.__exit__(None, None, None)
 
         self.emit_deinit_for_last_usage_of_vars(inst)

@@ -29,7 +29,7 @@ from pytools import UniqueNameGenerator
 
 def wrap_line_base(line, level=0, width=80, indentation="    ",
                    pad_func=lambda string, amount: string,
-                   lex_func=functools.partial(shlex.split, posix=False)):
+                   lex_func=None):
     """
     The input is a line of code at the given indentation level. Return the list
     of lines that results from wrapping the line to the given width. Lines
@@ -40,6 +40,9 @@ def wrap_line_base(line, level=0, width=80, indentation="    ",
     The `pad_func` argument is a function that adds line continuations. The
     `lex_func` argument returns the list of tokens in the line.
     """
+    if lex_func is None:
+        lex_func = functools.partial(shlex.split, posix=False)
+
     tokens = lex_func(line)
     resulting_lines = []
     at_line_start = True
@@ -137,9 +140,11 @@ class KeyToUniqueNameMap:
     created from the base name.
     """
 
-    def __init__(self, start={}, forced_prefix="",
+    def __init__(self, start=None, forced_prefix="",
                  key_translate_func=make_identifier_from_name,
                  name_generator=None):
+        if start is None:
+            start = {}
         self._dict = dict(start)
 
         if name_generator is None:
