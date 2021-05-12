@@ -43,8 +43,10 @@ def python_method_impl_codegen(code, **kwargs):
 # }}}
 
 
-def execute_and_return_single_result(python_method_impl, code, initial_context={},
+def execute_and_return_single_result(python_method_impl, code, initial_context=None,
                                      max_steps=1):
+    if initial_context is None:
+        initial_context = {}
     interpreter = python_method_impl(code, function_map={})
     interpreter.set_up(t_start=0, dt_start=0, context=initial_context)
     has_state_component = False

@@ -441,10 +441,10 @@ class CodeGenerator(StructuredCodeGenerator):
                     sub=subscript_code,
                     expr=self._expr(inst.expression)))
 
-        for ident, start, stop in inst.loops:
+        for _ident, _start, _stop in inst.loops:
             emitter.dedent()
 
-        for ident, start, stop in inst.loops:
+        for _ident, _start, _stop in inst.loops:
             managed_ident = self._name_manager[ident]
             emitter(f"del {managed_ident}")
 
@@ -494,3 +494,5 @@ class CodeGenerator(StructuredCodeGenerator):
             self._emit("yield")
 
     # }}}
+
+# vim: foldmethod=marker

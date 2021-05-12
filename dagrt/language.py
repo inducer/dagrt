@@ -207,7 +207,9 @@ class Assign(Statement, AssignBase):
     """
 
     def __init__(self, assignee=None, assignee_subscript=None, expression=None,
-            loops=[], **kwargs):
+            loops=None, **kwargs):
+        if loops is None:
+            loops = []
 
         if "lhs" not in kwargs:
             if assignee is None:
@@ -1007,7 +1009,7 @@ class CodeBuilder:
         self._conditional_expression_stack.pop()
         self._last_if_block_conditional_expression = None
 
-    def assign(self, assignees, expression, loops=[]):
+    def assign(self, assignees, expression, loops=None):
         """Generate code for an assignment.
 
         *assignees* may be a variable, a subscript (if referring to an
@@ -1017,6 +1019,8 @@ class CodeBuilder:
         *loops* is a list of tuples of the form
         *(identifier, start_index, stop_index)*.
         """
+        if loops is None:
+            loops = []
 
         from dagrt.expression import parse
 

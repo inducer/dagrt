@@ -221,10 +221,10 @@ class NumpyInterpreter:
                         self.eval_mapper(start), self.eval_mapper(stop)):
                     self.context[ident] = i
 
-                    for val in implement_loops(loops[1:]):
+                    for _val in implement_loops(loops[1:]):
                         yield
 
-            for val in implement_loops(stmt.loops):
+            for _val in implement_loops(stmt.loops):
                 if stmt.assignee_subscript:
                     self.context[stmt.assignee][
                             self.eval_mapper(stmt.assignee_subscript)] = \
