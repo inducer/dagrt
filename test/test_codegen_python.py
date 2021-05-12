@@ -156,17 +156,17 @@ def test_basic_raise_codegen():
     method.set_up(t_start=0, dt_start=0, context={})
     try:
         # initialization
-        for result in method.run_single_step():
+        for _result in method.run_single_step():
             pass
         # first primary step
-        for result in method.run_single_step():
-            assert False
+        for _result in method.run_single_step():
+            raise AssertionError()
     except method.TimeStepUnderflow:
         pass
     except Method.StepError as e:
         assert e.condition == "TimeStepUnderflow"
     except Exception as e:
-        assert False, e
+        assert not e, e
 
 
 def test_basic_fail_step_codegen():
@@ -183,7 +183,7 @@ def test_basic_fail_step_codegen():
     method.set_up(t_start=0, dt_start=0, context={})
     print(codegen(code))
 
-    for evt in method.run_single_step():
+    for _evt in method.run_single_step():
         pass
 
     with pytest.raises(method.FailStepException):

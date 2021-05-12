@@ -433,7 +433,7 @@ def parse(expr):
     return substitutor(parser(expr))
 
 
-def substitute(expression, variable_assignments={}, **kwargs):
+def substitute(expression, variable_assignments=None, **kwargs):
     """Perform variable substitution.
 
     :arg expression: A string or :mod:`pymbolic` expression.
@@ -441,6 +441,9 @@ def substitute(expression, variable_assignments={}, **kwargs):
     :arg variable_assignments: Mapping from variable names to expressions
     :arg kwargs: Extra arguments passed to to :func:`pymbolic.substitute`
     """
+    if variable_assignments is None:
+        variable_assignments = {}
+
     from pymbolic import substitute as substitute_pymbolic
 
     if isinstance(expression, str):

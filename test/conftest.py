@@ -35,4 +35,4 @@ def python_method_impl(request):
     elif kind == "codegen":
         return python_method_impl_codegen
     else:
-        assert False
+        raise ValueError("unexpected 'kind'")

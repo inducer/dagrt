@@ -18,6 +18,8 @@ Python
 
 .. autoclass:: CodeGenerator
 
+.. autoclass:: StepperInterface
+
 Fortran
 ~~~~~~~
 

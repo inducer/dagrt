@@ -511,7 +511,7 @@ class SymbolKindFinder:
                                 # We aren't supposed to get here. Kind inference
                                 # didn't succeed earlier. Since we made no progress,
                                 # it shouldn't succeed now.
-                                assert False
+                                raise AssertionError()
 
                         raise RuntimeError("failed to infer kinds")
 
