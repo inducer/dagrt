@@ -1,31 +1,15 @@
-Reference
-=========
-
-.. module:: dagrt
-
-Description language
---------------------
-
-.. automodule:: dagrt.language
-
-Code generation
----------------
+Code Generation/Execution
+=========================
 
 Python
 ~~~~~~
 
 .. automodule:: dagrt.codegen.python
 
-
 Fortran
 ~~~~~~~
 
 .. automodule:: dagrt.codegen.fortran
-
-Function registry
-~~~~~~~~~~~~~~~~~
-
-.. automodule:: dagrt.function_registry
 
 Data
 ~~~~
@@ -45,7 +29,6 @@ Utilities
 
 .. automodule:: dagrt.utils
    :members:
-
 
 :mod:`numpy`-based interpretation
 ---------------------------------
