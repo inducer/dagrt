@@ -25,6 +25,10 @@ from dagrt.expression import EvaluationMapper
 
 
 __doc__ = """
+.. autoclass:: StateComputed
+.. autoclass:: StepCompleted
+.. autoclass:: StepFailed
+
 .. autoexception:: FailStepException
 .. autoclass:: TransitionEvent
 .. autoclass:: NumpyInterpreter
@@ -88,7 +92,13 @@ class NumpyInterpreter:
     """A :mod:`numpy`-targeting interpreter for the time integration language
     defined in :mod:`dagrt.language`.
 
+    Implements
+
     .. attribute:: next_phase
+
+    .. attribute:: StateComputed
+    .. attribute:: StepCompleted
+    .. attribute:: StepFailed
 
     .. automethod:: set_up
     .. automethod:: run
