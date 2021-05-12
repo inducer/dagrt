@@ -78,11 +78,6 @@ def builtin_dot_product(a, b):
     return np.vdot(a, b)
 
 
-def builtin_cumulative_product(a, axis):
-    import numpy as np
-    return np.cumprod(a, axis=axis)
-
-
 def builtin_array(n):
     import numpy as np
     if n != np.floor(n):
@@ -98,8 +93,8 @@ def builtin_array_utype(n, x):
         raise ValueError("array() argument n is not an integer")
     n = int(n)
 
-    return np.empty((n, x.size), dtype=x.dtype)
-    #return np.zeros((n, x.size), dtype=x.dtype)
+    #return np.empty((n, x.size), dtype=x.dtype)
+    return np.zeros((n, x.size), dtype=x.dtype)
 
 
 def builtin_matmul(a, b, a_cols, b_cols):
@@ -117,10 +112,6 @@ def builtin_matmul(a, b, a_cols, b_cols):
     res_mat = a_mat.dot(b_mat)
 
     return res_mat.reshape(-1, order="F")
-
-
-def builtin_reshape(a, a_cols):
-    return a.reshape(-1, a_cols, order="F")
 
 
 def builtin_user_matmul(a, b, a_cols, b_cols, c_cols):
@@ -200,12 +191,10 @@ builtins = {
         "<builtin>norm_wrms": builtin_norm_wrms,
         "<builtin>norm_inf": builtin_norm_inf,
         "<builtin>dot_product": builtin_dot_product,
-        "<builtin>cumulative_product": builtin_cumulative_product,
         "<builtin>array": builtin_array,
         "<builtin>array_utype": builtin_array_utype,
         "<builtin>matmul": builtin_matmul,
         "<builtin>user_matmul": builtin_user_matmul,
-        "<builtin>reshape": builtin_reshape,
         "<builtin>transpose": builtin_transpose,
         "<builtin>linear_solve": builtin_linear_solve,
         "<builtin>svd": builtin_svd,

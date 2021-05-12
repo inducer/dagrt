@@ -59,12 +59,15 @@ documentation.
 
 .. autoclass:: Norm1
 .. autoclass:: Norm2
+.. autoclass:: NormWRMS
 .. autoclass:: NormInf
 .. autoclass:: DotProduct
 .. autoclass:: Len
 .. autoclass:: IsNaN
 .. autoclass:: Array_
+.. autoclass:: ArrayUType_
 .. autoclass:: MatMul
+.. autoclass:: UserMatMul
 .. autoclass:: Transpose
 .. autoclass:: LinearSolve
 .. autoclass:: SVD
@@ -344,28 +347,6 @@ class DotProduct(Function):
         return (Scalar(is_real_valued=False),)
 
 
-class CumulativeProduct(Function):
-    """``cumulative_product(x, a)`` return the cumulative product of *x*.
-    *x* is an array or user type, and *a* is an integer indicating the
-    axis over which the cumulative product should be taken.
-    """
-
-    result_names = ("result",)
-    identifier = "<builtin>cumulative_product"
-    arg_names = ("x", "a")
-    default_dict = {}
-
-    def get_result_kinds(self, arg_kinds, check):
-        x_kind, a_kind = self.resolve_args(arg_kinds)
-
-        if check and not isinstance(x_kind, (NoneType, Array, UserType)):
-            raise TypeError("argument 'x' of 'cumulative_product' is not user type")
-        if check and not isinstance(a_kind, (NoneType, Scalar)):
-            raise TypeError("argument 'y' of 'cumulative_product' is not a scalar")
-
-        return (Scalar(is_real_valued=False),)
-
-
 class Len(Function):
     """``len(x)`` returns the number of degrees of freedom in *x*.
     *x* is a user type or array.
@@ -539,30 +520,6 @@ class Transpose(Function):
         return (Array(is_real_valued),)
 
 
-class Reshape(Function):
-
-    result_names = ("result",)
-    identifier = "<builtin>reshape"
-    arg_names = ("a", "a_cols")
-    default_dict = {}
-
-    def get_result_kinds(self, arg_kinds, check):
-        a_kind, a_cols_kind = self.resolve_args(arg_kinds)
-
-        if a_kind is None:
-            raise UnableToInferKind(
-                    "transpose needs to know both arguments to infer result kind")
-
-        if check and not isinstance(a_kind, Array):
-            raise TypeError("argument 'a' of 'transpose' is not an array")
-        if check and not isinstance(a_cols_kind, Scalar):
-            raise TypeError("argument 'a_cols' of 'transpose' is not a scalar")
-
-        is_real_valued = a_kind.is_real_valued
-
-        return (Array(is_real_valued),)
-
-
 class LinearSolve(Function):
     """``linear_solve(a, b, a_cols, b_cols)`` returns a 1D array containing the
     matrix resulting from multiplying the matrix inverse of *a* by *b*, both
@@ -664,7 +621,6 @@ def _make_bfr():
             (NormWRMS(), "self._builtin_norm_wrms({args})"),
             (NormInf(), "self._builtin_norm_inf({args})"),
             (DotProduct(), "{numpy}.vdot({args})"),
-            (CumulativeProduct(), "{numpy}.cumprod({args})"),
             (Len(), "{numpy}.size({args})"),
             (IsNaN(), "{numpy}.isnan({args})"),
             (Array_(), "self._builtin_array({args})"),
@@ -672,7 +628,6 @@ def _make_bfr():
             (MatMul(), "self._builtin_matmul({args})"),
             (UserMatMul(), "self._builtin_user_matmul({args})"),
             (Transpose(), "self._builtin_transpose({args})"),
-            (Reshape(), "self._builtin_reshape({args})"),
             (LinearSolve(), "self._builtin_linear_solve({args})"),
             (Print(), "self._builtin_print({args})"),
             (SVD(), "self._builtin_svd({args})"),
