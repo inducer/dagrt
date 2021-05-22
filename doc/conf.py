@@ -65,9 +65,6 @@ pygments_style = "sphinx"
 
 html_theme = "furo"
 
-html_theme_options = {}
-
-
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
     "https://docs.python.org/3/": None,
@@ -76,4 +73,3 @@ intersphinx_mapping = {
     }
 
 autoclass_content = "class"
-autodoc_typehints = "description"
