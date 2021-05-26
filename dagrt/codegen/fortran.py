@@ -1287,10 +1287,10 @@ class CodeGenerator(StructuredCodeGenerator):
 
             # FIXME: need to steal UserType identifier somehow.
             self.emit_variable_decl(
-                    self.name_manager.name_global('usertype_array_element'),
-                    sym_kind=UserType('y'), is_argument=False,
+                    self.name_manager.name_global("usertype_array_element"),
+                    sym_kind=UserType("y"), is_argument=False,
                     refcount_name=self.name_manager.name_refcount(
-                        'uae', qualified_with_state=False))
+                        "uae", qualified_with_state=False))
             # Store the length of the UserTypeArray in the type itself.
             from dagrt.data import Scalar
             self.emit_variable_decl(
@@ -1479,7 +1479,7 @@ class CodeGenerator(StructuredCodeGenerator):
         ftype = StructureType("dagrt_usertype_array", (
             ("usertype_array_element",
                 self.get_fortran_type_for_user_type(type_identifier)),
-            (self.name_manager.name_refcount('uae', qualified_with_state=False),
+            (self.name_manager.name_refcount("uae", qualified_with_state=False),
                 PointerType(BuiltinType("integer")))))
 
         return ftype
@@ -1657,7 +1657,7 @@ class CodeGenerator(StructuredCodeGenerator):
         # since usertype arrays are actually intermediate structures.
         if isinstance(sym_kind, UserTypeArray):
             if assignee_subscript:
-                subscript_str += '%usertype_array_element'
+                subscript_str += "%usertype_array_element"
 
         if isinstance(expr, (Call, CallWithKwargs)):
             # These are supposed to have been transformed to AssignFunctionCall.
