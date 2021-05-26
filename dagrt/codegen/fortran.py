@@ -29,7 +29,7 @@ import re  # noqa
 from dagrt.codegen.expressions import FortranExpressionMapper
 from dagrt.codegen.codegen_base import StructuredCodeGenerator
 from dagrt.utils import is_state_variable
-from dagrt.data import UserType
+from dagrt.data import UserType, UserTypeArray
 from pytools.py_codegen import (
         # It's the same code. So sue me.
         PythonCodeGenerator as FortranEmitterBase)
@@ -308,8 +308,16 @@ class UserTypeReferenceTransformer(IdentityMapper):
     def transform(self, expr):
         raise NotImplementedError
 
+    def transform_utype_array(self, expr):
+        raise NotImplementedError
+
     def map_variable(self, expr):
         if isinstance(self.find_sym_kind(expr), UserType):
+            return self.transform(expr)
+        # We also need to catch UserTypeArrays here, and operate
+        # on their elements.
+        elif isinstance(self.find_sym_kind(expr), UserTypeArray):
+            expr = self.transform_utype_array(expr)
             return self.transform(expr)
         else:
             return expr
@@ -334,6 +342,9 @@ class ArraySubscriptAppender(UserTypeReferenceTransformer):
 
     def transform(self, expr):
         return expr[self.subscript]
+
+    def transform_utype_array(self, expr):
+        return expr.attr("usertype_array_element")
 
 # }}}
 
@@ -1267,6 +1278,27 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # }}}
 
+        # {{{ for usertype arrays, should they be required
+
+        with FortranTypeEmitter(
+                self.emitter,
+                "dagrt_usertype_array",
+                self) as emit:
+
+            # FIXME: need to steal UserType identifier somehow.
+            self.emit_variable_decl(
+                    self.name_manager.name_global('usertype_array_element'),
+                    sym_kind=UserType('y'), is_argument=False,
+                    refcount_name=self.name_manager.name_refcount(
+                        'uae', qualified_with_state=False))
+            # Store the length of the UserTypeArray in the type itself.
+            from dagrt.data import Scalar
+            self.emit_variable_decl(
+                    "array_size", sym_kind=Scalar(is_real_valued=True),
+                    is_argument=False)
+
+        # }}}
+
         # {{{ state type
 
         with FortranTypeEmitter(
@@ -1440,6 +1472,18 @@ class CodeGenerator(StructuredCodeGenerator):
 
         return ftype
 
+    def get_fortran_type_for_user_type_array(self, type_identifier,
+                                             is_argument=False):
+        # The type is a structure type, which has two members:
+        # a UserType and the (integer) refcount.
+        ftype = StructureType("dagrt_usertype_array", (
+            ("usertype_array_element",
+                self.get_fortran_type_for_user_type(type_identifier)),
+            (self.name_manager.name_refcount('uae', qualified_with_state=False),
+                PointerType(BuiltinType("integer")))))
+
+        return ftype
+
     def emit_variable_decl(self, fortran_name, sym_kind,
             is_argument=False, other_specifiers=(), emit=None,
             refcount_name=None):
@@ -1450,7 +1494,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         type_specifiers = other_specifiers
 
-        from dagrt.data import UserType
+        from dagrt.data import UserType, UserTypeArray
         if isinstance(sym_kind, Boolean):
             type_name = "logical"
 
@@ -1483,6 +1527,14 @@ class CodeGenerator(StructuredCodeGenerator):
                 emit(
                         "integer, pointer ::  {refcount_name}".format(
                             refcount_name=refcount_name))
+
+        elif isinstance(sym_kind, UserTypeArray):
+            ftype = self.get_fortran_type_for_user_type_array(sym_kind.identifier,
+                    is_argument=is_argument)
+
+            # This is a 1D array of UserTypes.
+            type_name = "type(dagrt_usertype_array)"
+            type_specifiers += ("dimension(:)",)
 
         else:
             raise ValueError("unknown variable kind: %s" % type(sym_kind).__name__)
@@ -1561,11 +1613,25 @@ class CodeGenerator(StructuredCodeGenerator):
             sym_kind, expr):
         self.emit_variable_deinit(assignee_sym, sym_kind)
 
+        # We need to check if the RHS of the user type move is an
+        # element of a UserTypeArray - if so, we need to add the
+        # entrance to the derived type.
+        expression = self.name_manager[expr.name]
+        if isinstance(expr, Variable):
+            expr_kind = self.sym_kind_table.get(self.current_function, expr.name)
+            if isinstance(expr_kind, UserTypeArray):
+                expression = self.expr(expr) + "%usertype_array_element"
+        if isinstance(expr, (Subscript, Lookup)):
+            expr_kind = self.sym_kind_table.get(self.current_function,
+                                                expr.aggregate.name)
+            if isinstance(expr_kind, UserTypeArray):
+                expression = self.expr(expr) + "%usertype_array_element"
+
         self.emit_traceable(
             "{name} => {expr}"
             .format(
                 name=assignee_fortran_name,
-                expr=self.name_manager[expr.name]))
+                expr=expression))
         self.emit_traceable(
             "{tgt_refcnt} => {refcnt}"
             .format(
@@ -1587,11 +1653,16 @@ class CodeGenerator(StructuredCodeGenerator):
         else:
             subscript_str = ""
 
+        # Special treatment for usertype arrays needed here,
+        # since usertype arrays are actually intermediate structures.
+        if isinstance(sym_kind, UserTypeArray):
+            if assignee_subscript:
+                subscript_str += '%usertype_array_element'
+
         if isinstance(expr, (Call, CallWithKwargs)):
             # These are supposed to have been transformed to AssignFunctionCall.
             raise RuntimeError("bare Call/CallWithKwargs encountered in "
                     "Fortran code generator")
-
         else:
             self.emit_trace("{assignee_fortran_name}{subscript_str} = {expr}..."
                     .format(
@@ -1600,18 +1671,58 @@ class CodeGenerator(StructuredCodeGenerator):
                         expr=str(expr)[:50]))
 
             from dagrt.data import UserType
-            if not isinstance(sym_kind, UserType):
+            if isinstance(sym_kind, UserType):
+                ftype = self.get_fortran_type_for_user_type(sym_kind.identifier)
+                AssignmentEmitter(self)(
+                        ftype, assignee_fortran_name, {}, expr,
+                        is_rhs_target=True)
+            elif isinstance(sym_kind, UserTypeArray):
+                # This will require a specialized assignment emitter,
+                # wherein the RHS expression is transformed to insert
+                # the proper structure stuff for UserTypeArrays.
+                ftype = self.get_fortran_type_for_user_type_array(
+                        sym_kind.identifier)
+                expression = self.expr(expr)
+                if isinstance(expr, Variable):
+                    expr_kind = self.sym_kind_table.get(self.current_function,
+                                                        expr.name)
+                    if isinstance(expr_kind, UserTypeArray):
+                        # We need to loop through the UserTypeArray here,
+                        # and attach the structure entrance to both the LHS and
+                        # the RHS...
+                        ident = self.name_manager["i"]
+                        expression = self.expr(expr) + \
+                                "({})%usertype_array_element".format(ident)
+                        subscript_str += "({})%usertype_array_element".format(ident)
+                        em = FortranDoEmitter(
+                            self.emitter, ident,
+                            "1, {}".format(
+                                self.expr(expr) + "%array_size"),
+                            self)
+                        em.__enter__()
+
+                if isinstance(expr, (Subscript, Lookup)):
+                    # We're indexing into a UserTypeArray here.
+                    expr_kind = self.sym_kind_table.get(self.current_function,
+                                                        expr.aggregate.name)
+                    if isinstance(expr_kind, UserTypeArray):
+                        expression = self.expr(expr) + "%usertype_array_element"
+                self.emit(
+                        "{name}{subscript_str} = {expr}"
+                        .format(
+                            name=assignee_fortran_name,
+                            subscript_str=subscript_str,
+                            expr=expression))
+                if (isinstance(expr, Variable)
+                        and isinstance(expr_kind, UserTypeArray)):
+                    self.emitter.__exit__(None, None, None)
+            else:
                 self.emit(
                         "{name}{subscript_str} = {expr}"
                         .format(
                             name=assignee_fortran_name,
                             subscript_str=subscript_str,
                             expr=self.expr(expr)))
-            else:
-                ftype = self.get_fortran_type_for_user_type(sym_kind.identifier)
-                AssignmentEmitter(self)(
-                        ftype, assignee_fortran_name, {}, expr,
-                        is_rhs_target=True)
 
         self.emit("")
 
@@ -2078,7 +2189,8 @@ class CodeGenerator(StructuredCodeGenerator):
         sym_kind = self.sym_kind_table.get(
                 self.current_function, assignee_sym)
 
-        if assignee_subscript and not isinstance(sym_kind, Array):
+        if (assignee_subscript and not isinstance(sym_kind, Array)
+                and not isinstance(sym_kind, UserTypeArray)):
             raise TypeError("only arrays support subscripted assignment")
             return
 
@@ -2364,6 +2476,39 @@ def codegen_builtin_norm_2(results, function, args, arg_kinds,
     code_generator.emit("")
 
 
+# FIXME: this is currently a placeholder
+def codegen_builtin_norm_wrms(results, function, args, arg_kinds,
+        code_generator):
+    result, = results
+
+    from dagrt.data import Scalar, UserType, Array
+    x_kind = arg_kinds[0]
+    if isinstance(x_kind, Scalar):
+        if x_kind.is_real_valued:
+            ftype = BuiltinType("real*8")
+        else:
+            ftype = BuiltinType("complex*16")
+    elif isinstance(x_kind, UserType):
+        ftype = code_generator.user_type_map[x_kind.identifier]
+
+    elif isinstance(x_kind, Array):
+        code_generator.emit("{result} = norm2({arg})".format(
+            result=result, arg=args[0]))
+        return
+
+    else:
+        raise TypeError("unsupported kind for norm_2 argument: %s" % x_kind)
+
+    code_generator.emit(f"{result} = 0")
+    code_generator.emit("")
+
+    Norm2Computer(code_generator, result)(ftype, args[0], {})
+
+    code_generator.emit("")
+    code_generator.emit("{result} = sqrt({result})".format(result=result))
+    code_generator.emit("")
+
+
 class LenComputer(TypeVisitorWithResult):
     # FIXME: This could be made *way* more efficient by handling
     # arrays of built-in types directly.
@@ -2449,6 +2594,34 @@ builtin_array = CallCode("""
         """)
 
 
+def codegen_builtin_array_utype(results, function, args, arg_kinds,
+        code_generator):
+    result, = results
+
+    from dagrt.data import UserType
+    x_kind = arg_kinds[1]
+    if isinstance(x_kind, UserType):
+        alloc_check_name = code_generator.get_alloc_check_name(x_kind.identifier)
+    else:
+        raise TypeError("unsupported kind for array_utype argument: %s" % x_kind)
+
+    from dagrt.data import Scalar
+    code_generator.emit_variable_decl("i", sym_kind=Scalar(is_real_valued=True),
+                                      is_argument=False)
+    code_generator.emit(f"{result}%array_size = {args[0]}")
+    code_generator.emit(f"allocate({result}(0:{args[0]}-1))")
+    code_generator.emit("")
+    code_generator.emit(f"do i = 0, {args[0]}-1")
+    code_generator.emitter.indent()
+    code_generator.emit(
+            f"call {alloc_check_name}({result}(int(i))%usertype_array_element, "
+            + f"{result}(int(i))%dagrt_refcnt_uae")
+    code_generator.emitter.dedent()
+    code_generator.emit("end do")
+
+    code_generator.emit("")
+
+
 UTIL_MACROS = """
     <%def name="write_matrix(mat_array, rows_var)" >
         <%
@@ -2504,10 +2677,39 @@ UTIL_MACROS = """
         if kind.is_real_valued:
             return "real (kind=%s)" % real_scalar_kind
         else:
-            return "compelx (kind=%s)" % complex_scalar_kind
+            return "complex (kind=%s)" % complex_scalar_kind
     %>
 
     """
+
+# FIXME: this is currently a placeholder
+builtin_user_matmul = CallCode(UTIL_MACROS + """
+        <%
+        a_rows = declare_new("integer", "a_rows")
+        b_rows = declare_new("integer", "b_rows")
+        res_size = declare_new("integer", "res_size")
+        %>
+
+        ${check_matrix(a, a_cols, a_rows, "matmul")}
+        ${check_matrix(b, b_cols, b_rows, "matmul")}
+
+        ${a_rows} = size(${a}) / int(${a_cols})
+        ${b_rows} = size(${b}) / int(${b_cols})
+
+        ${res_size} = ${a_rows} * int(${b_cols})
+
+        if (allocated(${result})) then
+            deallocate(${result})
+        endif
+
+        allocate(${result}(0:${res_size}-1))
+
+        ${result} = reshape( &
+                matmul( &
+                    reshape(${a}, (/${a_rows}, int(${a_cols})/)), &
+                    reshape(${b}, (/${b_rows}, int(${b_cols})/))), &
+                (/${res_size}/))
+        """)
 
 builtin_matmul = CallCode(UTIL_MACROS + """
         <%

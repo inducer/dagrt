@@ -46,6 +46,7 @@ Symbol kinds
 .. autoclass:: Scalar
 .. autoclass:: Array
 .. autoclass:: UserType
+.. autoclass:: UserTypeArray
 
 Symbol kind inference
 ^^^^^^^^^^^^^^^^^^^^^
@@ -131,6 +132,22 @@ class Array(SymbolKind):
 
     def __getinitargs__(self):
         return (self.is_real_valued,)
+
+
+class UserTypeArray(SymbolKind):
+    """A variable-sized one-dimensional array
+       of user types.
+
+    .. attribute:: identifier
+
+        A unique identifier for this type.
+    """
+
+    def __init__(self, identifier):
+        super().__init__(identifier=identifier)
+
+    def __getinitargs__(self):
+        return (self.identifier,)
 
 
 class UserType(SymbolKind):
@@ -424,13 +441,16 @@ class KindInferenceMapper(Mapper):
 
     def map_subscript(self, expr):
         agg_kind = self.rec(expr.aggregate)
-        if self.check and not isinstance(agg_kind, Array):
-            raise ValueError(
-                    "only arrays can be subscripted, not '%s' "
-                    "which is a '%s'"
-                    % (expr.aggregate, type(agg_kind).__name__))
-
-        return Scalar(is_real_valued=agg_kind.is_real_valued)
+        if isinstance(agg_kind, Array):
+            return Scalar(is_real_valued=agg_kind.is_real_valued)
+        elif isinstance(agg_kind, UserTypeArray):
+            return UserType(agg_kind.identifier)
+        else:
+            if self.check:
+                raise ValueError(
+                        "only arrays or UserTypeArrays can be "
+                        "subscripted, not '%s' which is a '%s'"
+                        % (expr.aggregate, type(agg_kind).__name__))
 
 # }}}
 

@@ -26,7 +26,7 @@ THE SOFTWARE.
 
 from pytools import RecordWithoutPickling
 from dagrt.data import (
-        UserType, Integer, Boolean, Scalar, Array, UnableToInferKind)
+        UserType, Integer, Boolean, Scalar, Array, UserTypeArray, UnableToInferKind)
 
 NoneType = type(None)
 
@@ -306,13 +306,18 @@ class NormWRMS(_NormBase):
     default_dict = {}
 
     def get_result_kinds(self, arg_kinds, check):
-        x_kind, y_kind, atol_kind, rtol_kind = self.resolve_args(arg_kinds)
+        x_kind, y_kind, yn_kind, atol_kind, rtol_kind = self.resolve_args(arg_kinds)
 
         if check and not isinstance(x_kind, (NoneType, Array, UserType)):
-            raise TypeError("argument 'x' of 'norm' is not a user type")
-
+            raise TypeError("argument 'x' of 'wrms_norm' is not a user type")
         if check and not isinstance(y_kind, (NoneType, Array, UserType)):
-            raise TypeError("argument 'y' of 'norm' is not a user type")
+            raise TypeError("argument 'y' of 'wrms_norm' is not a user type")
+        if check and not isinstance(yn_kind, (NoneType, Array, UserType)):
+            raise TypeError("argument 'ynew' of 'wrms_norm' is not a user type")
+        if check and not isinstance(atol_kind, (Scalar, Array)):
+            raise TypeError("argument 'atol' of 'wrms_norm' is not a scalar/array")
+        if check and not isinstance(rtol_kind, (Scalar, Array)):
+            raise TypeError("argument 'rtol' of 'wrms_norm' is not a scalar/array")
 
         return (Scalar(is_real_valued=True),)
 
@@ -405,8 +410,8 @@ class Array_(Function):  # noqa
 
 
 class ArrayUType_(Function):  # noqa
-    """``array_utype(n, x)`` returns an empty array with *n* entries in it.
-    *n* must be an integer.
+    """``array_utype(n, x)`` returns an empty array with *n* entries in it,
+    in which each entry is a user type. *n* must be an integer.
     """
 
     result_names = ("result",)
@@ -419,10 +424,12 @@ class ArrayUType_(Function):  # noqa
 
         if check and not isinstance(n_kind, Scalar):
             raise TypeError("argument 'n' of 'array_utype' is not a scalar")
-        if check and not isinstance(x_kind, (NoneType, Array, UserType)):
+        if check and not isinstance(x_kind, UserType):
             raise TypeError("argument 'x' of 'array_utype' is not a user type")
 
-        return (Array(is_real_valued=True),)
+        # FIXME: need to robustly get usertype argument's identifier...?
+        #return (UserTypeArray(identifier=x_kind.identifier),)
+        return (UserTypeArray(identifier="y"),)
 
 
 class MatMul(Function):
@@ -477,19 +484,19 @@ class UserMatMul(Function):
                     "matmul needs to know both arguments to infer result kind")
 
         if check and not isinstance(a_kind, Array):
-            raise TypeError("argument 'a' of 'matmul' is not an array")
-        if check and not isinstance(b_kind, Array):
-            raise TypeError("argument 'a' of 'matmul' is not an array")
+            raise TypeError("argument 'a' of 'user_matmul' is not an array")
+        if check and not isinstance(b_kind, UserTypeArray):
+            raise TypeError("argument 'b' of 'user_matmul' not array of UserTypes")
         if check and not isinstance(a_cols_kind, Scalar):
-            raise TypeError("argument 'a_cols' of 'matmul' is not a scalar")
+            raise TypeError("argument 'a_cols' of 'user_matmul' is not a scalar")
         if check and not isinstance(b_cols_kind, Scalar):
-            raise TypeError("argument 'b_cols' of 'matmul' is not a scalar")
+            raise TypeError("argument 'b_cols' of 'user_matmul' is not a scalar")
         if check and not isinstance(c_cols_kind, Scalar):
-            raise TypeError("argument 'c_cols' of 'matmul' is not a scalar")
+            raise TypeError("argument 'c_cols' of 'user_matmul' is not a scalar")
 
-        is_real_valued = a_kind.is_real_valued and b_kind.is_real_valued
-
-        return (Array(is_real_valued),)
+        # FIXME: need to robustly obtain usertypearray argument's identifier...
+        return (UserTypeArray(identifier=b_kind.identifier,),)
+        #return (UserTypeArray(identifier="y",),)
 
 
 class Transpose(Function):
@@ -644,14 +651,20 @@ def _make_bfr():
 
     bfr = bfr.register_codegen(Norm2.identifier, "fortran",
             f.codegen_builtin_norm_2)
+    bfr = bfr.register_codegen(NormWRMS.identifier, "fortran",
+            f.codegen_builtin_norm_wrms)
     bfr = bfr.register_codegen(Len.identifier, "fortran",
             f.codegen_builtin_len)
     bfr = bfr.register_codegen(IsNaN.identifier, "fortran",
             f.codegen_builtin_isnan)
     bfr = bfr.register_codegen(Array_.identifier, "fortran",
             f.builtin_array)
+    bfr = bfr.register_codegen(ArrayUType_.identifier, "fortran",
+            f.codegen_builtin_array_utype)
     bfr = bfr.register_codegen(MatMul.identifier, "fortran",
             f.builtin_matmul)
+    bfr = bfr.register_codegen(UserMatMul.identifier, "fortran",
+            f.builtin_user_matmul)
     bfr = bfr.register_codegen(Transpose.identifier, "fortran",
             f.builtin_transpose)
     bfr = bfr.register_codegen(LinearSolve.identifier, "fortran",
