@@ -1280,22 +1280,30 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ for usertype arrays, should they be required
 
-        with FortranTypeEmitter(
-                self.emitter,
-                "dagrt_usertype_array",
-                self) as emit:
+        # Check if this is needed.
+        utype_arrays_present = False
+        for _identifier, sym_kind in sorted(
+                self.sym_kind_table.global_table.items()):
+            if isinstance(sym_kind, UserTypeArray):
+                utype_arrays_present = True
 
-            # FIXME: need to steal UserType identifier somehow.
-            self.emit_variable_decl(
-                    self.name_manager.name_global("usertype_array_element"),
-                    sym_kind=UserType("y"), is_argument=False,
-                    refcount_name=self.name_manager.name_refcount(
-                        "uae", qualified_with_state=False))
-            # Store the length of the UserTypeArray in the type itself.
-            from dagrt.data import Scalar
-            self.emit_variable_decl(
-                    "array_size", sym_kind=Scalar(is_real_valued=True),
-                    is_argument=False)
+        if utype_arrays_present:
+            with FortranTypeEmitter(
+                    self.emitter,
+                    "dagrt_usertype_array",
+                    self) as emit:
+
+                # FIXME: need to steal UserType identifier somehow.
+                self.emit_variable_decl(
+                        self.name_manager.name_global("usertype_array_element"),
+                        sym_kind=UserType("y"), is_argument=False,
+                        refcount_name=self.name_manager.name_refcount(
+                            "uae", qualified_with_state=False))
+                # Store the length of the UserTypeArray in the type itself.
+                from dagrt.data import Scalar
+                self.emit_variable_decl(
+                        "array_size", sym_kind=Scalar(is_real_valued=True),
+                        is_argument=False)
 
         # }}}
 
