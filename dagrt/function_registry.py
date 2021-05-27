@@ -427,9 +427,7 @@ class ArrayUType_(Function):  # noqa
         if check and not isinstance(x_kind, UserType):
             raise TypeError("argument 'x' of 'array_utype' is not a user type")
 
-        # FIXME: need to robustly get usertype argument's identifier...?
-        #return (UserTypeArray(identifier=x_kind.identifier),)
-        return (UserTypeArray(identifier="y"),)
+        return (UserTypeArray(identifier=x_kind.identifier),)
 
 
 class MatMul(Function):
@@ -494,9 +492,7 @@ class UserMatMul(Function):
         if check and not isinstance(c_cols_kind, Scalar):
             raise TypeError("argument 'c_cols' of 'user_matmul' is not a scalar")
 
-        # FIXME: need to robustly obtain usertypearray argument's identifier...
         return (UserTypeArray(identifier=b_kind.identifier,),)
-        #return (UserTypeArray(identifier="y",),)
 
 
 class Transpose(Function):
