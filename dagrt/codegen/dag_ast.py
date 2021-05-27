@@ -1,8 +1,4 @@
 """Abstract syntax"""
-from pymbolic.mapper import IdentityMapper
-from pymbolic.primitives import Expression, LogicalNot
-from dagrt.language import Nop
-
 
 __copyright__ = "Copyright (C) 2015 Matt Wala"
 
@@ -26,6 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from pymbolic.mapper import IdentityMapper, Collector
+from pymbolic.mapper.stringifier import StringifyMapper
+from pymbolic.primitives import Expression, LogicalNot
+from dagrt.language import Nop
+
+
+# {{{ ast node types
 
 class IfThen(Expression):
     """
@@ -128,6 +131,117 @@ class StatementWrapper(Expression):
         return self.statement,
 
     mapper_method = "map_StatementWrapper"
+
+# }}}
+
+
+# {{{ ast mappers
+
+class ASTCollector(Collector):
+    def map_IfThenElse(self, expr):
+        return self.combine([
+            self.rec(expr.condition),
+            self.rec(expr.then),
+            self.rec(expr.else_),
+            ])
+
+    def map_IfThen(self, expr):
+        return self.combine([
+            self.rec(expr.condition),
+            self.rec(expr.then),
+            ])
+
+    def map_ForLoop(self, expr):
+        return self.combine([
+                self.rec(expr.lbound),
+                self.rec(expr.ubound),
+                self.rec(expr.body)])
+
+    def map_Block(self, expr):
+        return self.combine([
+            self.rec(ch)
+            for ch in expr.children])
+
+
+class LoopVariableFinder(ASTCollector):
+    def map_constant(self, expr):
+        return set()
+
+    def map_variable(self, expr):
+        return set()
+
+    def map_ForLoop(self, expr):
+        return {expr.loop_var_name} | super().map_ForLoop(expr)
+
+    def map_StatementWrapper(self, expr):
+        return set()
+
+
+class ASTIdentityMapper(IdentityMapper):
+    def map_IfThenElse(self, expr):
+        return type(expr)(self.rec(expr.condition), self.rec(expr.then),
+                          self.rec(expr.else_))
+
+    def map_IfThen(self, expr):
+        return type(expr)(self.rec(expr.condition), self.rec(expr.then))
+
+    def map_ForLoop(self, expr):
+        return type(expr)(
+                loop_var_name=expr.loop_var_name,
+                lbound=self.rec(expr.lbound),
+                ubound=self.rec(expr.ubound),
+                body=self.rec(expr.body))
+
+    def map_Block(self, expr):
+        return type(expr)(*[self.rec(child) for child in expr.children])
+
+    def map_NullASTNode(self, expr):
+        return type(expr)()
+
+    def map_StatementWrapper(self, expr):
+        return type(expr)(expr.statement)
+
+
+class ASTStringifier(StringifyMapper):
+    indent_str = "    "
+
+    def map_IfThenElse(self, expr, indent):
+        istr = self.indent_str*indent
+        return (
+                istr + f"if {expr.condition}:\n"
+                + self.rec(expr.then, indent+1) + "\n" +
+                + istr + "else:\n"
+                + self.rec(expr.else_, indent+1)
+                )
+
+    def map_IfThen(self, expr, indent):
+        istr = self.indent_str*indent
+        return (
+                istr + f"if {expr.condition}:\n"
+                + self.rec(expr.then, indent+1))
+
+    def map_ForLoop(self, expr, indent):
+        istr = self.indent_str*indent
+        return (
+                istr + f"for {expr.loop_var_name} "
+                f"in [{expr.lbound}, {expr.ubound}):\n"
+                + self.rec(expr.body, indent+1))
+
+    def map_Block(self, expr, indent):
+        istr = self.indent_str*indent
+        return (
+                istr + "{\n"
+                + "\n".join(self.rec(ch, indent+1) for ch in expr.children)
+                + "\n"
+                + istr + "}")
+
+    def map_NullASTNode(self, expr, indent):
+        return "**NULL**"
+
+    def map_StatementWrapper(self, expr, indent):
+        return self.indent_str*indent + str(expr.statement)
+
+# }}}
 
 
 def get_statements_in_ast(ast):
@@ -235,25 +349,6 @@ def simplify_ast(ast):
     )
 
     return reduce(apply_pass, passes, ast)
-
-
-class ASTIdentityMapper(IdentityMapper):
-
-    def map_IfThenElse(self, expr):
-        return type(expr)(self.rec(expr.condition), self.rec(expr.then),
-                          self.rec(expr.else_))
-
-    def map_IfThen(self, expr):
-        return type(expr)(self.rec(expr.condition), self.rec(expr.then))
-
-    def map_Block(self, expr):
-        return type(expr)(*[self.rec(child) for child in expr.children])
-
-    def map_NullASTNode(self, expr):
-        return type(expr)()
-
-    def map_StatementWrapper(self, expr):
-        return type(expr)(expr.statement)
 
 
 class ASTPreSimplifyMapper(ASTIdentityMapper):
@@ -381,3 +476,7 @@ class ASTSimplifyMapper(ASTIdentityMapper):
         if len(children) == 1:
             return children[0]
         return Block(*children)
+
+# }}}
+
+# vim: foldmethod=marker
