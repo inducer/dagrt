@@ -308,7 +308,7 @@ class UserTypeReferenceTransformer(IdentityMapper):
     def transform(self, expr):
         raise NotImplementedError
 
-    def transform_utype_array(self, expr):
+    def transform_utype_array(self, expr, identifier):
         raise NotImplementedError
 
     def map_variable(self, expr):
@@ -2196,7 +2196,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
         if (assignee_subscript and not isinstance(sym_kind, Array)
                 and not isinstance(sym_kind, UserTypeArray)):
-            raise TypeError("only arrays support subscripted assignment")
+            raise TypeError("only arrays and UserTypeArrays support"
+                    " subscripted assignment")
             return
 
         if not isinstance(sym_kind, UserType):
