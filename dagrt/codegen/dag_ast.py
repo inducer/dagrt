@@ -268,6 +268,33 @@ def get_statements_in_ast(ast):
         yield from get_statements_in_ast(child)
 
 
+def statement_to_ast(statement):
+    return StatementWrapper(statement)
+
+
+def conditional_to_ast(statement):
+    if statement.condition is not True:
+        new_statement = statement.copy(condition=True)
+        return IfThenElse(statement.condition,
+            statement_to_ast(new_statement),
+            NullASTNode())
+    else:
+        return statement_to_ast(statement)
+
+
+def loop_to_ast_node(statement):
+    if statement.loops:
+        loop_var_name, lower, upper = statement.loops[0]
+        new_statement = statement.copy(loops=statement.loops[1:])
+        return ForLoop(
+                loop_var_name=loop_var_name,
+                lbound=lower,
+                ubound=upper,
+                body=loop_to_ast_node(new_statement))
+    else:
+        return conditional_to_ast(statement)
+
+
 def create_ast_from_phase(code, phase_name):
     """
     Return an AST representation of the statements corresponding to the phase
@@ -276,7 +303,7 @@ def create_ast_from_phase(code, phase_name):
 
     phase = code.phases[phase_name]
 
-    # Construct a topological order of the statements.
+    # {{{ Construct a topological order of the statements.
     stack = []
     statement_map = {inst.id: inst for inst in phase.statements}
     visiting = set()
@@ -299,41 +326,25 @@ def create_ast_from_phase(code, phase_name):
             stack.extend(
                     sorted(statement_map[statement].depends_on))
 
-    # Convert the topological order to an AST.
+    # }}}
+
+    # {{{ Convert the topological order to an AST.
+
     main_block = []
+    for top_order_id in topological_order:
+        statement = statement_map[top_order_id]
 
-    from pymbolic.primitives import LogicalAnd
-
-    for statement in map(statement_map.__getitem__, topological_order):
         if isinstance(statement, Nop):
             continue
 
-        # Statements become AST nodes. An unconditional statement is wrapped
-        # into an StatementWrapper, while conditional statements are wrapped
-        # using IfThens.
+        main_block.append(loop_to_ast_node(statement))
 
-        if isinstance(statement.condition, LogicalAnd):
-            # LogicalAnd(c1, c2, ...) => IfThen(c1, IfThen(c2, ...))
-            conditions = reversed(statement.condition.children)
-            inst = IfThenElse(next(conditions),
-                              StatementWrapper(statement.copy(condition=True)),
-                              NullASTNode())
-            for next_cond in conditions:
-                inst = IfThenElse(next_cond, inst, NullASTNode())
-            main_block.append(inst)
+    # }}}
 
-        elif statement.condition is not True:
-            main_block.append(IfThenElse(statement.condition,
-                StatementWrapper(statement.copy(condition=True)),
-                NullASTNode()))
+    return simplify_ast(Block(*main_block))
 
-        else:
-            main_block.append(StatementWrapper(statement))
 
-    ast = Block(*main_block)
-
-    return simplify_ast(ast)
-
+# {{{ ast simplification
 
 def simplify_ast(ast):
     """Return an optimized copy of the AST `ast`."""

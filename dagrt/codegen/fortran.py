@@ -1048,16 +1048,6 @@ class CodeGenerator(StructuredCodeGenerator):
         from dagrt.codegen.analysis import verify_code
         verify_code(dag)
 
-        from dagrt.codegen.transform import (
-                eliminate_self_dependencies,
-                isolate_function_arguments,
-                isolate_function_calls,
-                expand_IfThenElse)
-        dag = eliminate_self_dependencies(dag)
-        dag = isolate_function_arguments(dag)
-        dag = isolate_function_calls(dag)
-        dag = expand_IfThenElse(dag)
-
         # from dagrt.language import show_dependency_graph
         # show_dependency_graph(dag)
 
@@ -1070,17 +1060,39 @@ class CodeGenerator(StructuredCodeGenerator):
         NameASTPair = namedtuple("NameASTPair", "name, ast")  # noqa
         fdescrs = []
 
+        def process_ast(ast, print_ast=False):
+            from dagrt.codegen.transform import (
+                    eliminate_self_dependencies,
+                    isolate_function_arguments,
+                    isolate_function_calls,
+                    expand_IfThenElse)
+            ast = eliminate_self_dependencies(ast)
+            ast = isolate_function_arguments(ast)
+            ast = isolate_function_calls(ast)
+            ast = expand_IfThenElse(ast)
+
+            if print_ast:
+                from dagrt.codegen.dag_ast import ASTStringifier
+                print(ASTStringifier()(ast, 0))
+
+            return ast
+
         for phase_name in sorted(dag.phases.keys()):
             ast = create_ast_from_phase(dag, phase_name)
-            fdescrs.append(NameASTPair(phase_name, ast))
+            fdescrs.append(NameASTPair(phase_name, process_ast(ast)))
 
         # }}}
 
-        from dagrt.data import SymbolKindFinder
+        from dagrt.data import SymbolKindFinder, Integer
+        from dagrt.codegen.dag_ast import LoopVariableFinder
 
         self.sym_kind_table = SymbolKindFinder(self.function_registry)(
-            [fd.name for fd in fdescrs],
-            [get_statements_in_ast(fd.ast) for fd in fdescrs])
+                [fd.name for fd in fdescrs],
+                [get_statements_in_ast(fd.ast) for fd in fdescrs],
+                forced_kinds=[
+                    (fd.name, loop_var, Integer())
+                    for fd in fdescrs
+                    for loop_var in LoopVariableFinder()(fd.ast)])
 
         from dagrt.codegen.analysis import (
                 collect_ode_component_names_from_dag,
@@ -1427,7 +1439,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.module_emitter.__exit__(None, None, None)
 
-        self.emit("! vim:foldmethod=marker")
+        self.emit("! vim:foldmethod=marker:filetype=fortran")
 
     # }}}
 
@@ -2070,6 +2082,19 @@ class CodeGenerator(StructuredCodeGenerator):
     def emit_else_begin(self):
         self.emitter.emit_else()  # pylint:disable=no-member
 
+    def emit_for_begin(self, loop_var_name, lbound, ubound):
+        em = FortranDoEmitter(
+                self.emitter,
+                self.name_manager[loop_var_name],
+                "int({}), int({})".format(
+                    self.expr(lbound),
+                    self.expr(ubound-1)),
+                code_generator=self)
+        em.__enter__()
+
+    def emit_for_end(self, loop_var_name):
+        self.emitter.__exit__(None, None, None)
+
     def emit_assign_expr(self, assignee_sym, assignee_subscript, expr):
         from dagrt.data import UserType, Array
 
@@ -2120,31 +2145,11 @@ class CodeGenerator(StructuredCodeGenerator):
     # {{{ emit_inst_Assign
 
     def emit_inst_Assign(self, inst):
-        start_em = self.emitter
-
-        for iloop, (ident, start, stop) in enumerate(inst.loops):
-            # Only parallelize the innermost loop
-            pdp = None
-            if iloop + 1 == len(inst.loops):
-                pdp = self.parallel_do_preamble
-
-            em = FortranDoEmitter(
-                    self.emitter,
-                    self.name_manager[ident],
-                    "int({}), int({})".format(self.expr(start), self.expr(stop-1)),
-                    code_generator=self,
-                    parallel_do_preamble=pdp)
-            em.__enter__()
+        assert not inst.loops
 
         self.emit_assign_expr(
                 inst.assignee, inst.assignee_subscript, inst.expression)
-
-        for _ident, _start, _stop in inst.loops[::-1]:
-            self.emitter.__exit__(None, None, None)
-
         self.emit_deinit_for_last_usage_of_vars(inst)
-
-        assert start_em is self.emitter
 
     # }}}
 
