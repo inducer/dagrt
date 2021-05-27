@@ -66,6 +66,9 @@ class ASTStatementRewriter(ASTIdentityMapper):
         else:
             return new_statements[0]
 
+    def map_statement(self, statement):
+        raise NotImplementedError()
+
 
 def apply_statement_rewriter(rewriter_cls, phase_ast):
     statements = list(get_statements_in_ast(phase_ast))
