@@ -279,7 +279,7 @@ class StatementFunctionCallIsolator(ASTStatementRewriter):
     def map_statement(self, stmt):
         from dagrt.language import Assign
         if not isinstance(stmt, Assign):
-            return stmt
+            return [stmt]
 
         new_deps = []
         new_statements = []
