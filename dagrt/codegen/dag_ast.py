@@ -25,7 +25,7 @@ THE SOFTWARE.
 from pymbolic.mapper import IdentityMapper, Collector
 from pymbolic.mapper.stringifier import StringifyMapper
 from pymbolic.primitives import Expression, LogicalNot
-from dagrt.language import Nop
+from dagrt.language import Nop, Assign
 
 
 # {{{ ast node types
@@ -283,7 +283,7 @@ def conditional_to_ast(statement):
 
 
 def loop_to_ast_node(statement):
-    if statement.loops:
+    if isinstance(statement, Assign) and statement.loops:
         loop_var_name, lower, upper = statement.loops[0]
         new_statement = statement.copy(loops=statement.loops[1:])
         return ForLoop(
