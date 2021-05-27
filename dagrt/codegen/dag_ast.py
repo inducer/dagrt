@@ -65,6 +65,29 @@ class IfThenElse(Expression):
     mapper_method = "map_IfThenElse"
 
 
+class ForLoop(Expression):
+    """
+    Bounds are a half-open interval as in Python
+
+    .. attribute: loop_var_name
+    .. attribute: lbound
+    .. attribute: ubound
+    .. attribute: body
+    """
+    init_args_names = ("loop_var_name", "lbound", "ubound", "body")
+
+    def __init__(self, loop_var_name, lbound, ubound, body):
+        self.loop_var_name = loop_var_name
+        self.lbound = lbound
+        self.ubound = ubound
+        self.body = body
+
+    def __getinitargs__(self):
+        return self.loop_var_name, self.lbound, self.ubound, self.body
+
+    mapper_method = "map_ForLoop"
+
+
 class Block(Expression):
     """
     .. attribute: children
@@ -120,6 +143,8 @@ def get_statements_in_ast(ast):
         children = (ast.then,)
     elif isinstance(ast, IfThenElse):
         children = (ast.then, ast.else_)
+    elif isinstance(ast, ForLoop):
+        children = (ast.body,)
     elif isinstance(ast, Block):
         children = ast.children
     else:
