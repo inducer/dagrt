@@ -993,7 +993,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def get_called_function_names(self, dag):
         from dagrt.codegen.analysis import collect_function_names_from_dag
-        result = collect_function_names_from_dag(dag, no_expressions=True)
+        result = collect_function_names_from_dag(dag)
 
         if self.call_before_state_update:
             result.add(self.call_before_state_update)
