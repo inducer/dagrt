@@ -1280,23 +1280,18 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ for usertype arrays, should they be required
 
-        # Check if this is needed.
-        utype_arrays_present = False
-        for _identifier, sym_kind in sorted(
-                self.sym_kind_table.global_table.items()):
-            if isinstance(sym_kind, UserTypeArray):
-                utype_arrays_present = True
-
-        if utype_arrays_present:
+        # Emit a derived type for each UserTypeArray that we have.
+        from dagrt.data import collect_user_type_arrays
+        usertype_arrays = collect_user_type_arrays(self.sym_kind_table)
+        for sym_id in usertype_arrays:
             with FortranTypeEmitter(
                     self.emitter,
-                    "dagrt_usertype_array",
+                    "dagrt_{}_array".format(sym_id),
                     self) as emit:
 
-                # FIXME: need to steal UserType identifier somehow.
                 self.emit_variable_decl(
                         self.name_manager.name_global("usertype_array_element"),
-                        sym_kind=UserType("y"), is_argument=False,
+                        sym_kind=UserType(sym_id), is_argument=False,
                         refcount_name=self.name_manager.name_refcount(
                             "uae", qualified_with_state=False))
                 # Store the length of the UserTypeArray in the type itself.
@@ -1484,7 +1479,7 @@ class CodeGenerator(StructuredCodeGenerator):
                                              is_argument=False):
         # The type is a structure type, which has two members:
         # a UserType and the (integer) refcount.
-        ftype = StructureType("dagrt_usertype_array", (
+        ftype = StructureType("dagrt_{}_array".format(type_identifier), (
             ("usertype_array_element",
                 self.get_fortran_type_for_user_type(type_identifier)),
             (self.name_manager.name_refcount("uae", qualified_with_state=False),
@@ -1541,7 +1536,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     is_argument=is_argument)
 
             # This is a 1D array of UserTypes.
-            type_name = "type(dagrt_usertype_array)"
+            type_name = "type(dagrt_{}_array)".format(sym_kind.identifier)
             type_specifiers += ("dimension(:)",)
 
         else:

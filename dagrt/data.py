@@ -60,6 +60,7 @@ Helper functions
 
 .. autofunction:: infer_kinds
 .. autofunction:: collect_user_types
+.. autofunction:: collect_user_type_arrays
 
 """
 
@@ -660,6 +661,30 @@ def collect_user_types(skt):
     for tbl in skt.per_phase_table.values():
         for kind in tbl.values():
             if isinstance(kind, UserType):
+                result.add(kind.identifier)
+
+    return result
+
+# }}}
+
+# {{{ collect user types
+
+
+def collect_user_type_arrays(skt):
+    """Collect all of the of :class:`UserTypeArray` identifiers in a table.
+
+    :arg skt: a :class:`SymbolKindTable`
+    :returns: a set of strings
+    """
+    result = set()
+
+    for kind in skt.global_table.values():
+        if isinstance(kind, UserTypeArray):
+            result.add(kind.identifier)
+
+    for tbl in skt.per_phase_table.values():
+        for kind in tbl.values():
+            if isinstance(kind, UserTypeArray):
                 result.add(kind.identifier)
 
     return result
