@@ -59,7 +59,6 @@ documentation.
 
 .. autoclass:: Norm1
 .. autoclass:: Norm2
-.. autoclass:: NormWRMS
 .. autoclass:: NormInf
 .. autoclass:: DotProduct
 .. autoclass:: Len
@@ -67,7 +66,6 @@ documentation.
 .. autoclass:: Array_
 .. autoclass:: ArrayUType_
 .. autoclass:: MatMul
-.. autoclass:: UserMatMul
 .. autoclass:: Transpose
 .. autoclass:: LinearSolve
 .. autoclass:: SVD
