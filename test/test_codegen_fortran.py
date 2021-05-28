@@ -150,6 +150,43 @@ def test_self_dep_in_loop():
         fortran_libraries=["lapack", "blas"])
 
 
+def test_usertype_arrays():
+    with CodeBuilder(name="primary") as cb:
+        cb("y_array", "<builtin>array_utype(5, <state>ytype)")
+        cb("y_array[i]", "<state>ytype",
+                loops=(("i", 0, 5),))
+        cb("y_array[i]", "i*<func>f(0, y_array[i])",
+                loops=(("i", 0, 5),))
+
+    code = create_DAGCode_with_steady_phase(cb.statements)
+
+    rhs_function = "<func>f"
+
+    from dagrt.function_registry import (
+            base_function_registry, register_ode_rhs)
+    freg = register_ode_rhs(base_function_registry, "ytype",
+                            identifier=rhs_function,
+                            input_names=("y",))
+    freg = freg.register_codegen(rhs_function, "fortran",
+            f.CallCode("""
+                ${result} = -2*${y}
+                """))
+
+    codegen = f.CodeGenerator(
+            "utype_arrays",
+            function_registry=freg,
+            user_type_map={"ytype": f.ArrayType((100,), f.BuiltinType("real*8"))},
+            timing_function="second")
+
+    code_str = codegen(code)
+
+    run_fortran([
+        ("utype_arrays.f90", code_str),
+        ("test_utype_arrays.f90", read_file("test_utype_arrays.f90")),
+        ],
+        fortran_libraries=["lapack", "blas"])
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])

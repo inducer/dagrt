@@ -470,7 +470,7 @@ class SymbolKindFinder:
     def __init__(self, function_registry):
         self.function_registry = function_registry
 
-    def __call__(self, names, phases, forced_kinds=None):
+    def __call__(self, names, phases, forced_kinds=None, user_type_map=None):
         """Infer the kinds of all the symbols in a program.
 
         :arg names: a list of phase names
@@ -492,6 +492,15 @@ class SymbolKindFinder:
         if forced_kinds is not None:
             for phase_name, ident, kind in forced_kinds:
                 result.set(phase_name, ident, kind=kind)
+
+        # If a UserType map is given, set the global symbol
+        # kind table accordingly.
+        # FIXME: are UserType identifiers guaranteed to
+        # match component_ids?
+        if user_type_map is not None:
+            for name in user_type_map:
+                result.set(names[0], "<state>{}".format(name),
+                           UserType(identifier=name))
 
         def make_kim(phase_name, check):
             return KindInferenceMapper(
