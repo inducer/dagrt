@@ -22,7 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from dagrt.codegen.dag_ast import Block, IfThen, IfThenElse, StatementWrapper
+from dagrt.codegen.dag_ast import \
+        Block, IfThen, IfThenElse, StatementWrapper, ForLoop
 
 
 class StructuredCodeGenerator:
@@ -54,6 +55,11 @@ class StructuredCodeGenerator:
             self.emit_else_begin()
             self.lower_node(node.else_)
             self.emit_if_end()
+
+        elif isinstance(node, ForLoop):
+            self.emit_for_begin(node.loop_var_name, node.lbound, node.ubound)
+            self.lower_node(node.body)
+            self.emit_for_end(node.loop_var_name)
 
         elif isinstance(node, Block):
             for child in node.children:
@@ -99,6 +105,12 @@ class StructuredCodeGenerator:
         raise NotImplementedError()
 
     def emit_else_begin(self):
+        raise NotImplementedError()
+
+    def emit_for_begin(self, loop_var_name, lbound, ubount):
+        raise NotImplementedError()
+
+    def emit_for_end(self, loop_var_name):
         raise NotImplementedError()
 
     def emit_return(self):

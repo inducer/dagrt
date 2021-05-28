@@ -1,8 +1,4 @@
 """Abstract syntax"""
-from pymbolic.mapper import IdentityMapper
-from pymbolic.primitives import Expression, LogicalNot
-from dagrt.language import Nop
-
 
 __copyright__ = "Copyright (C) 2015 Matt Wala"
 
@@ -26,8 +22,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from pymbolic.mapper import IdentityMapper, Collector
+from pymbolic.mapper.stringifier import StringifyMapper
+from pymbolic.primitives import Expression, LogicalNot
+from dagrt.language import Nop, Assign
 
-class IfThen(Expression):
+
+# {{{ ast node types
+
+class ASTNode(Expression):  # not really, but it lets us abuse pymbolic's machinery
+    def __str__(self):
+        return ASTStringifier()(self, 0)
+
+
+class IfThen(ASTNode):
     """
     .. attribute: condition
     .. attribute: then
@@ -45,7 +53,7 @@ class IfThen(Expression):
     mapper_method = "map_IfThen"
 
 
-class IfThenElse(Expression):
+class IfThenElse(ASTNode):
     """
     .. attribute: condition
     .. attribute: then
@@ -65,7 +73,30 @@ class IfThenElse(Expression):
     mapper_method = "map_IfThenElse"
 
 
-class Block(Expression):
+class ForLoop(ASTNode):
+    """
+    Bounds are a half-open interval as in Python
+
+    .. attribute: loop_var_name
+    .. attribute: lbound
+    .. attribute: ubound
+    .. attribute: body
+    """
+    init_args_names = ("loop_var_name", "lbound", "ubound", "body")
+
+    def __init__(self, loop_var_name, lbound, ubound, body):
+        self.loop_var_name = loop_var_name
+        self.lbound = lbound
+        self.ubound = ubound
+        self.body = body
+
+    def __getinitargs__(self):
+        return self.loop_var_name, self.lbound, self.ubound, self.body
+
+    mapper_method = "map_ForLoop"
+
+
+class Block(ASTNode):
     """
     .. attribute: children
     """
@@ -81,7 +112,7 @@ class Block(Expression):
     mapper_method = "map_Block"
 
 
-class NullASTNode(Expression):
+class NullASTNode(ASTNode):
 
     init_arg_names = ()
 
@@ -91,7 +122,7 @@ class NullASTNode(Expression):
     mapper_method = "map_NullASTNode"
 
 
-class StatementWrapper(Expression):
+class StatementWrapper(ASTNode):
     """
     .. attribute: statement
     """
@@ -105,6 +136,117 @@ class StatementWrapper(Expression):
         return self.statement,
 
     mapper_method = "map_StatementWrapper"
+
+# }}}
+
+
+# {{{ ast mappers
+
+class ASTCollector(Collector):
+    def map_IfThenElse(self, expr):
+        return self.combine([
+            self.rec(expr.condition),
+            self.rec(expr.then),
+            self.rec(expr.else_),
+            ])
+
+    def map_IfThen(self, expr):
+        return self.combine([
+            self.rec(expr.condition),
+            self.rec(expr.then),
+            ])
+
+    def map_ForLoop(self, expr):
+        return self.combine([
+                self.rec(expr.lbound),
+                self.rec(expr.ubound),
+                self.rec(expr.body)])
+
+    def map_Block(self, expr):
+        return self.combine([
+            self.rec(ch)
+            for ch in expr.children])
+
+
+class LoopVariableFinder(ASTCollector):
+    def map_constant(self, expr):
+        return set()
+
+    def map_variable(self, expr):
+        return set()
+
+    def map_ForLoop(self, expr):
+        return {expr.loop_var_name} | super().map_ForLoop(expr)
+
+    def map_StatementWrapper(self, expr):
+        return set()
+
+
+class ASTIdentityMapper(IdentityMapper):
+    def map_IfThenElse(self, expr):
+        return type(expr)(self.rec(expr.condition), self.rec(expr.then),
+                          self.rec(expr.else_))
+
+    def map_IfThen(self, expr):
+        return type(expr)(self.rec(expr.condition), self.rec(expr.then))
+
+    def map_ForLoop(self, expr):
+        return type(expr)(
+                loop_var_name=expr.loop_var_name,
+                lbound=self.rec(expr.lbound),
+                ubound=self.rec(expr.ubound),
+                body=self.rec(expr.body))
+
+    def map_Block(self, expr):
+        return type(expr)(*[self.rec(child) for child in expr.children])
+
+    def map_NullASTNode(self, expr):
+        return type(expr)()
+
+    def map_StatementWrapper(self, expr):
+        return type(expr)(expr.statement)
+
+
+class ASTStringifier(StringifyMapper):
+    indent_str = "    "
+
+    def map_IfThenElse(self, expr, indent):
+        istr = self.indent_str*indent
+        return (
+                istr + f"if {expr.condition}:\n"
+                + self.rec(expr.then, indent+1) + "\n" +
+                + istr + "else:\n"
+                + self.rec(expr.else_, indent+1)
+                )
+
+    def map_IfThen(self, expr, indent):
+        istr = self.indent_str*indent
+        return (
+                istr + f"if {expr.condition}:\n"
+                + self.rec(expr.then, indent+1))
+
+    def map_ForLoop(self, expr, indent):
+        istr = self.indent_str*indent
+        return (
+                istr + f"for {expr.loop_var_name} "
+                f"in [{expr.lbound}, {expr.ubound}):\n"
+                + self.rec(expr.body, indent+1))
+
+    def map_Block(self, expr, indent):
+        istr = self.indent_str*indent
+        return (
+                istr + "{\n"
+                + "\n".join(self.rec(ch, indent+1) for ch in expr.children)
+                + "\n"
+                + istr + "}")
+
+    def map_NullASTNode(self, expr, indent):
+        return "**NULL**"
+
+    def map_StatementWrapper(self, expr, indent):
+        return self.indent_str*indent + str(expr.statement)
+
+# }}}
 
 
 def get_statements_in_ast(ast):
@@ -120,6 +262,8 @@ def get_statements_in_ast(ast):
         children = (ast.then,)
     elif isinstance(ast, IfThenElse):
         children = (ast.then, ast.else_)
+    elif isinstance(ast, ForLoop):
+        children = (ast.body,)
     elif isinstance(ast, Block):
         children = ast.children
     else:
@@ -127,6 +271,33 @@ def get_statements_in_ast(ast):
 
     for child in children:
         yield from get_statements_in_ast(child)
+
+
+def statement_to_ast(statement):
+    return StatementWrapper(statement)
+
+
+def conditional_to_ast(statement):
+    if statement.condition is not True:
+        new_statement = statement.copy(condition=True)
+        return IfThenElse(statement.condition,
+            statement_to_ast(new_statement),
+            NullASTNode())
+    else:
+        return statement_to_ast(statement)
+
+
+def loop_to_ast_node(statement):
+    if isinstance(statement, Assign) and statement.loops:
+        loop_var_name, lower, upper = statement.loops[0]
+        new_statement = statement.copy(loops=statement.loops[1:])
+        return ForLoop(
+                loop_var_name=loop_var_name,
+                lbound=lower,
+                ubound=upper,
+                body=loop_to_ast_node(new_statement))
+    else:
+        return conditional_to_ast(statement)
 
 
 def create_ast_from_phase(code, phase_name):
@@ -137,7 +308,7 @@ def create_ast_from_phase(code, phase_name):
 
     phase = code.phases[phase_name]
 
-    # Construct a topological order of the statements.
+    # {{{ Construct a topological order of the statements.
     stack = []
     statement_map = {inst.id: inst for inst in phase.statements}
     visiting = set()
@@ -160,41 +331,25 @@ def create_ast_from_phase(code, phase_name):
             stack.extend(
                     sorted(statement_map[statement].depends_on))
 
-    # Convert the topological order to an AST.
+    # }}}
+
+    # {{{ Convert the topological order to an AST.
+
     main_block = []
+    for top_order_id in topological_order:
+        statement = statement_map[top_order_id]
 
-    from pymbolic.primitives import LogicalAnd
-
-    for statement in map(statement_map.__getitem__, topological_order):
         if isinstance(statement, Nop):
             continue
 
-        # Statements become AST nodes. An unconditional statement is wrapped
-        # into an StatementWrapper, while conditional statements are wrapped
-        # using IfThens.
+        main_block.append(loop_to_ast_node(statement))
 
-        if isinstance(statement.condition, LogicalAnd):
-            # LogicalAnd(c1, c2, ...) => IfThen(c1, IfThen(c2, ...))
-            conditions = reversed(statement.condition.children)
-            inst = IfThenElse(next(conditions),
-                              StatementWrapper(statement.copy(condition=True)),
-                              NullASTNode())
-            for next_cond in conditions:
-                inst = IfThenElse(next_cond, inst, NullASTNode())
-            main_block.append(inst)
+    # }}}
 
-        elif statement.condition is not True:
-            main_block.append(IfThenElse(statement.condition,
-                StatementWrapper(statement.copy(condition=True)),
-                NullASTNode()))
+    return simplify_ast(Block(*main_block))
 
-        else:
-            main_block.append(StatementWrapper(statement))
 
-    ast = Block(*main_block)
-
-    return simplify_ast(ast)
-
+# {{{ ast simplification
 
 def simplify_ast(ast):
     """Return an optimized copy of the AST `ast`."""
@@ -210,25 +365,6 @@ def simplify_ast(ast):
     )
 
     return reduce(apply_pass, passes, ast)
-
-
-class ASTIdentityMapper(IdentityMapper):
-
-    def map_IfThenElse(self, expr):
-        return type(expr)(self.rec(expr.condition), self.rec(expr.then),
-                          self.rec(expr.else_))
-
-    def map_IfThen(self, expr):
-        return type(expr)(self.rec(expr.condition), self.rec(expr.then))
-
-    def map_Block(self, expr):
-        return type(expr)(*[self.rec(child) for child in expr.children])
-
-    def map_NullASTNode(self, expr):
-        return type(expr)()
-
-    def map_StatementWrapper(self, expr):
-        return type(expr)(expr.statement)
 
 
 class ASTPreSimplifyMapper(ASTIdentityMapper):
@@ -356,3 +492,7 @@ class ASTSimplifyMapper(ASTIdentityMapper):
         if len(children) == 1:
             return children[0]
         return Block(*children)
+
+# }}}
+
+# vim: foldmethod=marker

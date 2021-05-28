@@ -180,11 +180,11 @@ class _FunctionNameCollector(Collector):
         return set()
 
     def map_call(self, expr):
-        return ({expr.function}
+        return ({expr.function.name}
                 | super().map_call(expr))
 
     def map_call_with_kwargs(self, expr):
-        return ({expr.function}
+        return ({expr.function.name}
                 | super().map_call_with_kwargs(expr))
 
 

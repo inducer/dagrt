@@ -447,10 +447,18 @@ class CodeGenerator(StructuredCodeGenerator):
         del self._emitter
 
     def emit_if_begin(self, expr):
-        self._emit("if {expr}:".format(expr=self._expr(expr)))
+        self._emit(f"if {self._expr(expr)}:")
         self._emitter.indent()
 
     def emit_if_end(self):
+        self._emitter.dedent()
+
+    def emit_for_begin(self, loop_var_name, lbound, ubound):
+        self._emit(f"for {self._name_manager[loop_var_name]} in "
+                f"range({self._expr(lbound)}, {self._expr(ubound)}):")
+        self._emitter.indent()
+
+    def emit_for_end(self, loop_var_name):
         self._emitter.dedent()
 
     def emit_else_begin(self):

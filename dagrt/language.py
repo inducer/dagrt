@@ -1048,7 +1048,7 @@ class CodeBuilder:
 
         from pymbolic.primitives import Call, CallWithKwargs, Variable
 
-        if isinstance(expression, (Call, CallWithKwargs)):
+        if isinstance(expression, (Call, CallWithKwargs)) and not loops:
             assignee_names = []
             for a in assignees:
                 if not isinstance(a, Variable):

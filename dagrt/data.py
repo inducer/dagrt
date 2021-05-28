@@ -444,7 +444,7 @@ class SymbolKindFinder:
     def __init__(self, function_registry):
         self.function_registry = function_registry
 
-    def __call__(self, names, phases):
+    def __call__(self, names, phases, forced_kinds=None):
         """Infer the kinds of all the symbols in a program.
 
         :arg names: a list of phase names
@@ -462,6 +462,10 @@ class SymbolKindFinder:
         phases = expanded_phases
 
         result = SymbolKindTable()
+
+        if forced_kinds is not None:
+            for phase_name, ident, kind in forced_kinds:
+                result.set(phase_name, ident, kind=kind)
 
         def make_kim(phase_name, check):
             return KindInferenceMapper(
