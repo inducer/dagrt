@@ -100,6 +100,7 @@ jobs:
 
     downstream_tests:
         strategy:
+            fail-fast: false
             matrix:
                 downstream_project: [leap, grudge]
                 run_what: [tests, examples]
@@ -128,7 +129,15 @@ jobs:
 
                 curl -L -O -k https://tiker.net/ci-support-v0
                 . ./ci-support-v0
-                build_py_project_in_venv
+
+                if test -f .test-conda-env-py3.yml; then
+                    CONDA_ENVIRONMENT=.test-conda-env-py3.yml
+                   build_py_project_in_conda_env
+                else
+                    EXTRA_INSTALL="numpy matplotlib scipy"
+                    build_py_project_in_venv
+                fi
+
                 if test "$RUN_WHAT" = "tests"; then
                     test_py_project
                 elif test "$RUN_WHAT" = "examples"; then
