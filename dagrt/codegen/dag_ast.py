@@ -30,7 +30,12 @@ from dagrt.language import Nop, Assign
 
 # {{{ ast node types
 
-class IfThen(Expression):
+class ASTNode(Expression):  # not really, but it lets us abuse pymbolic's machinery
+    def __str__(self):
+        return ASTStringifier()(self, 0)
+
+
+class IfThen(ASTNode):
     """
     .. attribute: condition
     .. attribute: then
@@ -48,7 +53,7 @@ class IfThen(Expression):
     mapper_method = "map_IfThen"
 
 
-class IfThenElse(Expression):
+class IfThenElse(ASTNode):
     """
     .. attribute: condition
     .. attribute: then
@@ -68,7 +73,7 @@ class IfThenElse(Expression):
     mapper_method = "map_IfThenElse"
 
 
-class ForLoop(Expression):
+class ForLoop(ASTNode):
     """
     Bounds are a half-open interval as in Python
 
@@ -91,7 +96,7 @@ class ForLoop(Expression):
     mapper_method = "map_ForLoop"
 
 
-class Block(Expression):
+class Block(ASTNode):
     """
     .. attribute: children
     """
@@ -107,7 +112,7 @@ class Block(Expression):
     mapper_method = "map_Block"
 
 
-class NullASTNode(Expression):
+class NullASTNode(ASTNode):
 
     init_arg_names = ()
 
@@ -117,7 +122,7 @@ class NullASTNode(Expression):
     mapper_method = "map_NullASTNode"
 
 
-class StatementWrapper(Expression):
+class StatementWrapper(ASTNode):
     """
     .. attribute: statement
     """

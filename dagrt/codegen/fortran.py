@@ -1072,8 +1072,7 @@ class CodeGenerator(StructuredCodeGenerator):
             ast = expand_IfThenElse(ast)
 
             if print_ast:
-                from dagrt.codegen.dag_ast import ASTStringifier
-                print(ASTStringifier()(ast, 0))
+                print(ast)
 
             return ast
 
