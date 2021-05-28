@@ -24,6 +24,10 @@ THE SOFTWARE.
 """
 
 from pymbolic.mapper import IdentityMapper
+from pytools import UniqueNameGenerator
+from dagrt.codegen.dag_ast import (
+        ASTIdentityMapper, get_statements_in_ast,
+        Block, StatementWrapper)
 
 __doc__ = """
 .. autofunction:: eliminate_self_dependencies
@@ -33,65 +37,104 @@ __doc__ = """
 """
 
 
+def get_stmt_id_generator(statements):
+    return UniqueNameGenerator({stmt.id for stmt in statements})
+
+
+def get_var_name_generator(statements):
+    existing_variables = set()
+    for stmt in statements:
+        existing_variables.update(stmt.get_written_variables())
+        existing_variables.update(stmt.get_read_variables())
+    return UniqueNameGenerator(existing_variables)
+
+
+# {{{ ast statement rewriter
+
+class ASTStatementRewriter(ASTIdentityMapper):
+    def __init__(self, stmt_id_gen, var_name_gen):
+        self.stmt_id_gen = stmt_id_gen
+        self.var_name_gen = var_name_gen
+
+    def map_StatementWrapper(self, expr):
+        new_statements = [
+                StatementWrapper(stmt)
+                for stmt in self.map_statement(expr.statement)]
+
+        if len(new_statements) > 1:
+            return Block(*new_statements)
+        else:
+            return new_statements[0]
+
+    def map_statement(self, statement):
+        raise NotImplementedError()
+
+
+def apply_statement_rewriter(rewriter_cls, phase_ast):
+    statements = list(get_statements_in_ast(phase_ast))
+    rewriter = rewriter_cls(
+            stmt_id_gen=get_stmt_id_generator(statements),
+            var_name_gen=get_var_name_generator(statements))
+
+    return rewriter(phase_ast)
+
+# }}}
+
+
 # {{{ eliminate self dependencies
 
-def eliminate_self_dependencies(dag):
-    stmt_id_gen = dag.get_stmt_id_generator()
-    var_name_gen = dag.get_var_name_generator()
+class SelfDependencyEliminator(ASTStatementRewriter):
+    def map_statement(self, stmt):
+        read_and_written = (
+                stmt.get_read_variables() & stmt.get_written_variables())
 
-    new_phases = {}
-    for phase_name, phase in dag.phases.items():
+        if not read_and_written:
+            return [stmt]
+
+        substs = []
+        tmp_stmt_ids = []
+
         new_statements = []
-        for stmt in sorted(phase.statements, key=lambda stmt: stmt.id):
-            read_and_written = (
-                    stmt.get_read_variables() & stmt.get_written_variables())
+        from dagrt.language import Assign
+        from pymbolic import var
+        for var_name in read_and_written:
+            tmp_var_name = self.var_name_gen(
+                    "temp_"
+                    + var_name.replace("<", "_").replace(">", "_"))
+            substs.append((var_name, var(tmp_var_name)))
 
-            if not read_and_written:
-                new_statements.append(stmt)
-                continue
+            tmp_stmt_id = self.stmt_id_gen("temp")
+            tmp_stmt_ids.append(tmp_stmt_id)
 
-            substs = []
-            tmp_stmt_ids = []
+            new_tmp_stmt = Assign(
+                    tmp_var_name, (), var(var_name),
+                    condition=stmt.condition,
+                    id=tmp_stmt_id,
+                    depends_on=stmt.depends_on)
+            new_statements.append(new_tmp_stmt)
 
-            from dagrt.language import Assign
-            from pymbolic import var
-            for var_name in read_and_written:
-                tmp_var_name = var_name_gen(
-                        "temp_"
-                        + var_name.replace("<", "_").replace(">", "_"))
-                substs.append((var_name, var(tmp_var_name)))
+        from pymbolic import substitute
+        new_stmt = (stmt
+                .map_expressions(
+                    lambda expr: substitute(expr, dict(substs)),
+                    include_lhs=False)
+                .copy(
+                    # lhs will be rewritten, but we don't want that.
+                    depends_on=stmt.depends_on | frozenset(tmp_stmt_ids)))
+        new_statements.append(new_stmt)
 
-                tmp_stmt_id = stmt_id_gen("temp")
-                tmp_stmt_ids.append(tmp_stmt_id)
+        return new_statements
 
-                new_tmp_stmt = Assign(
-                        tmp_var_name, (), var(var_name),
-                        condition=stmt.condition,
-                        id=tmp_stmt_id,
-                        depends_on=stmt.depends_on)
-                new_statements.append(new_tmp_stmt)
 
-            from pymbolic import substitute
-            new_stmt = (stmt
-                    .map_expressions(
-                        lambda expr: substitute(expr, dict(substs)),
-                        include_lhs=False)
-                    .copy(
-                        # lhs will be rewritten, but we don't want that.
-                        depends_on=stmt.depends_on | frozenset(tmp_stmt_ids)))
-
-            new_statements.append(new_stmt)
-
-        new_phases[phase_name] = phase.copy(statements=new_statements)
-
-    return dag.copy(phases=new_phases)
+def eliminate_self_dependencies(phase_ast):
+    return apply_statement_rewriter(SelfDependencyEliminator, phase_ast)
 
 # }}}
 
 
 # {{{ isolate function arguments
 
-class FunctionArgumentIsolator(IdentityMapper):
+class ExprFunctionArgumentIsolator(IdentityMapper):
     def __init__(self, new_statements,
             stmt_id_gen, var_name_gen):
         super().__init__()
@@ -142,40 +185,37 @@ class FunctionArgumentIsolator(IdentityMapper):
                 )
 
 
-def isolate_function_arguments(dag):
-    stmt_id_gen = dag.get_stmt_id_generator()
-    var_name_gen = dag.get_var_name_generator()
-
-    new_phases = {}
-    for phase_name, phase in dag.phases.items():
+class StatementFunctionArgumentIsolator(ASTStatementRewriter):
+    def map_statement(self, stmt):
         new_statements = []
 
-        fai = FunctionArgumentIsolator(
+        fai = ExprFunctionArgumentIsolator(
                 new_statements=new_statements,
-                stmt_id_gen=stmt_id_gen,
-                var_name_gen=var_name_gen)
+                stmt_id_gen=self.stmt_id_gen,
+                var_name_gen=self.var_name_gen)
 
-        for stmt in sorted(phase.statements, key=lambda stmt: stmt.id):
-            base_deps = stmt.depends_on
-            new_deps = []
+        base_deps = stmt.depends_on
+        new_deps = []
 
-            new_statements.append(
-                    stmt
-                    .map_expressions(
-                        lambda expr: fai(
-                            expr, stmt.condition, base_deps, new_deps))
-                    .copy(depends_on=stmt.depends_on | frozenset(new_deps)))
+        new_statements.append(
+                stmt
+                .map_expressions(
+                    lambda expr: fai(
+                        expr, stmt.condition, base_deps, new_deps))
+                .copy(depends_on=stmt.depends_on | frozenset(new_deps)))
 
-        new_phases[phase_name] = phase.copy(statements=new_statements)
+        return new_statements
 
-    return dag.copy(phases=new_phases)
+
+def isolate_function_arguments(phase_ast):
+    return apply_statement_rewriter(StatementFunctionArgumentIsolator, phase_ast)
 
 # }}}
 
 
 # {{{ isolate function calls
 
-class FunctionCallIsolator(IdentityMapper):
+class ExpressionFunctionCallIsolator(IdentityMapper):
     def __init__(self, new_statements,
             stmt_id_gen, var_name_gen):
         super().__init__()
@@ -235,49 +275,35 @@ class FunctionCallIsolator(IdentityMapper):
                 .map_call_with_kwargs)
 
 
-def isolate_function_calls_in_phase(phase, stmt_id_gen, var_name_gen):
-    new_statements = []
-
-    fci = FunctionCallIsolator(
-            new_statements=new_statements,
-            stmt_id_gen=stmt_id_gen,
-            var_name_gen=var_name_gen)
-
-    for stmt in sorted(phase.statements, key=lambda stmt: stmt.id):
-        new_deps = []
-
+class StatementFunctionCallIsolator(ASTStatementRewriter):
+    def map_statement(self, stmt):
         from dagrt.language import Assign
-        if isinstance(stmt, Assign):
-            new_statements.append(
-                    stmt
-                    .map_expressions(
-                        lambda expr: fci(
-                            expr, stmt.condition, stmt.depends_on, new_deps))
-                    .copy(depends_on=stmt.depends_on | frozenset(new_deps)))
-            from pymbolic.primitives import Call, CallWithKwargs
-            assert not isinstance(new_statements[-1].rhs,
-                    (Call, CallWithKwargs))
-        else:
-            new_statements.append(stmt)
+        if not isinstance(stmt, Assign):
+            return [stmt]
 
-    return phase.copy(statements=new_statements)
+        new_deps = []
+        new_statements = []
+
+        fci = ExpressionFunctionCallIsolator(
+                new_statements=new_statements,
+                stmt_id_gen=self.stmt_id_gen,
+                var_name_gen=self.var_name_gen)
+
+        new_statements.append(
+                stmt
+                .map_expressions(
+                    lambda expr: fci(
+                        expr, stmt.condition, stmt.depends_on, new_deps))
+                .copy(depends_on=stmt.depends_on | frozenset(new_deps)))
+        from pymbolic.primitives import Call, CallWithKwargs
+        assert not isinstance(new_statements[-1].rhs,
+                (Call, CallWithKwargs))
+
+        return new_statements
 
 
-def isolate_function_calls(dag):
-    """
-    :func:`isolate_function_arguments` should be
-    called before this.
-    """
-
-    stmt_id_gen = dag.get_stmt_id_generator()
-    var_name_gen = dag.get_var_name_generator()
-
-    new_phases = {}
-    for phase_name, phase in dag.phases.items():
-        new_phases[phase_name] = isolate_function_calls_in_phase(
-                phase, stmt_id_gen, var_name_gen)
-
-    return dag.copy(phases=new_phases)
+def isolate_function_calls(phase_ast):
+    return apply_statement_rewriter(StatementFunctionCallIsolator, phase_ast)
 
 # }}}
 
@@ -295,7 +321,7 @@ def flat_LogicalAnd(*children):  # noqa
 
 # {{{ expand IfThenElse expressions
 
-class IfThenElseExpander(IdentityMapper):
+class ExprIfThenElseExpander(IdentityMapper):
 
     def __init__(self, new_statements, stmt_id_gen, var_name_gen):
         super().__init__()
@@ -363,37 +389,33 @@ class IfThenElseExpander(IdentityMapper):
         return var(tmp_result)
 
 
-def expand_IfThenElse(dag):  # noqa
+class StatementIfThenElseExpander(ASTStatementRewriter):
+    def map_statement(self, stmt):
+        new_statements = []
+
+        expander = ExprIfThenElseExpander(
+            new_statements=new_statements,
+            stmt_id_gen=self.stmt_id_gen,
+            var_name_gen=self.var_name_gen)
+
+        base_deps = stmt.depends_on
+        new_deps = []
+
+        new_statements.append(
+            stmt.map_expressions(
+                lambda expr: expander(expr, stmt.condition, base_deps, new_deps))
+            .copy(depends_on=stmt.depends_on | frozenset(new_deps)))
+
+        return new_statements
+
+
+def expand_IfThenElse(phase_ast):  # noqa
     """
     Turn IfThenElse expressions into values that are computed as a result of an
     If statement. This is useful for targets that do not support ternary
     operators.
     """
-
-    stmt_id_gen = dag.get_stmt_id_generator()
-    var_name_gen = dag.get_var_name_generator()
-
-    new_phases = {}
-    for phase_name, phase in dag.phases.items():
-        new_statements = []
-
-        expander = IfThenElseExpander(
-            new_statements=new_statements,
-            stmt_id_gen=stmt_id_gen,
-            var_name_gen=var_name_gen)
-
-        for stmt in phase.statements:
-            base_deps = stmt.depends_on
-            new_deps = []
-
-            new_statements.append(
-                stmt.map_expressions(
-                    lambda expr: expander(expr, stmt.condition, base_deps, new_deps))
-                .copy(depends_on=stmt.depends_on | frozenset(new_deps)))
-
-        new_phases[phase_name] = phase.copy(statements=new_statements)
-
-    return dag.copy(phases=new_phases)
+    return apply_statement_rewriter(StatementIfThenElseExpander, phase_ast)
 
 # }}}
 

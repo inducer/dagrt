@@ -324,15 +324,6 @@ def test_IfThenElse(python_method_impl):
     assert result == expected_result
 
 
-def test_IfThenElse_expansion(python_method_impl):
-    from utils import execute_and_return_single_result
-    code, expected_result = get_IfThenElse_test_code_and_expected_result()
-    from dagrt.codegen.transform import expand_IfThenElse
-    code = expand_IfThenElse(code)
-    result = execute_and_return_single_result(python_method_impl, code)
-    assert result == expected_result
-
-
 def test_arrays_and_looping(python_method_impl):
     with CodeBuilder(name="primary") as cb:
         cb("myarray", "`<builtin>array`(20)")

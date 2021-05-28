@@ -172,7 +172,11 @@ class TemporaryDirectory:
 
 # {{{ run_fortran
 
-def run_fortran(sources, fortran_options=None, fortran_libraries=None):
+class DebuggerExit(Exception):
+    pass
+
+
+def run_fortran(sources, fortran_options=None, fortran_libraries=None, debug=False):
     if fortran_options is None:
         fortran_options = []
     if fortran_libraries is None:
@@ -202,16 +206,21 @@ def run_fortran(sources, fortran_options=None, fortran_libraries=None):
                 + ["-l"+lib for lib in fortran_libraries],
                 cwd=tmpdir)
 
-        p = Popen([join(tmpdir, "runtest")], stdout=PIPE, stderr=PIPE,
-                close_fds=True)
-        stdout_data, stderr_data = p.communicate()
+        if debug:
+            p = Popen(["gdb", "--args", join(tmpdir, "runtest")])
+            p.wait()
+            raise DebuggerExit
+        else:
+            p = Popen([join(tmpdir, "runtest")], stdout=PIPE, stderr=PIPE,
+                    close_fds=True)
+            stdout_data, stderr_data = p.communicate()
 
-        if stdout_data:
-            print("Fortran code said this on stdout: -----------------------------",
-                    file=sys.stderr)
-            print(stdout_data.decode(), file=sys.stderr)
-            print("---------------------------------------------------------------",
-                    file=sys.stderr)
+            if stdout_data:
+                print("Fortran code said this on stdout: -------------------------",
+                        file=sys.stderr)
+                print(stdout_data.decode(), file=sys.stderr)
+                print("-----------------------------------------------------------",
+                        file=sys.stderr)
 
         if stderr_data:
             raise RuntimeError(

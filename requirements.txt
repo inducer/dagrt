@@ -1,2 +1,2 @@
-git+git://github.com/inducer/pytools
-git+git://github.com/inducer/pymbolic
+git+https://github.com/inducer/pytools.git#egg=pytools
+git+https://github.com/inducer/pymbolic.git#egg=pymbolic
