@@ -2343,6 +2343,32 @@ class CodeGenerator(StructuredCodeGenerator):
                         + assignee_fortran_names
                         )))
 
+        # If we just built a UserTypeArray, we need to loop and call the
+        # appropriate allocation check on the elements.
+        if "array_utype" in fortran_func_name:
+            alloc_check_name = self.get_alloc_check_name(sym_kind.identifier)
+            ident = self.name_manager["i"]
+            em = FortranDoEmitter(
+                    self.emitter, ident,
+                    "1, {}".format(
+                        assignee_fortran_names[0] + "%array_size"),
+                    self)
+            em.__enter__()
+            uarray_entry = assignee_fortran_names[0] + "(int({}))".format(ident)
+            uarray_entry += "%{}".format(sym_kind.identifier)
+            refcnt_name = assignee_fortran_names[0] + "(int({}))".format(ident)
+            refcnt_name += "%{}".format(self.name_manager.name_refcount(
+                sym_kind.identifier, qualified_with_state=False))
+            self.emit(
+                    "call {alloc_check_name}({args})"
+                    .format(
+                        alloc_check_name=alloc_check_name,
+                        args=", ".join(
+                            self.extra_arguments
+                            + (uarray_entry, refcnt_name))
+                        ))
+            self.emitter.__exit__(None, None, None)
+
         self.emit_deinit_for_last_usage_of_vars(inst)
 
     # }}}
@@ -2604,34 +2630,19 @@ builtin_array = CallCode("""
         """)
 
 
-def codegen_builtin_array_utype(results, function, args, arg_kinds,
-        code_generator):
-    result, = results
+builtin_array_utype = CallCode("""
+        if (int(${n}).ne.${n}) then
+            write(dagrt_stderr,*) 'argument to array_utype() is not an integer'
+            stop
+        endif
 
-    from dagrt.data import UserType
-    x_kind = arg_kinds[1]
-    if isinstance(x_kind, UserType):
-        alloc_check_name = code_generator.get_alloc_check_name(x_kind.identifier)
-    else:
-        raise TypeError("unsupported kind for array_utype argument: %s" % x_kind)
+        if (allocated(${result})) then
+            deallocate(${result})
+        endif
 
-    refcount_name = code_generator.name_manager.name_refcount(
-            x_kind.identifier, qualified_with_state=False)
-    from dagrt.data import Scalar
-    code_generator.emit_variable_decl("i", sym_kind=Scalar(is_real_valued=True),
-                                      is_argument=False)
-    code_generator.emit(f"{result}%array_size = {args[0]}")
-    code_generator.emit(f"allocate({result}(0:{args[0]}-1))")
-    code_generator.emit("")
-    code_generator.emit(f"do i = 0, {args[0]}-1")
-    code_generator.emitter.indent()
-    code_generator.emit(
-            f"call {alloc_check_name}({result}(int(i))%{x_kind.identifier}, "
-            + f"{result}(int(i))%{refcount_name}")
-    code_generator.emitter.dedent()
-    code_generator.emit("end do")
-
-    code_generator.emit("")
+        ${result}%array_size = ${n}
+        allocate(${result}(0:int(${n})-1))
+        """)
 
 
 UTIL_MACROS = """

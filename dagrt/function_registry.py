@@ -656,7 +656,7 @@ def _make_bfr():
     bfr = bfr.register_codegen(Array_.identifier, "fortran",
             f.builtin_array)
     bfr = bfr.register_codegen(ArrayUType_.identifier, "fortran",
-            f.codegen_builtin_array_utype)
+            f.builtin_array_utype)
     bfr = bfr.register_codegen(MatMul.identifier, "fortran",
             f.builtin_matmul)
     bfr = bfr.register_codegen(UserMatMul.identifier, "fortran",
