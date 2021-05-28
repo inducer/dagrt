@@ -101,14 +101,19 @@ jobs:
     downstream_tests:
         strategy:
             matrix:
-                downstream_project: [leap]
-        name: Tests for downstream project ${{ matrix.downstream_project }}
+                include:
+                -   downstream_project: leap
+                    run_what: tests
+                -   downstream_project: grudge
+                    run_what: examples
+        name: Run ${{ matrix.run_what }} for downstream project ${{ matrix.downstream_project }}
         runs-on: ubuntu-latest
         steps:
         -   uses: actions/checkout@v2
         -   name: "Main Script"
             env:
                 DOWNSTREAM_PROJECT: ${{ matrix.downstream_project }}
+                RUN_WHAT: ${{ matrix.run_what }}
             run: |
                 git clone "https://github.com/inducer/$DOWNSTREAM_PROJECT.git"
                 cd "$DOWNSTREAM_PROJECT"
@@ -122,6 +127,13 @@ jobs:
                 curl -L -O -k https://tiker.net/ci-support-v0
                 . ./ci-support-v0
                 build_py_project_in_venv
-                test_py_project
+                if test "$RUN_WHAT" = "tests"; then
+                    test_py_project
+                elif test "$RUN_WHAT" = "examples"; then
+                    run_examples
+                else
+                    echo "Value $RUN_WHAT of RUN_WHAT not understood."
+                    exit 1
+                fi     
 
 # vim: sw=4
