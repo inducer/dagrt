@@ -101,11 +101,13 @@ jobs:
     downstream_tests:
         strategy:
             matrix:
-                include:
-                -   downstream_project: leap
-                    run_what: tests
+                downstream_project: [leap, grudge]
+                run_what: [tests, examples]
+                exclude:
+                # no need, no leap dependency
                 -   downstream_project: grudge
-                    run_what: examples
+                    run_what: tests
+
         name: Run ${{ matrix.run_what }} for downstream project ${{ matrix.downstream_project }}
         runs-on: ubuntu-latest
         steps:
