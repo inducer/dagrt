@@ -296,32 +296,6 @@ class Norm2(_NormBase):
     identifier = "<builtin>norm_2"
 
 
-class NormWRMS(_NormBase):
-    """``norm_wrms(x)`` returns the wrms-norm of *x*.
-    *x* is a user type or array, and *y* is also a user type
-    or array.
-    """
-    identifier = "<builtin>norm_wrms"
-    arg_names = ("x", "y", "ynew", "atol", "rtol")
-    default_dict = {}
-
-    def get_result_kinds(self, arg_kinds, check):
-        x_kind, y_kind, yn_kind, atol_kind, rtol_kind = self.resolve_args(arg_kinds)
-
-        if check and not isinstance(x_kind, (NoneType, Array, UserType)):
-            raise TypeError("argument 'x' of 'wrms_norm' is not a user type")
-        if check and not isinstance(y_kind, (NoneType, Array, UserType)):
-            raise TypeError("argument 'y' of 'wrms_norm' is not a user type")
-        if check and not isinstance(yn_kind, (NoneType, Array, UserType)):
-            raise TypeError("argument 'ynew' of 'wrms_norm' is not a user type")
-        if check and not isinstance(atol_kind, (Scalar, Array)):
-            raise TypeError("argument 'atol' of 'wrms_norm' is not a scalar/array")
-        if check and not isinstance(rtol_kind, (Scalar, Array)):
-            raise TypeError("argument 'rtol' of 'wrms_norm' is not a scalar/array")
-
-        return (Scalar(is_real_valued=True),)
-
-
 class NormInf(_NormBase):
     """``norm_inf(x)`` returns the infinity-norm of *x*.
     *x* is a user type or array.
@@ -462,39 +436,6 @@ class MatMul(Function):
         return (Array(is_real_valued),)
 
 
-class UserMatMul(Function):
-    """``matmul(a, b, a_cols, b_cols, c_cols)`` returns a 1D array containing the
-    matrix resulting from multiplying the arrays *a* and *b* (both interpreted
-    as matrices, with a number of columns *a_cols* and *b_cols* respectively).
-    """
-
-    result_names = ("result",)
-    identifier = "<builtin>user_matmul"
-    arg_names = ("a", "b", "a_cols", "b_cols", "c_cols")
-    default_dict = {}
-
-    def get_result_kinds(self, arg_kinds, check):
-        [a_kind, b_kind, a_cols_kind,
-                b_cols_kind, c_cols_kind] = self.resolve_args(arg_kinds)
-
-        if a_kind is None or b_kind is None:
-            raise UnableToInferKind(
-                    "matmul needs to know both arguments to infer result kind")
-
-        if check and not isinstance(a_kind, Array):
-            raise TypeError("argument 'a' of 'user_matmul' is not an array")
-        if check and not isinstance(b_kind, UserTypeArray):
-            raise TypeError("argument 'b' of 'user_matmul' not array of UserTypes")
-        if check and not isinstance(a_cols_kind, Scalar):
-            raise TypeError("argument 'a_cols' of 'user_matmul' is not a scalar")
-        if check and not isinstance(b_cols_kind, Scalar):
-            raise TypeError("argument 'b_cols' of 'user_matmul' is not a scalar")
-        if check and not isinstance(c_cols_kind, Scalar):
-            raise TypeError("argument 'c_cols' of 'user_matmul' is not a scalar")
-
-        return (UserTypeArray(identifier=b_kind.identifier,),)
-
-
 class Transpose(Function):
     """``transpose(a, a_cols)`` returns a 1D array containing the
     matrix resulting from transposing the array *a* (interpreted
@@ -621,7 +562,6 @@ def _make_bfr():
     for func, py_pattern in [
             (Norm1(), "self._builtin_norm_1({args})"),
             (Norm2(), "self._builtin_norm_2({args})"),
-            (NormWRMS(), "self._builtin_norm_wrms({args})"),
             (NormInf(), "self._builtin_norm_inf({args})"),
             (DotProduct(), "{numpy}.vdot({args})"),
             (Len(), "{numpy}.size({args})"),
@@ -629,7 +569,6 @@ def _make_bfr():
             (Array_(), "self._builtin_array({args})"),
             (ArrayUType_(), "self._builtin_array_utype({args})"),
             (MatMul(), "self._builtin_matmul({args})"),
-            (UserMatMul(), "self._builtin_user_matmul({args})"),
             (Transpose(), "self._builtin_transpose({args})"),
             (LinearSolve(), "self._builtin_linear_solve({args})"),
             (Print(), "self._builtin_print({args})"),
@@ -647,8 +586,6 @@ def _make_bfr():
 
     bfr = bfr.register_codegen(Norm2.identifier, "fortran",
             f.codegen_builtin_norm_2)
-    bfr = bfr.register_codegen(NormWRMS.identifier, "fortran",
-            f.codegen_builtin_norm_wrms)
     bfr = bfr.register_codegen(Len.identifier, "fortran",
             f.codegen_builtin_len)
     bfr = bfr.register_codegen(IsNaN.identifier, "fortran",
@@ -659,8 +596,6 @@ def _make_bfr():
             f.builtin_array_utype)
     bfr = bfr.register_codegen(MatMul.identifier, "fortran",
             f.builtin_matmul)
-    bfr = bfr.register_codegen(UserMatMul.identifier, "fortran",
-            f.builtin_user_matmul)
     bfr = bfr.register_codegen(Transpose.identifier, "fortran",
             f.builtin_transpose)
     bfr = bfr.register_codegen(LinearSolve.identifier, "fortran",

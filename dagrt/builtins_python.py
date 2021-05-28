@@ -47,25 +47,6 @@ def builtin_norm_2(x):
     return np.linalg.norm(x, 2)
 
 
-def builtin_norm_wrms(x, y, ynew, atol, rtol):
-    import numpy as np
-    if np.isscalar(x):
-        return abs(x)
-    # Use y to calculate weights.
-    w = np.zeros(len(y))
-    for i in range(len(y)):
-        if np.isscalar(rtol):
-            w[i] = 1.0/(rtol*abs(ynew[i]) + atol)
-        else:
-            w[i] = 1.0/(rtol[i]*abs(ynew[i]) + atol)
-    # now calculate the wrms norm
-    add = 0
-    for i in range(len(x)):
-        add += (w[i]*x[i])**2
-
-    return np.sqrt(add/len(y))
-
-
 def builtin_norm_inf(x):
     import numpy as np
     if np.isscalar(x):
@@ -112,26 +93,6 @@ def builtin_matmul(a, b, a_cols, b_cols):
     res_mat = a_mat.dot(b_mat)
 
     return res_mat.reshape(-1, order="F")
-
-
-def builtin_user_matmul(a, b, a_cols, b_cols, c_cols):
-    import numpy as np
-    if a_cols != np.floor(a_cols):
-        raise ValueError("matmul() argument a_cols is not an integer")
-    if b_cols != np.floor(b_cols):
-        raise ValueError("matmul() argument b_cols is not an integer")
-    if c_cols != np.floor(c_cols):
-        raise ValueError("matmul() argument b_cols is not an integer")
-    a_cols = int(a_cols)
-    b_cols = int(b_cols)
-    c_cols = int(c_cols)
-
-    a_mat = a.reshape(-1, a_cols, order="F")
-    b_mat = b.reshape(-1, b_cols, order="F")
-
-    res_mat = a_mat.dot(b_mat)
-
-    return res_mat.reshape(-1, c_cols, order="F")
 
 
 def builtin_transpose(a, a_cols):
@@ -188,13 +149,11 @@ builtins = {
         "<builtin>isnan": builtin_isnan,
         "<builtin>norm_1": builtin_norm_1,
         "<builtin>norm_2": builtin_norm_2,
-        "<builtin>norm_wrms": builtin_norm_wrms,
         "<builtin>norm_inf": builtin_norm_inf,
         "<builtin>dot_product": builtin_dot_product,
         "<builtin>array": builtin_array,
         "<builtin>array_utype": builtin_array_utype,
         "<builtin>matmul": builtin_matmul,
-        "<builtin>user_matmul": builtin_user_matmul,
         "<builtin>transpose": builtin_transpose,
         "<builtin>linear_solve": builtin_linear_solve,
         "<builtin>svd": builtin_svd,

@@ -1103,7 +1103,8 @@ class CodeGenerator(StructuredCodeGenerator):
                 forced_kinds=[
                     (fd.name, loop_var, Integer())
                     for fd in fdescrs
-                    for loop_var in LoopVariableFinder()(fd.ast)])
+                    for loop_var in LoopVariableFinder()(fd.ast)],
+                user_type_map=self.user_type_map)
 
         from dagrt.codegen.analysis import (
                 collect_ode_component_names_from_dag,
@@ -1307,9 +1308,9 @@ class CodeGenerator(StructuredCodeGenerator):
                         refcount_name=self.name_manager.name_refcount(
                             sym_id, qualified_with_state=False))
                 # Store the length of the UserTypeArray in the type itself.
-                from dagrt.data import Scalar
+                from dagrt.data import Integer
                 self.emit_variable_decl(
-                        "array_size", sym_kind=Scalar(is_real_valued=True),
+                        "array_size", sym_kind=Integer(),
                         is_argument=False)
 
         # }}}
@@ -1401,7 +1402,6 @@ class CodeGenerator(StructuredCodeGenerator):
                 # If the refcount is 1, then nobody else is referring to
                 # the memory, and we might as well repurpose/overwrite it,
                 # so there's nothing more to do in that case.
-
                 with FortranIfEmitter(
                         self.emitter, "refcount.ne.1", self) as emit_if:
 
@@ -1550,7 +1550,7 @@ class CodeGenerator(StructuredCodeGenerator):
 
             # This is a 1D array of UserTypes.
             type_name = "type(dagrt_{}_array)".format(sym_kind.identifier)
-            type_specifiers += ("dimension(:)",)
+            type_specifiers += ("allocatable, dimension(:)",)
 
         else:
             raise ValueError("unknown variable kind: %s" % type(sym_kind).__name__)
@@ -1706,14 +1706,53 @@ class CodeGenerator(StructuredCodeGenerator):
                         # We need to loop through the UserTypeArray here,
                         # and attach the structure entrance to both the LHS and
                         # the RHS...
-                        ident = self.name_manager["i"]
+                        # For temps, we also need to check if the assignee is
+                        # allocated, and if not, allocate it.
+                        with FortranIfEmitter(
+                                self.emitter, ".not.allocated({})".format(
+                                    assignee_fortran_name), self):
+                            self.emit("allocate({}(0:{}-1))".format(
+                                assignee_fortran_name,
+                                self.expr(expr) + "(0)%array_size"))
+                            alloc_check_name = self.get_alloc_check_name(
+                                    sym_kind.identifier)
+                            ident = self.name_manager.make_unique_fortran_name(
+                                    "uarray_i")
+                            self.declaration_emitter("integer %s" % ident)
+                            em = FortranDoEmitter(
+                                    self.emitter, ident,
+                                    "0, {}".format(
+                                        self.expr(expr) + "(0)%array_size-1"),
+                                    self)
+                            em.__enter__()
+                            uarray_entry = assignee_fortran_name + \
+                                    "(int({}))".format(ident)
+                            uarray_entry += "%{}".format(sym_kind.identifier)
+                            refcnt_name = assignee_fortran_name + "(int({}))".format(
+                                    ident)
+                            refcnt_name += "%{}".format(
+                                    self.name_manager.name_refcount(
+                                        sym_kind.identifier,
+                                        qualified_with_state=False))
+                            self.emit(
+                                    "call {alloc_check_name}({args})"
+                                    .format(
+                                        alloc_check_name=alloc_check_name,
+                                        args=", ".join(
+                                            self.extra_arguments
+                                            + (uarray_entry, refcnt_name))
+                                        ))
+                            self.emitter.__exit__(None, None, None)
+                        ident = self.name_manager.make_unique_fortran_name(
+                                  "uarray_i")
                         expression = self.expr(expr) + \
                                 "({})%".format(ident) + expr_kind.identifier
                         subscript_str += "({})%".format(ident) + expr_kind.identifier
+                        self.declaration_emitter("integer %s" % ident)
                         em = FortranDoEmitter(
                             self.emitter, ident,
-                            "1, {}".format(
-                                self.expr(expr) + "%array_size"),
+                            "0, {}".format(
+                                self.expr(expr) + "(0)%array_size-1"),
                             self)
                         em.__enter__()
 
@@ -2347,11 +2386,12 @@ class CodeGenerator(StructuredCodeGenerator):
         # appropriate allocation check on the elements.
         if "array_utype" in fortran_func_name:
             alloc_check_name = self.get_alloc_check_name(sym_kind.identifier)
-            ident = self.name_manager["i"]
+            ident = self.name_manager.make_unique_fortran_name("uarray_i")
+            self.declaration_emitter("integer %s" % ident)
             em = FortranDoEmitter(
                     self.emitter, ident,
-                    "1, {}".format(
-                        assignee_fortran_names[0] + "%array_size"),
+                    "0, {}".format(
+                        assignee_fortran_names[0] + "(0)%array_size-1"),
                     self)
             em.__enter__()
             uarray_entry = assignee_fortran_names[0] + "(int({}))".format(ident)
@@ -2512,39 +2552,6 @@ def codegen_builtin_norm_2(results, function, args, arg_kinds,
     code_generator.emit("")
 
 
-# FIXME: this is currently a placeholder
-def codegen_builtin_norm_wrms(results, function, args, arg_kinds,
-        code_generator):
-    result, = results
-
-    from dagrt.data import Scalar, UserType, Array
-    x_kind = arg_kinds[0]
-    if isinstance(x_kind, Scalar):
-        if x_kind.is_real_valued:
-            ftype = BuiltinType("real*8")
-        else:
-            ftype = BuiltinType("complex*16")
-    elif isinstance(x_kind, UserType):
-        ftype = code_generator.user_type_map[x_kind.identifier]
-
-    elif isinstance(x_kind, Array):
-        code_generator.emit("{result} = norm2({arg})".format(
-            result=result, arg=args[0]))
-        return
-
-    else:
-        raise TypeError("unsupported kind for norm_2 argument: %s" % x_kind)
-
-    code_generator.emit(f"{result} = 0")
-    code_generator.emit("")
-
-    Norm2Computer(code_generator, result)(ftype, args[0], {})
-
-    code_generator.emit("")
-    code_generator.emit("{result} = sqrt({result})".format(result=result))
-    code_generator.emit("")
-
-
 class LenComputer(TypeVisitorWithResult):
     # FIXME: This could be made *way* more efficient by handling
     # arrays of built-in types directly.
@@ -2631,6 +2638,9 @@ builtin_array = CallCode("""
 
 
 builtin_array_utype = CallCode("""
+        <%
+        i = declare_new("integer", "i")
+        %>
         if (int(${n}).ne.${n}) then
             write(dagrt_stderr,*) 'argument to array_utype() is not an integer'
             stop
@@ -2640,8 +2650,11 @@ builtin_array_utype = CallCode("""
             deallocate(${result})
         endif
 
-        ${result}%array_size = ${n}
         allocate(${result}(0:int(${n})-1))
+
+        do ${i} = 0, int(${n})-1
+          ${result}(int(${i}))%array_size = int(${n})
+        end do
         """)
 
 
@@ -2705,34 +2718,6 @@ UTIL_MACROS = """
 
     """
 
-# FIXME: this is currently a placeholder
-builtin_user_matmul = CallCode(UTIL_MACROS + """
-        <%
-        a_rows = declare_new("integer", "a_rows")
-        b_rows = declare_new("integer", "b_rows")
-        res_size = declare_new("integer", "res_size")
-        %>
-
-        ${check_matrix(a, a_cols, a_rows, "matmul")}
-        ${check_matrix(b, b_cols, b_rows, "matmul")}
-
-        ${a_rows} = size(${a}) / int(${a_cols})
-        ${b_rows} = size(${b}) / int(${b_cols})
-
-        ${res_size} = ${a_rows} * int(${b_cols})
-
-        if (allocated(${result})) then
-            deallocate(${result})
-        endif
-
-        allocate(${result}(0:${res_size}-1))
-
-        ${result} = reshape( &
-                matmul( &
-                    reshape(${a}, (/${a_rows}, int(${a_cols})/)), &
-                    reshape(${b}, (/${b_rows}, int(${b_cols})/))), &
-                (/${res_size}/))
-        """)
 
 builtin_matmul = CallCode(UTIL_MACROS + """
         <%
