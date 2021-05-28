@@ -131,6 +131,9 @@ jobs:
                 . ./ci-support-v0
 
                 if test -f .test-conda-env-py3.yml; then
+                    sudo apt-get update
+                    sudo apt-get install openmpi-bin libopenmpi-dev
+                
                     CONDA_ENVIRONMENT=.test-conda-env-py3.yml
                    build_py_project_in_conda_env
                 else
