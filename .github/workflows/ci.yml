@@ -100,15 +100,23 @@ jobs:
 
     downstream_tests:
         strategy:
+            fail-fast: false
             matrix:
-                downstream_project: [leap]
-        name: Tests for downstream project ${{ matrix.downstream_project }}
+                downstream_project: [leap, grudge]
+                run_what: [tests, examples]
+                exclude:
+                # no need, no leap dependency
+                -   downstream_project: grudge
+                    run_what: tests
+
+        name: Run ${{ matrix.run_what }} for downstream project ${{ matrix.downstream_project }}
         runs-on: ubuntu-latest
         steps:
         -   uses: actions/checkout@v2
         -   name: "Main Script"
             env:
                 DOWNSTREAM_PROJECT: ${{ matrix.downstream_project }}
+                RUN_WHAT: ${{ matrix.run_what }}
             run: |
                 git clone "https://github.com/inducer/$DOWNSTREAM_PROJECT.git"
                 cd "$DOWNSTREAM_PROJECT"
@@ -121,7 +129,25 @@ jobs:
 
                 curl -L -O -k https://tiker.net/ci-support-v0
                 . ./ci-support-v0
-                build_py_project_in_venv
-                test_py_project
+
+                if test -f .test-conda-env-py3.yml; then
+                    sudo apt-get update
+                    sudo apt-get install openmpi-bin libopenmpi-dev
+                
+                    CONDA_ENVIRONMENT=.test-conda-env-py3.yml
+                   build_py_project_in_conda_env
+                else
+                    EXTRA_INSTALL="numpy matplotlib scipy"
+                    build_py_project_in_venv
+                fi
+
+                if test "$RUN_WHAT" = "tests"; then
+                    test_py_project
+                elif test "$RUN_WHAT" = "examples"; then
+                    run_examples
+                else
+                    echo "Value $RUN_WHAT of RUN_WHAT not understood."
+                    exit 1
+                fi     
 
 # vim: sw=4
