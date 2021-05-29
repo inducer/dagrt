@@ -1,0 +1,9 @@
+include doc/*.rst
+include doc/conf.py
+include doc/Makefile
+include doc/make.bat
+
+recursive-include examples *.py
+
+include test/*.py
+include test/test_*.f90
