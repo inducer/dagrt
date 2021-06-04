@@ -371,7 +371,12 @@ class KindInferenceMapper(Mapper):
             except UnableToInferKind:
                 arg_kinds[key] = None
 
-        z = func.get_result_kinds(arg_kinds, self.check)
+        try:
+            z = func.get_result_kinds(arg_kinds, self.check)
+        except Exception:
+            raise UnableToInferKind(
+                    "function '%s' needs more info about arguments"
+                    % function_id)
 
         if single_return_only:
             if len(z) != 1:

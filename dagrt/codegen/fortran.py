@@ -2407,6 +2407,42 @@ def codegen_builtin_len(results, function, args, arg_kinds,
     code_generator.emit("")
 
 
+class AbsComputer(TypeVisitorWithResult):
+    def visit_BuiltinType(self, fortran_type, fortran_expr_str, index_expr_map):
+        self.code_generator.emit(
+                "{result} = abs({result})"
+                .format(
+                    result=self.result_expr))
+
+
+def codegen_builtin_elementwise_abs(results, function, args, arg_kinds,
+        code_generator):
+    result, = results
+
+    from dagrt.data import Scalar, Array, UserType
+    x_kind = arg_kinds[0]
+    if isinstance(x_kind, Scalar):
+        if x_kind.is_real_valued:
+            ftype = BuiltinType("real*8")
+        else:
+            ftype = BuiltinType("complex*16")
+    elif isinstance(x_kind, UserType):
+        ftype = code_generator.user_type_map[x_kind.identifier]
+    elif isinstance(x_kind, Array):
+        code_generator.emit("{result} = abs({arg})".format(
+            result=result,
+            arg=args[0]))
+        return
+    else:
+        raise TypeError("unsupported kind for elementwise_abs argument: %s" % x_kind)
+
+    code_generator.emit(f"{result} = 0")
+    code_generator.emit("")
+
+    AbsComputer(code_generator, result)(ftype, args[0], {})
+    code_generator.emit("")
+
+
 class IsNaNComputer(TypeVisitorWithResult):
     def visit_BuiltinType(self, fortran_type, fortran_expr_str, index_expr_map):
         self.code_generator.emit(
