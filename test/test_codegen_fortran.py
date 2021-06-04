@@ -150,6 +150,49 @@ def test_self_dep_in_loop():
         fortran_libraries=["lapack", "blas"])
 
 
+def test_elementwise_abs():
+    with CodeBuilder(name="primary") as cb:
+        cb("y", "<func>f(0, <state>ytype)")
+        cb("<state>ytype", "y")
+        # Test new builtin on a usertype.
+        cb("z", "<builtin>elementwise_abs(<state>ytype)")
+        cb("i", "<builtin>array(20)")
+        cb("i[j]", "-j",
+                loops=(("j", 0, 20),))
+        # Test new builtin on an array type.
+        cb("k", "<builtin>elementwise_abs(i)")
+        # Test new builtin on a scalar.
+        cb("l", "<builtin>elementwise_abs(-20)")
+
+    code = create_DAGCode_with_steady_phase(cb.statements)
+
+    rhs_function = "<func>f"
+
+    from dagrt.function_registry import (
+            base_function_registry, register_ode_rhs)
+    freg = register_ode_rhs(base_function_registry, "ytype",
+                            identifier=rhs_function,
+                            input_names=("y",))
+    freg = freg.register_codegen(rhs_function, "fortran",
+            f.CallCode("""
+                ${result} = -2*${y}
+                """))
+
+    codegen = f.CodeGenerator(
+            "element_abs_test",
+            function_registry=freg,
+            user_type_map={"ytype": f.ArrayType((100,), f.BuiltinType("real*8"))},
+            timing_function="second")
+
+    code_str = codegen(code)
+
+    run_fortran([
+        ("element_abs.f90", code_str),
+        ("test_element_abs.f90", read_file("test_element_abs.f90")),
+        ],
+        fortran_libraries=["lapack", "blas"])
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         exec(sys.argv[1])

@@ -60,6 +60,7 @@ documentation.
 .. autoclass:: Norm1
 .. autoclass:: Norm2
 .. autoclass:: NormInf
+.. autoclass:: ElementwiseAbs
 .. autoclass:: DotProduct
 .. autoclass:: Len
 .. autoclass:: IsNaN
@@ -298,6 +299,32 @@ class NormInf(_NormBase):
     *x* is a user type or array.
     """
     identifier = "<builtin>norm_inf"
+
+
+class ElementwiseAbs(Function):
+    """``elementwise_abs(x)`` takes the elementwise absolute value of *x*.
+    *x* is a user type, array, or scalar.
+    """
+
+    result_names = ("result",)
+    identifier = "<builtin>elementwise_abs"
+    arg_names = ("x")
+    default_dict = {}
+
+    def get_result_kinds(self, arg_kinds, check):
+        x_kind, = self.resolve_args(arg_kinds)
+
+        if check and not isinstance(x_kind, (Scalar, Array, UserType)):
+            raise TypeError("argument 'x' of 'elementwise_abs' is not a user type")
+
+        if isinstance(x_kind, UserType):
+            return (UserType(identifier=x_kind.identifier),)
+        elif isinstance(x_kind, Array):
+            return (Array(is_real_valued=True),)
+        elif isinstance(x_kind, Scalar):
+            return (Scalar(is_real_valued=True),)
+        else:
+            raise TypeError("argument 'x' of 'elementwise_abs' undetermined")
 
 
 class DotProduct(Function):
@@ -539,6 +566,7 @@ def _make_bfr():
             (Norm1(), "self._builtin_norm_1({args})"),
             (Norm2(), "self._builtin_norm_2({args})"),
             (NormInf(), "self._builtin_norm_inf({args})"),
+            (ElementwiseAbs(), "{numpy}.abs({args})"),
             (DotProduct(), "{numpy}.vdot({args})"),
             (Len(), "{numpy}.size({args})"),
             (IsNaN(), "{numpy}.isnan({args})"),
@@ -561,6 +589,8 @@ def _make_bfr():
 
     bfr = bfr.register_codegen(Norm2.identifier, "fortran",
             f.codegen_builtin_norm_2)
+    bfr = bfr.register_codegen(ElementwiseAbs.identifier, "fortran",
+            f.codegen_builtin_elementwise_abs)
     bfr = bfr.register_codegen(Len.identifier, "fortran",
             f.codegen_builtin_len)
     bfr = bfr.register_codegen(IsNaN.identifier, "fortran",
