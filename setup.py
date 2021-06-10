@@ -16,7 +16,7 @@ def main():
           author="Andreas Kloeckner",
           author_email="inform@tiker.net",
           license="MIT",
-          url="http://wiki.tiker.net/Leap",
+          url="https://documen.tician.de/dagrt",
           classifiers=[
               "Development Status :: 3 - Alpha",
               "Intended Audience :: Developers",
@@ -26,9 +26,6 @@ def main():
               "Natural Language :: English",
               "Programming Language :: Python",
               "Programming Language :: Python :: 3",
-              "Programming Language :: Python :: 3.6",
-              "Programming Language :: Python :: 3.7",
-              "Programming Language :: Python :: 3.8",
               "Topic :: Scientific/Engineering",
               "Topic :: Scientific/Engineering :: Mathematics",
               "Topic :: Scientific/Engineering :: Information Analysis",
