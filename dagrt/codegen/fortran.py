@@ -1679,22 +1679,9 @@ class CodeGenerator(StructuredCodeGenerator):
                     ))
 
     def emit_user_type_move(self, assignee_sym, assignee_fortran_name,
-            sym_kind, expr):
-        self.emit_variable_deinit(assignee_sym, sym_kind)
-
-        # We need to check if the RHS of the user type move is an
-        # element of a UserTypeArray - if so, we need to add the
-        # entrance to the derived type.
-        expression = self.name_manager[expr.name]
-        if isinstance(expr, Variable):
-            expr_kind = self.sym_kind_table.get(self.current_function, expr.name)
-            if isinstance(expr_kind, UserTypeArray):
-                expression = self.expr(expr) + "%" + expr_kind.identifier
-        if isinstance(expr, (Subscript, Lookup)):
-            expr_kind = self.sym_kind_table.get(self.current_function,
-                                                expr.aggregate.name)
-            if isinstance(expr_kind, UserTypeArray):
-                expression = self.expr(expr) + "%" + expr_kind.identifier
+            sym_kind, expression, tgt_refcnt, refcnt, deinit=True):
+        if deinit:
+            self.emit_variable_deinit(assignee_sym, sym_kind)
 
         self.emit_traceable(
             "{name} => {expr}"
@@ -1704,15 +1691,15 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emit_traceable(
             "{tgt_refcnt} => {refcnt}"
             .format(
-                tgt_refcnt=self.name_manager.name_refcount(assignee_sym),
-                refcnt=self.name_manager.name_refcount(expr.name)))
+                tgt_refcnt=tgt_refcnt,
+                refcnt=refcnt))
         self.emit_traceable(
             "{tgt_refcnt} = {tgt_refcnt} + 1"
             .format(
-                tgt_refcnt=self.name_manager.name_refcount(assignee_sym)))
+                tgt_refcnt=tgt_refcnt))
         self.emit("")
 
-    def emit_assign_expr_inner(self,
+    def emit_assign_expr_inner(self, assignee_sym,
             assignee_fortran_name, assignee_subscript, expr, sym_kind):
         if assignee_subscript:
             subscript_str = "(%s)" % (
@@ -1729,6 +1716,7 @@ class CodeGenerator(StructuredCodeGenerator):
                 subscript_str += "%" + sym_kind.identifier
 
         expr_kind = None
+        expression = self.expr(expr)
 
         if isinstance(expr, (Call, CallWithKwargs)):
             # These are supposed to have been transformed to AssignFunctionCall.
@@ -1746,6 +1734,8 @@ class CodeGenerator(StructuredCodeGenerator):
                 AssignmentEmitter(self)(
                         ftype, assignee_fortran_name, {}, expr,
                         is_rhs_target=True)
+                self.emit("")
+                return
             elif isinstance(sym_kind, UserTypeArray):
                 ftype = self.get_fortran_type_for_user_type_array(
                         sym_kind.identifier)
@@ -1753,14 +1743,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     transformer = UserTypeArrayAppender(
                             self, sym_kind.identifier)
                     expression = self.expr(transformer(expr))
-                    self.emit(
-                            "{name}{subscript_str} = {expr}"
-                            .format(
-                                name=assignee_fortran_name,
-                                subscript_str=subscript_str,
-                                expr=expression))
                 else:
-                    expression = self.expr(expr)
                     if isinstance(expr, Variable):
                         expr_kind = self.sym_kind_table.get(self.current_function,
                                                             expr.name)
@@ -1836,41 +1819,23 @@ class CodeGenerator(StructuredCodeGenerator):
                                     self.expr(expr) + "(0)%array_size-1"),
                                 self)
                             em.__enter__()
-                            # Handle refcounts here as well - we are essentially
-                            # doing per-element user type moves.
-                            self.emit(
-                                    "{name}{subscript_str} => {expr}"
-                                    .format(
-                                        name=assignee_fortran_name,
-                                        subscript_str=subscript_str,
-                                        expr=expression))
-                            self.emit("{tgt_refcnt} => {refcnt}".format(
-                                      tgt_refcnt=tgt_refcnt_name,
-                                      refcnt=refcnt_name))
-                            self.emit("{tgt_refcnt} = {tgt_refcnt} + 1".format(
-                                      tgt_refcnt=tgt_refcnt_name))
+                            # Per-element user type moves.
+                            assignee_loop_name = assignee_fortran_name \
+                                    + subscript_str
+                            self.emit_user_type_move(assignee_sym,
+                                                     assignee_loop_name,
+                                                     sym_kind, expression,
+                                                     tgt_refcnt_name, refcnt_name,
+                                                     deinit=False)
                             self.emitter.__exit__(None, None, None)
-                        else:
-                            self.emit(
-                                "{name}{subscript_str} = {expr}"
-                                .format(
-                                    name=assignee_fortran_name,
-                                    subscript_str=subscript_str,
-                                    expr=expression))
-                    else:
-                        self.emit(
-                            "{name}{subscript_str} = {expr}"
-                            .format(
-                                name=assignee_fortran_name,
-                                subscript_str=subscript_str,
-                                expr=expression))
-            else:
-                self.emit(
-                        "{name}{subscript_str} = {expr}"
-                        .format(
-                            name=assignee_fortran_name,
-                            subscript_str=subscript_str,
-                            expr=self.expr(expr)))
+                            self.emit("")
+                            return
+        self.emit(
+                "{name}{subscript_str} = {expr}"
+                .format(
+                    name=assignee_fortran_name,
+                    subscript_str=subscript_str,
+                    expr=expression))
 
         self.emit("")
 
@@ -2358,16 +2323,39 @@ class CodeGenerator(StructuredCodeGenerator):
 
         if not isinstance(sym_kind, UserType):
             self.emit_assign_expr_inner(
-                    assignee_fortran_name, assignee_subscript, expr, sym_kind)
+                    assignee_sym, assignee_fortran_name, assignee_subscript,
+                    expr, sym_kind)
             return
 
         if assignee_subscript:
             raise ValueError("User types do not support subscripting")
 
+        # Incorporate possibility for assigning UserTypeArray elements to
+        # UserTypes.
+        tgt_refcnt = self.name_manager.name_refcount(assignee_sym)
         if isinstance(expr, Variable):
+            expression = self.name_manager[expr.name]
+            refcnt = self.name_manager.name_refcount(expr.name)
             self.emit_user_type_move(
-                    assignee_sym, assignee_fortran_name, sym_kind, expr)
+                    assignee_sym, assignee_fortran_name, sym_kind,
+                    expression, tgt_refcnt, refcnt)
             return
+        elif isinstance(expr, (Subscript, Lookup)):
+            expr_kind = self.sym_kind_table.get(self.current_function,
+                                                expr.aggregate.name)
+            if isinstance(expr_kind, UserTypeArray):
+                transformer = UserTypeArrayAppender(
+                        self, sym_kind.identifier)
+                expression = self.expr(transformer(expr))
+                refcnt = self.expr(expr) \
+                        + "%{}".format(
+                        self.name_manager.name_refcount(
+                            sym_kind.identifier,
+                            qualified_with_state=False))
+                self.emit_user_type_move(
+                        assignee_sym, assignee_fortran_name, sym_kind,
+                        expression, tgt_refcnt, refcnt)
+                return
 
         from pymbolic import var
         from pymbolic.mapper.dependency import DependencyMapper
@@ -2379,7 +2367,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
         self.emit_allocation_check(assignee_sym, sym_kind)
         self.emit_assign_expr_inner(
-                assignee_fortran_name, assignee_subscript, expr, sym_kind)
+                assignee_sym, assignee_fortran_name, assignee_subscript,
+                expr, sym_kind)
 
     def lower_inst(self, inst):
         """Emit the code for an statement."""
