@@ -1753,6 +1753,12 @@ class CodeGenerator(StructuredCodeGenerator):
                     transformer = UserTypeArrayAppender(
                             self, sym_kind.identifier)
                     expression = self.expr(transformer(expr))
+                    self.emit(
+                            "{name}{subscript_str} = {expr}"
+                            .format(
+                                name=assignee_fortran_name,
+                                subscript_str=subscript_str,
+                                expr=expression))
                 else:
                     expression = self.expr(expr)
                     if isinstance(expr, Variable):
@@ -1811,6 +1817,18 @@ class CodeGenerator(StructuredCodeGenerator):
                                     "({})%".format(ident) + expr_kind.identifier
                             subscript_str += "({})%".format(ident) \
                                     + expr_kind.identifier
+                            tgt_refcnt_name = assignee_fortran_name \
+                                    + "(int({}))".format(ident)
+                            tgt_refcnt_name += "%{}".format(
+                                    self.name_manager.name_refcount(
+                                        sym_kind.identifier,
+                                        qualified_with_state=False))
+                            refcnt_name = self.expr(expr) \
+                                    + "(int({}))".format(ident)
+                            refcnt_name += "%{}".format(
+                                    self.name_manager.name_refcount(
+                                        sym_kind.identifier,
+                                        qualified_with_state=False))
                             self.declaration_emitter("integer %s" % ident)
                             em = FortranDoEmitter(
                                 self.emitter, ident,
@@ -1818,15 +1836,34 @@ class CodeGenerator(StructuredCodeGenerator):
                                     self.expr(expr) + "(0)%array_size-1"),
                                 self)
                             em.__enter__()
-                self.emit(
-                        "{name}{subscript_str} = {expr}"
-                        .format(
-                            name=assignee_fortran_name,
-                            subscript_str=subscript_str,
-                            expr=expression))
-                if isinstance(expr, Variable):
-                    if isinstance(expr_kind, UserTypeArray):
-                        self.emitter.__exit__(None, None, None)
+                            # Handle refcounts here as well - we are essentially
+                            # doing per-element user type moves.
+                            self.emit(
+                                    "{name}{subscript_str} => {expr}"
+                                    .format(
+                                        name=assignee_fortran_name,
+                                        subscript_str=subscript_str,
+                                        expr=expression))
+                            self.emit("{tgt_refcnt} => {refcnt}".format(
+                                      tgt_refcnt=tgt_refcnt_name,
+                                      refcnt=refcnt_name))
+                            self.emit("{tgt_refcnt} = {tgt_refcnt} + 1".format(
+                                      tgt_refcnt=tgt_refcnt_name))
+                            self.emitter.__exit__(None, None, None)
+                        else:
+                            self.emit(
+                                "{name}{subscript_str} = {expr}"
+                                .format(
+                                    name=assignee_fortran_name,
+                                    subscript_str=subscript_str,
+                                    expr=expression))
+                    else:
+                        self.emit(
+                            "{name}{subscript_str} = {expr}"
+                            .format(
+                                name=assignee_fortran_name,
+                                subscript_str=subscript_str,
+                                expr=expression))
             else:
                 self.emit(
                         "{name}{subscript_str} = {expr}"
@@ -2455,6 +2492,10 @@ class CodeGenerator(StructuredCodeGenerator):
             refcnt_name = assignee_fortran_names[0] + "(int({}))".format(ident)
             refcnt_name += "%{}".format(self.name_manager.name_refcount(
                 sym_kind.identifier, qualified_with_state=False))
+            # Ensure allocations will be performed by setting refcounts to
+            # non-unity.
+            self.emit("allocate({})".format(refcnt_name))
+            self.emit("{} = 2".format(refcnt_name))
             self.emit(
                     "call {alloc_check_name}({args})"
                     .format(
