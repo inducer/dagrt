@@ -336,6 +336,24 @@ class StructureLookupAppender(UserTypeReferenceTransformer):
         return expr.attr(self.component)
 
 
+class UserTypeArrayAppender(UserTypeReferenceTransformer):
+    def __init__(self, code_generator, component):
+        super().__init__(code_generator)
+        self.component = component
+
+    def map_variable(self, expr):
+        if isinstance(self.find_sym_kind(expr), UserTypeArray):
+            return self.transform(expr)
+        else:
+            return expr
+
+    def transform(self, expr):
+        return expr.attr(self.component)
+
+    map_lookup = map_variable
+    map_subscript = map_variable
+
+
 class ArraySubscriptAppender(UserTypeReferenceTransformer):
     def __init__(self, code_generator, subscript):
         super().__init__(code_generator)
@@ -1195,6 +1213,9 @@ class CodeGenerator(StructuredCodeGenerator):
         for identifier, sym_kind in sorted(sym_table.items()):
             if (identifier, self.current_function) not in self.last_used_stmt_table:
                 self.emit_variable_deinit(identifier, sym_kind)
+            # For now defer UserTypeArray dealloc until function end.
+            if isinstance(sym_kind, UserTypeArray):
+                self.emit_variable_deinit(identifier, sym_kind)
 
         # }}}
 
@@ -1575,19 +1596,51 @@ class CodeGenerator(StructuredCodeGenerator):
         fortran_name = self.name_manager[name]
         refcnt_name = self.name_manager.name_refcount(name)
 
-        from dagrt.data import UserType
-        if not isinstance(sym_kind, UserType):
+        if isinstance(sym_kind, UserType):
+            self.emit(
+                    "call {var_deinit_name}({args})"
+                    .format(
+                        var_deinit_name=self.get_var_deinit_name(
+                            sym_kind.identifier),
+                        args=", ".join(
+                            self.extra_arguments
+                            + (fortran_name, refcnt_name))
+                        ))
+        elif isinstance(sym_kind, UserTypeArray):
+            # For UserTypeArrays we need to loop through and deinit as well.
+            with FortranIfEmitter(
+                    self.emitter, "allocated({})".format(
+                        fortran_name), self):
+                ident = self.name_manager.make_unique_fortran_name("uarray_i")
+                self.declaration_emitter("integer %s" % ident)
+                em = FortranDoEmitter(
+                        self.emitter, ident,
+                        "0, {}".format(
+                            fortran_name + "(0)%array_size-1"),
+                        self)
+                em.__enter__()
+                uarray_entry = fortran_name + \
+                        "(int({}))".format(ident)
+                uarray_entry += "%{}".format(sym_kind.identifier)
+                refcnt_name = fortran_name \
+                        + "(int({}))".format(ident)
+                refcnt_name += "%{}".format(
+                        self.name_manager.name_refcount(
+                            sym_kind.identifier,
+                            qualified_with_state=False))
+                self.emit(
+                        "call {var_deinit_name}({args})"
+                        .format(
+                            var_deinit_name=self.get_var_deinit_name(
+                                sym_kind.identifier),
+                            args=", ".join(
+                                self.extra_arguments
+                                + (uarray_entry, refcnt_name))
+                            ))
+                self.emitter.__exit__(None, None, None)
+                self.emit("deallocate({})".format(fortran_name))
+        else:
             return
-
-        self.emit(
-                "call {var_deinit_name}({args})"
-                .format(
-                    var_deinit_name=self.get_var_deinit_name(
-                        sym_kind.identifier),
-                    args=", ".join(
-                        self.extra_arguments
-                        + (fortran_name, refcnt_name))
-                    ))
 
     def emit_refcounted_allocation(self, sym, sym_kind):
         fortran_name = self.name_manager[sym]
@@ -1675,6 +1728,8 @@ class CodeGenerator(StructuredCodeGenerator):
             if assignee_subscript:
                 subscript_str += "%" + sym_kind.identifier
 
+        expr_kind = None
+
         if isinstance(expr, (Call, CallWithKwargs)):
             # These are supposed to have been transformed to AssignFunctionCall.
             raise RuntimeError("bare Call/CallWithKwargs encountered in "
@@ -1686,91 +1741,92 @@ class CodeGenerator(StructuredCodeGenerator):
                         subscript_str=subscript_str,
                         expr=str(expr)[:50]))
 
-            from dagrt.data import UserType
             if isinstance(sym_kind, UserType):
                 ftype = self.get_fortran_type_for_user_type(sym_kind.identifier)
                 AssignmentEmitter(self)(
                         ftype, assignee_fortran_name, {}, expr,
                         is_rhs_target=True)
             elif isinstance(sym_kind, UserTypeArray):
-                # This will require a specialized assignment emitter,
-                # wherein the RHS expression is transformed to insert
-                # the proper structure stuff for UserTypeArrays.
                 ftype = self.get_fortran_type_for_user_type_array(
                         sym_kind.identifier)
-                expression = self.expr(expr)
-                if isinstance(expr, Variable):
-                    expr_kind = self.sym_kind_table.get(self.current_function,
-                                                        expr.name)
-                    if isinstance(expr_kind, UserTypeArray):
-                        # We need to loop through the UserTypeArray here,
-                        # and attach the structure entrance to both the LHS and
-                        # the RHS...
-                        # For temps, we also need to check if the assignee is
-                        # allocated, and if not, allocate it.
-                        with FortranIfEmitter(
-                                self.emitter, ".not.allocated({})".format(
-                                    assignee_fortran_name), self):
-                            self.emit("allocate({}(0:{}-1))".format(
-                                assignee_fortran_name,
-                                self.expr(expr) + "(0)%array_size"))
-                            alloc_check_name = self.get_alloc_check_name(
-                                    sym_kind.identifier)
+                if (subscript_str or isinstance(expr, (Subscript, Lookup))):
+                    transformer = UserTypeArrayAppender(
+                            self, sym_kind.identifier)
+                    expression = self.expr(transformer(expr))
+                else:
+                    expression = self.expr(expr)
+                    if isinstance(expr, Variable):
+                        expr_kind = self.sym_kind_table.get(self.current_function,
+                                                            expr.name)
+                        if isinstance(expr_kind, UserTypeArray):
+                            # We need to loop through the UserTypeArray here,
+                            # and attach the structure entrance to both the LHS and
+                            # the RHS...
+                            # For temps, we also need to check if the assignee is
+                            # allocated, and if not, allocate it.
+                            with FortranIfEmitter(
+                                    self.emitter, ".not.allocated({})".format(
+                                        assignee_fortran_name), self):
+                                self.emit("allocate({}(0:{}-1))".format(
+                                    assignee_fortran_name,
+                                    self.expr(expr) + "(0)%array_size"))
+                                alloc_check_name = self.get_alloc_check_name(
+                                        sym_kind.identifier)
+                                ident = self.name_manager.make_unique_fortran_name(
+                                        "uarray_i")
+                                self.declaration_emitter("integer %s" % ident)
+                                em = FortranDoEmitter(
+                                        self.emitter, ident,
+                                        "0, {}".format(
+                                            self.expr(expr) + "(0)%array_size-1"),
+                                        self)
+                                em.__enter__()
+                                uarray_entry = assignee_fortran_name + \
+                                        "(int({}))".format(ident)
+                                self.emit(
+                                        "{out}%array_size = {existing}".format(
+                                            out=uarray_entry,
+                                            existing=self.expr(expr)
+                                            + "(0)%array_size"))
+                                uarray_entry += "%{}".format(sym_kind.identifier)
+                                refcnt_name = assignee_fortran_name \
+                                        + "(int({}))".format(ident)
+                                refcnt_name += "%{}".format(
+                                        self.name_manager.name_refcount(
+                                            sym_kind.identifier,
+                                            qualified_with_state=False))
+                                self.emit("allocate({})".format(refcnt_name))
+                                self.emit(
+                                        "call {alloc_check_name}({args})"
+                                        .format(
+                                            alloc_check_name=alloc_check_name,
+                                            args=", ".join(
+                                                self.extra_arguments
+                                                + (uarray_entry, refcnt_name))
+                                            ))
+                                self.emitter.__exit__(None, None, None)
                             ident = self.name_manager.make_unique_fortran_name(
-                                    "uarray_i")
+                                        "uarray_i")
+                            expression = self.expr(expr) + \
+                                    "({})%".format(ident) + expr_kind.identifier
+                            subscript_str += "({})%".format(ident) \
+                                    + expr_kind.identifier
                             self.declaration_emitter("integer %s" % ident)
                             em = FortranDoEmitter(
-                                    self.emitter, ident,
-                                    "0, {}".format(
-                                        self.expr(expr) + "(0)%array_size-1"),
-                                    self)
+                                self.emitter, ident,
+                                "0, {}".format(
+                                    self.expr(expr) + "(0)%array_size-1"),
+                                self)
                             em.__enter__()
-                            uarray_entry = assignee_fortran_name + \
-                                    "(int({}))".format(ident)
-                            uarray_entry += "%{}".format(sym_kind.identifier)
-                            refcnt_name = assignee_fortran_name + "(int({}))".format(
-                                    ident)
-                            refcnt_name += "%{}".format(
-                                    self.name_manager.name_refcount(
-                                        sym_kind.identifier,
-                                        qualified_with_state=False))
-                            self.emit(
-                                    "call {alloc_check_name}({args})"
-                                    .format(
-                                        alloc_check_name=alloc_check_name,
-                                        args=", ".join(
-                                            self.extra_arguments
-                                            + (uarray_entry, refcnt_name))
-                                        ))
-                            self.emitter.__exit__(None, None, None)
-                        ident = self.name_manager.make_unique_fortran_name(
-                                  "uarray_i")
-                        expression = self.expr(expr) + \
-                                "({})%".format(ident) + expr_kind.identifier
-                        subscript_str += "({})%".format(ident) + expr_kind.identifier
-                        self.declaration_emitter("integer %s" % ident)
-                        em = FortranDoEmitter(
-                            self.emitter, ident,
-                            "0, {}".format(
-                                self.expr(expr) + "(0)%array_size-1"),
-                            self)
-                        em.__enter__()
-
-                if isinstance(expr, (Subscript, Lookup)):
-                    # We're indexing into a UserTypeArray here.
-                    expr_kind = self.sym_kind_table.get(self.current_function,
-                                                        expr.aggregate.name)
-                    if isinstance(expr_kind, UserTypeArray):
-                        expression = self.expr(expr) + "%" + expr_kind.identifier
                 self.emit(
                         "{name}{subscript_str} = {expr}"
                         .format(
                             name=assignee_fortran_name,
                             subscript_str=subscript_str,
                             expr=expression))
-                if (isinstance(expr, Variable)
-                        and isinstance(expr_kind, UserTypeArray)):
-                    self.emitter.__exit__(None, None, None)
+                if isinstance(expr, Variable):
+                    if isinstance(expr_kind, UserTypeArray):
+                        self.emitter.__exit__(None, None, None)
             else:
                 self.emit(
                         "{name}{subscript_str} = {expr}"
@@ -2466,6 +2522,11 @@ class CodeGenerator(StructuredCodeGenerator):
                 var_kind = self.sym_kind_table.get(
                     self.current_function, variable)
             except KeyError:
+                continue
+
+            # Defer deinit of these until the end of the function,
+            # in case they come up in loops.
+            if isinstance(var_kind, UserTypeArray):
                 continue
 
             last_used_stmt_id = self.last_used_stmt_table[
