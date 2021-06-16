@@ -1017,6 +1017,10 @@ class CodeGenerator(StructuredCodeGenerator):
         self.current_function = None
         self.used = False
 
+        self.in_loop = 0
+        self.deinit_in_loop = False
+        self.deinit_emitter = FortranEmitter()
+
     # }}}
 
     # {{{ utilities
@@ -2316,10 +2320,18 @@ class CodeGenerator(StructuredCodeGenerator):
                     self.expr(lbound),
                     self.expr(ubound-1)),
                 code_generator=self)
+        self.in_loop += 1
         em.__enter__()
 
     def emit_for_end(self, loop_var_name):
         self.emitter.__exit__(None, None, None)
+        self.in_loop -= 1
+        # if we are out of all loops, emitter-juggle to
+        # perform any deinits we have hanging around
+        if self.deinit_in_loop:
+            if self.in_loop == 0:
+                self.emitter.incorporate(self.deinit_emitter)
+                self.deinit_in_loop = False
 
     def emit_assign_expr(self, assignee_sym, assignee_subscript, expr):
         from dagrt.data import UserType, Array
@@ -2568,15 +2580,21 @@ class CodeGenerator(StructuredCodeGenerator):
             except KeyError:
                 continue
 
-            # Defer deinit of these until the end of the function,
-            # in case they come up in loops.
-            if isinstance(var_kind, UserTypeArray):
-                continue
-
             last_used_stmt_id = self.last_used_stmt_table[
                     variable, self.current_function]
             if inst.id == last_used_stmt_id and not is_state_variable(variable):
-                self.emit_variable_deinit(variable, var_kind)
+                # Check if we are in a loop or not.
+                if self.in_loop == 0:
+                    self.emit_variable_deinit(variable, var_kind)
+                else:
+                    # If we are in a loop, we need to pop the deinit outside
+                    # of it.
+                    self.deinit_emitter = FortranEmitter()
+                    self.emitters.append(self.deinit_emitter)
+                    self.emit_variable_deinit(variable, var_kind)
+                    self.emit("")
+                    self.deinit_in_loop = True
+                    self.emitters.pop()
 
     def emit_inst_Raise(self, inst):
         # FIXME: Reenable emitting full error message
