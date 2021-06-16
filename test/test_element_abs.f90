@@ -20,7 +20,7 @@ program test_element_abs
 
 
   do i = 1, 100
-    y0 = i
+    y0(i) = i
   end do
 
   call timestep_initialize(dagrt_state=dagrt_state_ptr, state_ytype=y0)
