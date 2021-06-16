@@ -2411,8 +2411,6 @@ class AbsComputer(AssignmentEmitter):
     def visit_BuiltinType(self, fortran_type, fortran_expr_str, index_expr_map,
             rhs_expr, is_rhs_target):
         expr = self.code_generator.expr(rhs_expr)
-        # FIXME: spurious lploc
-        expr = expr.replace("lploc_", "")
         self.code_generator.emit(
                 "{result} = abs({expr})"
                 .format(
@@ -2437,10 +2435,11 @@ def codegen_builtin_elementwise_abs(results, function, args, arg_kinds,
         raise TypeError("unsupported kind for elementwise_abs argument: %s" % x_kind)
 
     # Need to pass argument to assignment emitter as a variable (for mappers)
+    # Call it a target to avoid name mangling
     from pymbolic import var
-    argvar = var(args[0])
+    argvar = var("<target>" + args[0])
     code_generator.sym_kind_table.set(
-        None, args[0], UserType(x_kind.identifier))
+        None, "<target>" + args[0], UserType(x_kind.identifier))
     AbsComputer(code_generator)(ftype, result, {}, argvar, is_rhs_target=False)
     code_generator.emit("")
 
