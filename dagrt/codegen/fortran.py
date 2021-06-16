@@ -1217,9 +1217,6 @@ class CodeGenerator(StructuredCodeGenerator):
         for identifier, sym_kind in sorted(sym_table.items()):
             if (identifier, self.current_function) not in self.last_used_stmt_table:
                 self.emit_variable_deinit(identifier, sym_kind)
-            # For now defer UserTypeArray dealloc until function end.
-            if isinstance(sym_kind, UserTypeArray):
-                self.emit_variable_deinit(identifier, sym_kind)
 
         # }}}
 
