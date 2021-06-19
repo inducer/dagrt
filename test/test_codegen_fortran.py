@@ -156,14 +156,6 @@ class AbsFailure:
 
 def test_elementwise_abs():
     with CodeBuilder(name="primary") as cb:
-        cb("y", "<func>f(0, <state>ytype)")
-        cb("<state>ytype", "y")
-        # Test new builtin on a usertype.
-        cb("z", "<builtin>elementwise_abs(<state>ytype)")
-        with cb.if_("z[1] > 2"):
-            cb.raise_(AbsFailure)
-        with cb.if_("z[1] < 2"):
-            cb.raise_(AbsFailure)
         cb("i", "<builtin>array(20)")
         cb("i[j]", "-j",
                 loops=(("j", 0, 20),))
@@ -179,6 +171,11 @@ def test_elementwise_abs():
             cb.raise_(AbsFailure)
         with cb.if_("l < 20"):
             cb.raise_(AbsFailure)
+        cb("y", "<func>f(0, <state>ytype)")
+        cb("<state>ytype", "y")
+        # Test new builtin on a usertype.
+        cb("<state>ytype", "<builtin>elementwise_abs(<state>ytype)")
+        # (We check this in the outer test code)
 
     code = create_DAGCode_with_steady_phase(cb.statements)
 
