@@ -150,19 +150,32 @@ def test_self_dep_in_loop():
         fortran_libraries=["lapack", "blas"])
 
 
+class AbsFailure:
+    pass
+
+
 def test_elementwise_abs():
     with CodeBuilder(name="primary") as cb:
-        cb("y", "<func>f(0, <state>ytype)")
-        cb("<state>ytype", "y")
-        # Test new builtin on a usertype.
-        cb("z", "<builtin>elementwise_abs(<state>ytype)")
         cb("i", "<builtin>array(20)")
         cb("i[j]", "-j",
                 loops=(("j", 0, 20),))
         # Test new builtin on an array type.
         cb("k", "<builtin>elementwise_abs(i)")
+        with cb.if_("k[20] > 19"):
+            cb.raise_(AbsFailure)
+        with cb.if_("k[20] < 19"):
+            cb.raise_(AbsFailure)
         # Test new builtin on a scalar.
         cb("l", "<builtin>elementwise_abs(-20)")
+        with cb.if_("l > 20"):
+            cb.raise_(AbsFailure)
+        with cb.if_("l < 20"):
+            cb.raise_(AbsFailure)
+        cb("y", "<func>f(0, <state>ytype)")
+        cb("<state>ytype", "y")
+        # Test new builtin on a usertype.
+        cb("<state>ytype", "<builtin>elementwise_abs(<state>ytype)")
+        # (We check this in the outer test code)
 
     code = create_DAGCode_with_steady_phase(cb.statements)
 
