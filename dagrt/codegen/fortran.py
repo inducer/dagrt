@@ -2711,12 +2711,15 @@ def codegen_builtin_len(results, function, args, arg_kinds,
     code_generator.emit("")
 
 
-class AbsComputer(TypeVisitorWithResult):
-    def visit_BuiltinType(self, fortran_type, fortran_expr_str, index_expr_map):
+class AbsComputer(AssignmentEmitter):
+    def visit_BuiltinType(self, fortran_type, fortran_expr_str, index_expr_map,
+            rhs_expr, is_rhs_target):
+        expr = self.code_generator.expr(rhs_expr)
         self.code_generator.emit(
-                "{result} = abs({result})"
+                "{result} = abs({expr})"
                 .format(
-                    result=self.result_expr))
+                    result=fortran_expr_str,
+                    expr=expr))
 
 
 def codegen_builtin_elementwise_abs(results, function, args, arg_kinds,
@@ -2725,25 +2728,23 @@ def codegen_builtin_elementwise_abs(results, function, args, arg_kinds,
 
     from dagrt.data import Scalar, Array, UserType
     x_kind = arg_kinds[0]
-    if isinstance(x_kind, Scalar):
-        if x_kind.is_real_valued:
-            ftype = BuiltinType("real*8")
-        else:
-            ftype = BuiltinType("complex*16")
-    elif isinstance(x_kind, UserType):
-        ftype = code_generator.user_type_map[x_kind.identifier]
-    elif isinstance(x_kind, Array):
+    if isinstance(x_kind, Scalar) or isinstance(x_kind, Array):
         code_generator.emit("{result} = abs({arg})".format(
             result=result,
             arg=args[0]))
         return
+    elif isinstance(x_kind, UserType):
+        ftype = code_generator.user_type_map[x_kind.identifier]
     else:
         raise TypeError("unsupported kind for elementwise_abs argument: %s" % x_kind)
 
-    code_generator.emit(f"{result} = 0")
-    code_generator.emit("")
-
-    AbsComputer(code_generator, result)(ftype, args[0], {})
+    # Need to pass argument to assignment emitter as a variable (for mappers)
+    # Call it a target to avoid name mangling
+    from pymbolic import var
+    argvar = var("<target>" + args[0])
+    code_generator.sym_kind_table.set(
+        None, "<target>" + args[0], UserType(x_kind.identifier))
+    AbsComputer(code_generator)(ftype, result, {}, argvar, is_rhs_target=False)
     code_generator.emit("")
 
 
