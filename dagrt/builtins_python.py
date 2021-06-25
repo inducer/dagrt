@@ -59,6 +59,11 @@ def builtin_dot_product(a, b):
     return np.vdot(a, b)
 
 
+def builtin_elementwise_abs(x):
+    import numpy as np
+    return np.abs(x)
+
+
 def builtin_array(n):
     import numpy as np
     if n != np.floor(n):
@@ -141,6 +146,7 @@ builtins = {
         "<builtin>norm_2": builtin_norm_2,
         "<builtin>norm_inf": builtin_norm_inf,
         "<builtin>dot_product": builtin_dot_product,
+        "<builtin>elementwise_abs": builtin_elementwise_abs,
         "<builtin>array": builtin_array,
         "<builtin>matmul": builtin_matmul,
         "<builtin>transpose": builtin_transpose,
