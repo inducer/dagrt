@@ -118,17 +118,17 @@ jobs:
                 DOWNSTREAM_PROJECT: ${{ matrix.downstream_project }}
                 RUN_WHAT: ${{ matrix.run_what }}
             run: |
+                curl -L -O https://tiker.net/ci-support-v0
+                . ./ci-support-v0
+
                 git clone "https://github.com/inducer/$DOWNSTREAM_PROJECT.git"
                 cd "$DOWNSTREAM_PROJECT"
                 echo "*** $DOWNSTREAM_PROJECT version: $(git rev-parse --short HEAD)"
 
-                sed -i "/egg=dagrt/ c git+file://$(readlink -f ..)#egg=dagrt" requirements.txt
+                edit_requirements_txt_for_downstream_in_subdir
 
                 # Avoid slow or complicated tests in downstream projects
                 export PYTEST_ADDOPTS="-k 'not (slowtest or octave or mpi)'"
-
-                curl -L -O https://tiker.net/ci-support-v0
-                . ./ci-support-v0
 
                 if test -f .test-conda-env-py3.yml; then
                    build_py_project_in_conda_env
