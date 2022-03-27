@@ -1117,7 +1117,7 @@ class CodeGenerator(StructuredCodeGenerator):
                     None, "<ret_state>"+comp_id, UserType(comp_id))
 
         self.begin_emit(dag)
-        for fdescr in sorted(fdescrs, key=lambda fdescr: fdescr.name):
+        for fdescr in sorted(fdescrs, key=lambda f_descr: f_descr.name):
             self.lower_function(fdescr.name, fdescr.ast)
         self.finish_emit(dag)
 
