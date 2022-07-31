@@ -221,7 +221,8 @@ class FortranTypeEmitter(FortranSubblockEmitter):
 # {{{ code generation for function calls
 
 class CallCode:
-    """Encapsulation for a Fortran code template embodying a dagrt-level function call.
+    """Encapsulation for a Fortran code template embodying a dagrt-level
+    function call.
     """
 
     def __init__(self, template, extra_args=None):
