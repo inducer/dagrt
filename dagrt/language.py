@@ -944,8 +944,8 @@ class CodeBuilder:
         return generate_unique_names(prefix)
 
     def fresh_var_name(self, prefix="temp"):
-        """Return a variable name that is not in use also and won't be returned in the
-        future, regardless of use.
+        """Return a variable name that is not in use also and won't be returned
+        in the future, regardless of use.
         """
         for var_name in self._var_name_generator(prefix):
             if var_name not in self._seen_var_names:
