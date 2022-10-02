@@ -36,11 +36,11 @@ def main():
               ],
 
           packages=find_packages(),
-          python_requires="~=3.6",
+          python_requires="~=3.8",
           install_requires=[
               "numpy>=1.5",
               "pytools>=2020.1",
-              "pymbolic>=2016.2",
+              "pymbolic>=2022.1",
               "pytest>=2.3",
               "mako",
               ],
