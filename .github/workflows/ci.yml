@@ -12,9 +12,9 @@ jobs:
         name: Flake8
         runs-on: ubuntu-latest
         steps:
-        -   uses: actions/checkout@v2
+        -   uses: actions/checkout@v3
         -
-            uses: actions/setup-python@v1
+            uses: actions/setup-python@v4
             with:
                 # matches compat target in setup.py
                 python-version: '3.8'
@@ -27,9 +27,9 @@ jobs:
         name: Pylint
         runs-on: ubuntu-latest
         steps:
-        -   uses: actions/checkout@v2
+        -   uses: actions/checkout@v3
         -
-            uses: actions/setup-python@v1
+            uses: actions/setup-python@v4
             with:
                 python-version: '3.x'
         -   name: "Main Script"
@@ -45,9 +45,9 @@ jobs:
             matrix:
                 python-version: ["3.8", "3.x"]
         steps:
-        -   uses: actions/checkout@v2
+        -   uses: actions/checkout@v3
         -
-            uses: actions/setup-python@v1
+            uses: actions/setup-python@v4
             with:
                 python-version: ${{ matrix.python-version }}
         -   name: "Main Script"
@@ -66,9 +66,9 @@ jobs:
             matrix:
                 python-version: ["3.8", "3.x"]
         steps:
-        -   uses: actions/checkout@v2
+        -   uses: actions/checkout@v3
         -
-            uses: actions/setup-python@v1
+            uses: actions/setup-python@v4
             with:
                 python-version: ${{ matrix.python-version }}
         -   name: "Main Script"
@@ -85,9 +85,9 @@ jobs:
         name: Documentation
         runs-on: ubuntu-latest
         steps:
-        -   uses: actions/checkout@v2
+        -   uses: actions/checkout@v3
         -
-            uses: actions/setup-python@v1
+            uses: actions/setup-python@v4
             with:
                 python-version: '3.x'
         -   name: "Main Script"
@@ -112,7 +112,7 @@ jobs:
         name: Run ${{ matrix.run_what }} for downstream project ${{ matrix.downstream_project }}
         runs-on: ubuntu-latest
         steps:
-        -   uses: actions/checkout@v2
+        -   uses: actions/checkout@v3
         -   name: "Main Script"
             env:
                 DOWNSTREAM_PROJECT: ${{ matrix.downstream_project }}
