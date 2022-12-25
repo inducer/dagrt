@@ -40,7 +40,7 @@ class FortranExpressionMapper(StringifyMapper):
         self._name_manager = name_manager
 
     def map_constant(self, expr, enclosing_prec):
-        if isinstance(expr, (complex, np.complex)):
+        if isinstance(expr, (complex, np.complexfloating)):
             return "({}, {})".format(
                     self.rec(expr.real),
                     self.rec(expr.imag))
