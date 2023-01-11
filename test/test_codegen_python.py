@@ -57,7 +57,7 @@ def test_basic_codegen():
     Method = codegen.get_class(code)  # noqa
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={})
-    hist = [s for s in method.run(max_steps=2)]
+    hist = list(method.run(max_steps=2))
     assert len(hist) == 3
     assert isinstance(hist[0], method.StepCompleted)
     assert hist[0].current_phase == "init"
@@ -90,7 +90,7 @@ def test_basic_conditional_codegen():
     Method = codegen.get_class(code)  # noqa
     method = Method({})
     method.set_up(t_start=0, dt_start=0, context={"y": 6})
-    hist = [s for s in method.run(max_steps=2)]
+    hist = list(method.run(max_steps=2))
     assert len(hist) == 3
     assert isinstance(hist[1], method.StateComputed)
     assert hist[1].state_component == 1
@@ -131,7 +131,7 @@ def test_basic_assign_rhs_codegen():
 
     method = Method({"y": y, "yy": yy})
     method.set_up(t_start=0, dt_start=0, context={"y": 0})
-    hist = [s for s in method.run(max_steps=2)]
+    hist = list(method.run(max_steps=2))
     assert len(hist) == 3
     assert isinstance(hist[1], method.StateComputed)
     assert hist[1].state_component == 12

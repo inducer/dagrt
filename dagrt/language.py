@@ -469,7 +469,7 @@ class AssignFunctionCall(AssignmentBase):
                     kw_parameters=mapped_expr.kw_parameters))
 
     def __str__(self):
-        pars = list(str(p) for p in self.parameters) + [
+        pars = [str(p) for p in self.parameters] + [
                 f"{name}={value}"
                 for name, value in sorted(self.kw_parameters.items())]
 
@@ -653,7 +653,7 @@ class DAGCode(RecordWithoutPickling):
 
     @classmethod
     def from_phases_list(cls, phases, initial_phase):
-        name_to_phase = dict()
+        name_to_phase = {}
         for phase in phases:
             if phase.name in name_to_phase:
                 raise ValueError("duplicate phase name '%s'" % phase.name)

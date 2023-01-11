@@ -199,7 +199,7 @@ class _ExpressionCollapsingMapper(IdentityMapper):
             folded_constant = new_var
 
         if non_constants:
-            return combine_func(tuple([folded_constant]) + non_constants)
+            return combine_func((folded_constant,) + non_constants)
         else:
             return folded_constant
 

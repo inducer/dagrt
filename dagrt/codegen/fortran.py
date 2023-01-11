@@ -253,14 +253,14 @@ class CallCode:
 
         import dagrt.data as kinds
 
-        template_names = dict(
-                real_scalar_kind=code_generator.real_scalar_kind,
-                complex_scalar_kind=code_generator.complex_scalar_kind,
-                get_new_identifier=(
+        template_names = {
+                "real_scalar_kind": code_generator.real_scalar_kind,
+                "complex_scalar_kind": code_generator.complex_scalar_kind,
+                "get_new_identifier": (
                     code_generator.name_manager.make_unique_fortran_name),
-                add_declaration=add_declaration,
-                declare_new=declare_new,
-                kinds=kinds)
+                "add_declaration": add_declaration,
+                "declare_new": declare_new,
+                "kinds": kinds}
 
         result_names = getattr(function, "result_names", ("result",))
 
