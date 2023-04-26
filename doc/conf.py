@@ -19,7 +19,7 @@ release = _ver_dic["VERSION_TEXT"]
 version = release
 
 intersphinx_mapping = {
-    "https://docs.python.org/3/": None,
-    "https://numpy.org/doc/stable/": None,
-    "https://documen.tician.de/pymbolic/": None,
-    }
+        "python": ("https://docs.python.org/3/", None),
+        "numpy": ("https://numpy.org/doc/stable/", None),
+        "pymbolic": ("https://documen.tician.de/pymbolic/", None),
+        }
