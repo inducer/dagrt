@@ -26,7 +26,7 @@ THE SOFTWARE.
 
 from pytools import RecordWithoutPickling
 from dagrt.data import (
-        UserType, Integer, Boolean, Scalar, Array, UnableToInferKind)
+        UserType, Integer, Boolean, Scalar, Array, UserTypeArray, UnableToInferKind)
 
 NoneType = type(None)
 
@@ -65,6 +65,7 @@ documentation.
 .. autoclass:: Len
 .. autoclass:: IsNaN
 .. autoclass:: Array_
+.. autoclass:: ArrayUType_
 .. autoclass:: MatMul
 .. autoclass:: Transpose
 .. autoclass:: LinearSolve
@@ -407,6 +408,27 @@ class Array_(Function):  # noqa
         return (Array(is_real_valued=True),)
 
 
+class ArrayUType_(Function):  # noqa
+    """``array_utype(n, x)`` returns an empty array with *n* entries in it,
+    in which each entry is a user type. *n* must be an integer.
+    """
+
+    result_names = ("result",)
+    identifier = "<builtin>array_utype"
+    arg_names = ("n", "x")
+    default_dict = {}
+
+    def get_result_kinds(self, arg_kinds, check):
+        n_kind, x_kind = self.resolve_args(arg_kinds)
+
+        if check and not isinstance(n_kind, Scalar):
+            raise TypeError("argument 'n' of 'array_utype' is not a scalar")
+        if check and not isinstance(x_kind, UserType):
+            raise TypeError("argument 'x' of 'array_utype' is not a user type")
+
+        return (UserTypeArray(identifier=x_kind.identifier),)
+
+
 class MatMul(Function):
     """``matmul(a, b, a_cols, b_cols)`` returns a 1D array containing the
     matrix resulting from multiplying the arrays *a* and *b* (both interpreted
@@ -571,6 +593,7 @@ def _make_bfr():
             (Len(), "{numpy}.size({args})"),
             (IsNaN(), "{numpy}.isnan({args})"),
             (Array_(), "self._builtin_array({args})"),
+            (ArrayUType_(), "self._builtin_array_utype({args})"),
             (MatMul(), "self._builtin_matmul({args})"),
             (Transpose(), "self._builtin_transpose({args})"),
             (LinearSolve(), "self._builtin_linear_solve({args})"),
@@ -597,6 +620,8 @@ def _make_bfr():
             f.codegen_builtin_isnan)
     bfr = bfr.register_codegen(Array_.identifier, "fortran",
             f.builtin_array)
+    bfr = bfr.register_codegen(ArrayUType_.identifier, "fortran",
+            f.builtin_array_utype)
     bfr = bfr.register_codegen(MatMul.identifier, "fortran",
             f.builtin_matmul)
     bfr = bfr.register_codegen(Transpose.identifier, "fortran",

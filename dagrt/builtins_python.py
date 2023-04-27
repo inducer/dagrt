@@ -73,6 +73,16 @@ def builtin_array(n):
     return np.empty(n, dtype=np.float64)
 
 
+def builtin_array_utype(n, x):
+    import numpy as np
+    if n != np.floor(n):
+        raise ValueError("array() argument n is not an integer")
+    n = int(n)
+
+    #return np.empty((n, x.size), dtype=x.dtype)
+    return np.zeros((n, x.size), dtype=x.dtype)
+
+
 def builtin_matmul(a, b, a_cols, b_cols):
     import numpy as np
     if a_cols != np.floor(a_cols):
@@ -148,6 +158,7 @@ builtins = {
         "<builtin>dot_product": builtin_dot_product,
         "<builtin>elementwise_abs": builtin_elementwise_abs,
         "<builtin>array": builtin_array,
+        "<builtin>array_utype": builtin_array_utype,
         "<builtin>matmul": builtin_matmul,
         "<builtin>transpose": builtin_transpose,
         "<builtin>linear_solve": builtin_linear_solve,

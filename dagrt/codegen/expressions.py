@@ -123,6 +123,24 @@ class FortranExpressionMapper(StringifyMapper):
                     " .and. ", expr.children, PREC_LOGICAL_AND),
                 enclosing_prec, PREC_LOGICAL_AND)
 
+    _comparison_to_fortran = {
+        "==": ".eq.",
+        "!=": ".ne.",
+        "<": ".lt.",
+        ">": ".gt.",
+        "<=": ".le.",
+        ">=": ".ge.",
+        }
+
+    def map_comparison(self, expr, enclosing_prec, *args, **kwargs):
+        from pymbolic.mapper.stringifier import PREC_COMPARISON
+        return self.parenthesize_if_needed(
+                self.format("%s %s %s",
+                    self.rec(expr.left, PREC_COMPARISON, *args, **kwargs),
+                    self._comparison_to_fortran[expr.operator],
+                    self.rec(expr.right, PREC_COMPARISON, *args, **kwargs)),
+                enclosing_prec, PREC_COMPARISON)
+
 # }}}
 
 

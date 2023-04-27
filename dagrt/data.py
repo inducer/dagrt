@@ -46,6 +46,7 @@ Symbol kinds
 .. autoclass:: Scalar
 .. autoclass:: Array
 .. autoclass:: UserType
+.. autoclass:: UserTypeArray
 
 Symbol kind inference
 ^^^^^^^^^^^^^^^^^^^^^
@@ -59,6 +60,7 @@ Helper functions
 
 .. autofunction:: infer_kinds
 .. autofunction:: collect_user_types
+.. autofunction:: collect_user_type_arrays
 
 """
 
@@ -131,6 +133,22 @@ class Array(SymbolKind):
 
     def __getinitargs__(self):
         return (self.is_real_valued,)
+
+
+class UserTypeArray(SymbolKind):
+    """A variable-sized one-dimensional array
+       of user types.
+
+    .. attribute:: identifier
+
+        A unique identifier for this type.
+    """
+
+    def __init__(self, identifier):
+        super().__init__(identifier=identifier)
+
+    def __getinitargs__(self):
+        return (self.identifier,)
 
 
 class UserType(SymbolKind):
@@ -429,13 +447,16 @@ class KindInferenceMapper(Mapper):
 
     def map_subscript(self, expr):
         agg_kind = self.rec(expr.aggregate)
-        if self.check and not isinstance(agg_kind, Array):
-            raise ValueError(
-                    "only arrays can be subscripted, not '%s' "
-                    "which is a '%s'"
-                    % (expr.aggregate, type(agg_kind).__name__))
-
-        return Scalar(is_real_valued=agg_kind.is_real_valued)
+        if isinstance(agg_kind, Array):
+            return Scalar(is_real_valued=agg_kind.is_real_valued)
+        elif isinstance(agg_kind, UserTypeArray):
+            return UserType(agg_kind.identifier)
+        else:
+            if self.check:
+                raise ValueError(
+                        "only arrays or UserTypeArrays can be "
+                        "subscripted, not '%s' which is a '%s'"
+                        % (expr.aggregate, type(agg_kind).__name__))
 
 # }}}
 
@@ -449,7 +470,7 @@ class SymbolKindFinder:
     def __init__(self, function_registry):
         self.function_registry = function_registry
 
-    def __call__(self, names, phases, forced_kinds=None):
+    def __call__(self, names, phases, forced_kinds=None, user_type_map=None):
         """Infer the kinds of all the symbols in a program.
 
         :arg names: a list of phase names
@@ -471,6 +492,15 @@ class SymbolKindFinder:
         if forced_kinds is not None:
             for phase_name, ident, kind in forced_kinds:
                 result.set(phase_name, ident, kind=kind)
+
+        # If a UserType map is given, set the global symbol
+        # kind table accordingly.
+        # FIXME: are UserType identifiers guaranteed to
+        # match component_ids?
+        if user_type_map is not None:
+            for name in user_type_map:
+                result.set(names[0], "<state>{}".format(name),
+                           UserType(identifier=name))
 
         def make_kim(phase_name, check):
             return KindInferenceMapper(
@@ -649,6 +679,30 @@ def collect_user_types(skt):
     for tbl in skt.per_phase_table.values():
         for kind in tbl.values():
             if isinstance(kind, UserType):
+                result.add(kind.identifier)
+
+    return result
+
+# }}}
+
+# {{{ collect user types
+
+
+def collect_user_type_arrays(skt):
+    """Collect all of the of :class:`UserTypeArray` identifiers in a table.
+
+    :arg skt: a :class:`SymbolKindTable`
+    :returns: a set of strings
+    """
+    result = set()
+
+    for kind in skt.global_table.values():
+        if isinstance(kind, UserTypeArray):
+            result.add(kind.identifier)
+
+    for tbl in skt.per_phase_table.values():
+        for kind in tbl.values():
+            if isinstance(kind, UserTypeArray):
                 result.add(kind.identifier)
 
     return result
