@@ -120,56 +120,6 @@ def resolve_args(arg_names, default_dict, arg_dict):
 # }}}
 
 
-# {{{ temporary directory
-
-class TemporaryDirectory:
-    """Create and return a temporary directory.  This has the same
-    behavior as mkdtemp but can be used as a context manager.  For
-    example:
-
-        with TemporaryDirectory() as tmpdir:
-            ...
-
-    Upon exiting the context, the directory and everything contained
-    in it are removed.
-    """
-
-    # Yanked from
-    # https://hg.python.org/cpython/file/3.3/Lib/tempfile.py
-
-    # Handle mkdtemp raising an exception
-    name = None
-    _closed = False
-
-    def __init__(self, suffix="", prefix="tmp", dirname=None):
-        from tempfile import mkdtemp
-        self.name = mkdtemp(suffix, prefix, dirname)
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} {self.name!r}>"
-
-    def __enter__(self):
-        return self.name
-
-    def cleanup(self, _warn=False):
-        import warnings
-        if self.name and not self._closed:
-            from shutil import rmtree
-            rmtree(self.name)
-            self._closed = True
-            if _warn and warnings.warn:
-                warnings.warn(f"Implicitly cleaning up {self!r}")
-
-    def __exit__(self, exc, value, tb):
-        self.cleanup()
-
-    def __del__(self):
-        # Issue a ResourceWarning if implicit cleanup needed
-        self.cleanup(_warn=True)
-
-# }}}
-
-
 # {{{ run_fortran
 
 class DebuggerExit(Exception):
@@ -183,6 +133,7 @@ def run_fortran(sources, fortran_options=None, fortran_libraries=None, debug=Fal
         fortran_libraries = []
 
     from os.path import join
+    from tempfile import TemporaryDirectory
 
     with TemporaryDirectory() as tmpdir:
         source_names = []
