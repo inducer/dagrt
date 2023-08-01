@@ -23,7 +23,8 @@ THE SOFTWARE.
 """
 
 from pymbolic.mapper import Collector
-from dagrt.language import YieldState, SwitchPhase, AssignFunctionCall
+
+from dagrt.language import AssignFunctionCall, SwitchPhase, YieldState
 
 
 # {{{ verifier

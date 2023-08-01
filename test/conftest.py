@@ -27,9 +27,7 @@ import pytest
 def python_method_impl(request):
     kind = request.param
 
-    from utils import (
-            python_method_impl_interpreter,
-            python_method_impl_codegen)
+    from utils import python_method_impl_codegen, python_method_impl_interpreter
     if kind == "interpreter":
         return python_method_impl_interpreter
     elif kind == "codegen":

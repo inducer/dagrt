@@ -22,22 +22,21 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+import re  # noqa
 import sys
 from functools import partial
-import re  # noqa
 
-from dagrt.codegen.expressions import FortranExpressionMapper
-from dagrt.codegen.codegen_base import StructuredCodeGenerator
-from dagrt.utils import is_state_variable
-from dagrt.data import UserType
-from pytools.py_codegen import (
-        # It's the same code. So sue me.
-        PythonCodeGenerator as FortranEmitterBase)
-from pymbolic.primitives import (Call, CallWithKwargs, Variable,
-        Subscript, Lookup)
 from pymbolic.mapper import IdentityMapper
-from dagrt.codegen.utils import (wrap_line_base, KeyToUniqueNameMap,
-        make_identifier_from_name)
+from pymbolic.primitives import Call, CallWithKwargs, Lookup, Subscript, Variable
+from pytools.py_codegen import (  # It's the same code. So sue me.
+    PythonCodeGenerator as FortranEmitterBase)
+
+from dagrt.codegen.codegen_base import StructuredCodeGenerator
+from dagrt.codegen.expressions import FortranExpressionMapper
+from dagrt.codegen.utils import (
+    KeyToUniqueNameMap, make_identifier_from_name, wrap_line_base)
+from dagrt.data import UserType
+from dagrt.utils import is_state_variable
 
 
 __doc__ = """
@@ -240,8 +239,7 @@ class CallCode:
     def __call__(self, results, function, args, arg_kinds,
             code_generator):
         from dagrt.codegen.utils import (
-                remove_common_indentation,
-                remove_redundant_blank_lines)
+            remove_common_indentation, remove_redundant_blank_lines)
 
         def add_declaration(decl):
             code_generator.declaration_emitter(decl)
@@ -1054,19 +1052,17 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # {{{ produce function name / function AST pairs
 
-        from dagrt.codegen.dag_ast import (
-                create_ast_from_phase, get_statements_in_ast)
-
         from collections import namedtuple
+
+        from dagrt.codegen.dag_ast import (
+            create_ast_from_phase, get_statements_in_ast)
         NameASTPair = namedtuple("NameASTPair", "name, ast")  # noqa
         fdescrs = []
 
         def process_ast(ast, print_ast=False):
             from dagrt.codegen.transform import (
-                    eliminate_self_dependencies,
-                    isolate_function_arguments,
-                    isolate_function_calls,
-                    expand_IfThenElse)
+                eliminate_self_dependencies, expand_IfThenElse,
+                isolate_function_arguments, isolate_function_calls)
             ast = eliminate_self_dependencies(ast)
             ast = isolate_function_arguments(ast)
             ast = isolate_function_calls(ast)
@@ -1083,8 +1079,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
         # }}}
 
-        from dagrt.data import SymbolKindFinder, Integer
         from dagrt.codegen.dag_ast import LoopVariableFinder
+        from dagrt.data import Integer, SymbolKindFinder
 
         self.sym_kind_table = SymbolKindFinder(self.function_registry)(
                 [fd.name for fd in fdescrs],
@@ -1095,8 +1091,8 @@ class CodeGenerator(StructuredCodeGenerator):
                     for loop_var in LoopVariableFinder()(fd.ast)])
 
         from dagrt.codegen.analysis import (
-                collect_ode_component_names_from_dag,
-                var_to_last_dependent_statement_mapping)
+            collect_ode_component_names_from_dag,
+            var_to_last_dependent_statement_mapping)
 
         component_ids = collect_ode_component_names_from_dag(dag)
 
@@ -1456,7 +1452,7 @@ class CodeGenerator(StructuredCodeGenerator):
         if emit is None:
             emit = self.emit
 
-        from dagrt.data import Boolean, Scalar, Array, Integer
+        from dagrt.data import Array, Boolean, Integer, Scalar
 
         type_specifiers = other_specifiers
 
@@ -2094,7 +2090,7 @@ class CodeGenerator(StructuredCodeGenerator):
         self.emitter.__exit__(None, None, None)
 
     def emit_assign_expr(self, assignee_sym, assignee_subscript, expr):
-        from dagrt.data import UserType, Array
+        from dagrt.data import Array, UserType
 
         assignee_fortran_name = self.name_manager[assignee_sym]
 
@@ -2185,8 +2181,9 @@ class CodeGenerator(StructuredCodeGenerator):
             except KeyError:
                 pass
 
-        from pymbolic.mapper.dependency import DependencyMapper
         from pymbolic import var
+        from pymbolic.mapper.dependency import DependencyMapper
+
         from dagrt.data import UserType
 
         for assignee_sym in inst.assignees:
@@ -2241,8 +2238,9 @@ class CodeGenerator(StructuredCodeGenerator):
                 (),
                 inst.time)
 
-        from dagrt.language import AssignFunctionCall
         from pymbolic import var
+
+        from dagrt.language import AssignFunctionCall
 
         if self.call_before_state_update:
             self.emit_inst_AssignFunctionCall(
@@ -2339,7 +2337,7 @@ def codegen_builtin_norm_2(results, function, args, arg_kinds,
         code_generator):
     result, = results
 
-    from dagrt.data import Scalar, UserType, Array
+    from dagrt.data import Array, Scalar, UserType
     x_kind = arg_kinds[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
@@ -2382,7 +2380,7 @@ def codegen_builtin_len(results, function, args, arg_kinds,
         code_generator):
     result, = results
 
-    from dagrt.data import Scalar, Array, UserType
+    from dagrt.data import Array, Scalar, UserType
     x_kind = arg_kinds[0]
     if isinstance(x_kind, Scalar):
         if x_kind.is_real_valued:
@@ -2421,7 +2419,7 @@ def codegen_builtin_elementwise_abs(results, function, args, arg_kinds,
         code_generator):
     result, = results
 
-    from dagrt.data import Scalar, Array, UserType
+    from dagrt.data import Array, Scalar, UserType
     x_kind = arg_kinds[0]
     if isinstance(x_kind, Scalar) or isinstance(x_kind, Array):
         code_generator.emit("{result} = abs({arg})".format(

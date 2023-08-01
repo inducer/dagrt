@@ -1,18 +1,17 @@
 #! /usr/bin/env python
 
-import pytest
 import sys
 
-from dagrt.language import Assign, YieldState
-from dagrt.codegen import CodeGenerationError
-from dagrt.codegen.analysis import verify_code
+import pytest
+from utils import (
+    RawCodeBuilder, create_DAGCode_with_init_and_main_phases,
+    create_DAGCode_with_steady_phase)
 
 from pymbolic import var
 
-from utils import (
-        RawCodeBuilder,
-        create_DAGCode_with_init_and_main_phases,
-        create_DAGCode_with_steady_phase)
+from dagrt.codegen import CodeGenerationError
+from dagrt.codegen.analysis import verify_code
+from dagrt.language import Assign, YieldState
 
 
 __copyright__ = "Copyright (C) 2014 Andreas Kloeckner, Matt Wala"

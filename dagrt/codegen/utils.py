@@ -24,6 +24,7 @@ THE SOFTWARE.
 
 import functools
 import shlex
+
 from pytools import UniqueNameGenerator
 
 

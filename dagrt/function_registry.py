@@ -25,8 +25,9 @@ THE SOFTWARE.
 
 
 from pytools import RecordWithoutPickling
-from dagrt.data import (
-        UserType, Integer, Boolean, Scalar, Array, UnableToInferKind)
+
+from dagrt.data import Array, Boolean, Integer, Scalar, UnableToInferKind, UserType
+
 
 NoneType = type(None)
 

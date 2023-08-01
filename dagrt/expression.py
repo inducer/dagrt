@@ -23,19 +23,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
-from pymbolic.mapper.dependency import DependencyMapper
-from pymbolic.mapper import CombineMapper, IdentityMapper
-from pymbolic.mapper.unifier import UnidirectionalUnifier
-from pymbolic.primitives import Variable, is_constant
-from pymbolic.parser import Parser, _less, _greater, _identifier
-from pymbolic.primitives import If as IfThenElse # noqa
-from pymbolic.mapper.stringifier import PREC_LOGICAL_OR
-
 import logging
 import operator
-import pytools.lex
 from functools import reduce
+
+import pytools.lex
+from pymbolic.mapper import CombineMapper, IdentityMapper
+from pymbolic.mapper.dependency import DependencyMapper
+from pymbolic.mapper.evaluator import EvaluationMapper as EvaluationMapperBase
+from pymbolic.mapper.stringifier import PREC_LOGICAL_OR
+from pymbolic.mapper.unifier import UnidirectionalUnifier
+from pymbolic.parser import Parser, _greater, _identifier, _less
+from pymbolic.primitives import If as IfThenElse, Variable, is_constant  # noqa
+
 
 logger = logging.getLogger(__name__)
 

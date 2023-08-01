@@ -193,7 +193,7 @@ def run_fortran(sources, fortran_options=None, fortran_libraries=None, debug=Fal
                 srcf.write(contents)
 
         import os
-        from subprocess import check_call, Popen, PIPE
+        from subprocess import PIPE, Popen, check_call
         check_call(
                 [os.environ.get("FC", "gfortran"),
                     "-Wall",

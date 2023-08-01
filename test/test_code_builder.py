@@ -1,19 +1,16 @@
 #! /usr/bin/env python
 
 import sys
-from dagrt.language import (CodeBuilder, DAGCode)
-from pymbolic import var
-
-from dagrt.exec_numpy import NumpyInterpreter  # noqa
-from dagrt.codegen import PythonCodeGenerator  # noqa
 
 from utils import (  # noqa
-        python_method_impl_interpreter as pmi_int,
-        python_method_impl_codegen as pmi_cg)
+    create_DAGCode_with_steady_phase, execute_and_return_single_result,
+    python_method_impl_codegen as pmi_cg, python_method_impl_interpreter as pmi_int)
 
-from utils import (
-        execute_and_return_single_result,
-        create_DAGCode_with_steady_phase)
+from pymbolic import var
+
+from dagrt.codegen import PythonCodeGenerator  # noqa
+from dagrt.exec_numpy import NumpyInterpreter  # noqa
+from dagrt.language import CodeBuilder, DAGCode
 
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"

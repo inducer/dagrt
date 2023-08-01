@@ -1,7 +1,8 @@
 """Code generation of expressions"""
-from pymbolic.mapper.stringifier import (
-        StringifyMapper, PREC_NONE, PREC_CALL, PREC_PRODUCT, PREC_LOGICAL_OR)
 import numpy as np
+
+from pymbolic.mapper.stringifier import (
+    PREC_CALL, PREC_LOGICAL_OR, PREC_NONE, PREC_PRODUCT, StringifyMapper)
 
 
 __copyright__ = "Copyright (C) 2014 Matt Wala"

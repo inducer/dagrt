@@ -22,8 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from dagrt.codegen.dag_ast import \
-        Block, IfThen, IfThenElse, StatementWrapper, ForLoop
+from dagrt.codegen.dag_ast import (
+    Block, ForLoop, IfThen, IfThenElse, StatementWrapper)
 
 
 class StructuredCodeGenerator:
