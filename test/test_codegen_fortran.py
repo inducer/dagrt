@@ -115,7 +115,7 @@ def test_arrays_and_linalg():
 def test_self_dep_in_loop():
     with CodeBuilder(name="primary") as cb:
         cb("y", "<state>y")
-        cb("y", "<func>f(0, 2*i*<func>f(0, y if i > 2 else 2*y))",
+        cb("y", "5 + <func>f(0, 2*i*<func>f(0, y if i > 2 else 2*y))",
                 loops=(("i", 0, 5),))
         cb("<state>y", "y")
 
