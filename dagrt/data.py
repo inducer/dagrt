@@ -79,7 +79,7 @@ class SymbolKind(RecordWithoutPickling):
 
     def __eq__(self, other):
         return (
-                type(self) == type(other)
+                type(self) is type(other)
                 and self.__getinitargs__() == other.__getinitargs__())
 
     def __ne__(self, other):
