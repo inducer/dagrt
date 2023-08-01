@@ -25,8 +25,9 @@ THE SOFTWARE.
 
 import numpy as np
 
-from dagrt.language import DAGCode, CodeBuilder
 from pymbolic import var
+
+from dagrt.language import CodeBuilder, DAGCode
 
 
 def adaptive_rk_method(tol):

@@ -22,10 +22,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pymbolic.mapper import IdentityMapper, Collector
+from pymbolic.mapper import Collector, IdentityMapper
 from pymbolic.mapper.stringifier import StringifyMapper
 from pymbolic.primitives import Expression, LogicalNot
-from dagrt.language import Nop, Assign
+
+from dagrt.language import Assign, Nop
 
 
 # {{{ ast node types

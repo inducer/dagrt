@@ -23,6 +23,7 @@ THE SOFTWARE.
 """
 
 import numpy as np  # noqa
+
 import dagrt.language as lang
 
 

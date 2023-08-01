@@ -22,19 +22,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-import numpy as np
-import pytest
 import sys
 
-from dagrt.language import Assign, YieldState
+import numpy as np
+import pytest
+from utils import (  # noqa
+    RawCodeBuilder, create_DAGCode_with_steady_phase,
+    execute_and_return_single_result, python_method_impl_codegen as pmi_cg,
+    python_method_impl_interpreter as pmi_int)
+
 from pymbolic import var
 
-from utils import (  # noqa
-        execute_and_return_single_result,
-        RawCodeBuilder,
-        python_method_impl_interpreter as pmi_int,
-        python_method_impl_codegen as pmi_cg,
-        create_DAGCode_with_steady_phase)
+from dagrt.language import Assign, YieldState
 
 
 @pytest.mark.parametrize(("obj, len_"), [(np.ones(0), 0),

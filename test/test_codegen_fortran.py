@@ -24,21 +24,18 @@ THE SOFTWARE.
 
 import sys
 
-from dagrt.language import YieldState
-from dagrt.language import CodeBuilder
+from utils import RawCodeBuilder, create_DAGCode_with_steady_phase
+
 import dagrt.codegen.fortran as f
-
-from utils import RawCodeBuilder
-
+from dagrt.language import CodeBuilder, YieldState
 from dagrt.utils import run_fortran
 
-from utils import create_DAGCode_with_steady_phase
 
 #skip = pytest.mark.skipif(True, reason="not fully implemented")
 
 
 def read_file(rel_path):
-    from os.path import join, abspath, dirname
+    from os.path import abspath, dirname, join
     path = join(abspath(dirname(__file__)), rel_path)
     with open(path) as inf:
         return inf.read()
@@ -126,8 +123,7 @@ def test_self_dep_in_loop():
 
     rhs_function = "<func>f"
 
-    from dagrt.function_registry import (
-            base_function_registry, register_ode_rhs)
+    from dagrt.function_registry import base_function_registry, register_ode_rhs
     freg = register_ode_rhs(base_function_registry, "ytype",
                             identifier=rhs_function,
                             input_names=("y",))
@@ -181,8 +177,7 @@ def test_elementwise_abs():
 
     rhs_function = "<func>f"
 
-    from dagrt.function_registry import (
-            base_function_registry, register_ode_rhs)
+    from dagrt.function_registry import base_function_registry, register_ode_rhs
     freg = register_ode_rhs(base_function_registry, "ytype",
                             identifier=rhs_function,
                             input_names=("y",))

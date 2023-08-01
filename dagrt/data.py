@@ -25,12 +25,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from dagrt.utils import TODO
+from pymbolic.mapper import Mapper
+from pytools import RecordWithoutPickling
 
 import dagrt.language as lang
-from dagrt.utils import is_state_variable
-from pytools import RecordWithoutPickling
-from pymbolic.mapper import Mapper
+from dagrt.utils import TODO, is_state_variable
 
 
 __doc__ = """

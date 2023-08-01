@@ -26,16 +26,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from dagrt.codegen.expressions import PythonExpressionMapper
-from dagrt.codegen.codegen_base import StructuredCodeGenerator
-from dagrt.codegen.utils import (wrap_line_base, exec_in_new_namespace,
-                    KeyToUniqueNameMap)
-from pytools.py_codegen import (
-        PythonCodeGenerator as PythonEmitter,
-        PythonFunctionGenerator as PythonFunctionEmitter)
-from dagrt.utils import is_state_variable
-from functools import partial
 from abc import ABC, abstractmethod
+from functools import partial
+
+from pytools.py_codegen import (
+    PythonCodeGenerator as PythonEmitter,
+    PythonFunctionGenerator as PythonFunctionEmitter)
+
+from dagrt.codegen.codegen_base import StructuredCodeGenerator
+from dagrt.codegen.expressions import PythonExpressionMapper
+from dagrt.codegen.utils import (
+    KeyToUniqueNameMap, exec_in_new_namespace, wrap_line_base)
+from dagrt.utils import is_state_variable
 
 
 def pad_python(line, width):
@@ -279,8 +281,8 @@ class CodeGenerator(StructuredCodeGenerator):
 
     def _pre_lower(self, ast):
         self._has_yield_inst = False
-        from dagrt.language import YieldState
         from dagrt.codegen.dag_ast import get_statements_in_ast
+        from dagrt.language import YieldState
         for inst in get_statements_in_ast(ast):
             if isinstance(inst, YieldState):
                 self._has_yield_inst = True
@@ -323,6 +325,7 @@ class CodeGenerator(StructuredCodeGenerator):
             emit(line)
 
         from inspect import getsourcefile
+
         import dagrt.builtins_python as builtins
         builtins_source_file = getsourcefile(builtins)
 

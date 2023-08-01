@@ -23,18 +23,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
-from pytools import RecordWithoutPickling, memoize_method, natsorted
+import logging
+from contextlib import contextmanager
+from sys import intern
+
 from pymbolic.imperative.statement import (
-        ConditionalStatement as StatementBase,
-        ConditionalAssignment as AssignBase,
-        Nop as NopBase)
+    ConditionalAssignment as AssignBase, ConditionalStatement as StatementBase,
+    Nop as NopBase)
+from pytools import RecordWithoutPickling, memoize_method, natsorted
 
 from dagrt.utils import get_variables
-from contextlib import contextmanager
-
-import logging
-
-from sys import intern
 
 
 logger = logging.getLogger(__name__)
@@ -246,7 +244,7 @@ class Assign(Statement, AssignBase):
 
     @property
     def assignee(self):
-        from pymbolic.primitives import Variable, Subscript
+        from pymbolic.primitives import Subscript, Variable
         if isinstance(self.lhs, Variable):
             return self.lhs.name
         elif isinstance(self.lhs, Subscript):
@@ -257,7 +255,7 @@ class Assign(Statement, AssignBase):
 
     @property
     def assignee_subscript(self):
-        from pymbolic.primitives import Variable, Subscript
+        from pymbolic.primitives import Subscript, Variable
         if isinstance(self.lhs, Variable):
             return ()
         elif isinstance(self.lhs, Subscript):
@@ -1075,7 +1073,7 @@ class CodeBuilder:
                         "%d found" % len(assignees))
             assignee, = assignees
 
-            from pymbolic.primitives import Variable, Subscript
+            from pymbolic.primitives import Subscript, Variable
             if isinstance(assignee, Variable):
                 aname = assignee.name
                 asub = ()

@@ -23,17 +23,15 @@ THE SOFTWARE.
 
 import sys
 
-from pymbolic import var
-
-from pymbolic.primitives import LogicalNot
-
-from dagrt.codegen.dag_ast import (IfThen, IfThenElse, Block, StatementWrapper,
-                               create_ast_from_phase, simplify_ast)
-from dagrt.language import Statement
-
+import pytest
 from utils import create_DAGCode_with_steady_phase
 
-import pytest
+from pymbolic import var
+from pymbolic.primitives import LogicalNot
+
+from dagrt.codegen.dag_ast import (
+    Block, IfThen, IfThenElse, StatementWrapper, create_ast_from_phase, simplify_ast)
+from dagrt.language import Statement
 
 
 def test_create_ast():

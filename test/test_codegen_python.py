@@ -23,21 +23,20 @@ THE SOFTWARE.
 """
 
 import sys
-import pytest
 
-import numpy.linalg as la
 import numpy as np
+import numpy.linalg as la
+import pytest
+from utils import (  # noqa
+    RawCodeBuilder, create_DAGCode_with_init_and_main_phases,
+    create_DAGCode_with_steady_phase, python_method_impl_codegen as pmi_cg,
+    python_method_impl_interpreter as pmi_int)
 
-from dagrt.language import Assign, YieldState, FailStep, Raise, Nop
-from dagrt.language import CodeBuilder, DAGCode
-from dagrt.codegen import PythonCodeGenerator
 from pymbolic import var
 
-from utils import (  # noqa
-        RawCodeBuilder, python_method_impl_interpreter as pmi_int,
-        python_method_impl_codegen as pmi_cg,
-        create_DAGCode_with_init_and_main_phases,
-        create_DAGCode_with_steady_phase)
+from dagrt.codegen import PythonCodeGenerator
+from dagrt.language import (
+    Assign, CodeBuilder, DAGCode, FailStep, Nop, Raise, YieldState)
 
 
 def test_basic_codegen():
@@ -416,8 +415,8 @@ def test_class_preamble():
 
     code = create_DAGCode_with_steady_phase(cb.statements)
 
-    from dagrt.codegen import PythonCodeGenerator
     import dagrt.function_registry as freg
+    from dagrt.codegen import PythonCodeGenerator
 
     preamble = """
             @staticmethod

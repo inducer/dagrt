@@ -21,6 +21,7 @@ THE SOFTWARE.
 """
 
 from collections import namedtuple
+
 from dagrt.expression import EvaluationMapper
 
 

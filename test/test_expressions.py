@@ -64,8 +64,9 @@ def test_match():
 
 
 def test_match_strings():
-    from dagrt.expression import match
     from pymbolic import var
+
+    from dagrt.expression import match
     subst = match("a+b*a", "a+b*a")
     assert len(subst) == 2
     assert subst["a"] == var("a")
@@ -143,6 +144,7 @@ def test_substitute():
 
 def test_parser():
     from pymbolic import var
+
     from dagrt.expression import parse
     parse("(2*a[1]*b[1]+2*a[0]*b[0])*(hankel_1(-1,sqrt(a[1]**2+a[0]**2)*k) "
             "-hankel_1(1,sqrt(a[1]**2+a[0]**2)*k))*k /(4*sqrt(a[1]**2+a[0]**2)) "

@@ -25,9 +25,10 @@ THE SOFTWARE.
 
 from pymbolic.mapper import IdentityMapper
 from pytools import UniqueNameGenerator
+
 from dagrt.codegen.dag_ast import (
-        ASTIdentityMapper, get_statements_in_ast,
-        Block, StatementWrapper)
+    ASTIdentityMapper, Block, StatementWrapper, get_statements_in_ast)
+
 
 __doc__ = """
 .. autofunction:: eliminate_self_dependencies
@@ -95,8 +96,9 @@ class SelfDependencyEliminator(ASTStatementRewriter):
         tmp_stmt_ids = []
 
         new_statements = []
-        from dagrt.language import Assign
         from pymbolic import var
+
+        from dagrt.language import Assign
         for var_name in read_and_written:
             tmp_var_name = self.var_name_gen(
                     "temp_"
@@ -330,8 +332,8 @@ class ExprIfThenElseExpander(IdentityMapper):
         self.var_name_gen = var_name_gen
 
     def map_if(self, expr, base_condition, base_deps, extra_deps):
-        from pymbolic.primitives import LogicalNot
         from pymbolic import var
+        from pymbolic.primitives import LogicalNot
 
         flag = var(self.var_name_gen("<cond>ifthenelse_cond"))
         tmp_result = self.var_name_gen("ifthenelse_result")
