@@ -51,6 +51,9 @@ class FortranExpressionMapper(StringifyMapper):
             else:
                 return ".false."
         else:
+            if isinstance(expr, np.generic):
+                expr = expr.item()
+
             result = repr(expr).replace("e", "d")
             if "d" not in result:
                 result = result+"d0"
@@ -148,6 +151,9 @@ class PythonExpressionMapper(StringifyMapper):
         if isinstance(expr, (float, np.number)):
             if np.isinf(expr) or np.isnan(expr):
                 return "float('" + repr(expr) + "')"
+        if isinstance(expr, np.generic):
+            expr = expr.item()
+
         return repr(expr)
 
     def map_foreign(self, expr, *args):
