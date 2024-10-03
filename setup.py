@@ -43,6 +43,7 @@ def main():
               "pymbolic>=2022.1",
               "pytest>=2.3",
               "mako",
+              "immutabledict",
               ],
           )
 

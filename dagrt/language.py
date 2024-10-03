@@ -27,6 +27,8 @@ import logging
 from contextlib import contextmanager
 from sys import intern
 
+from immutabledict import immutabledict
+
 from pymbolic.imperative.statement import (
     ConditionalAssignment as AssignBase, ConditionalStatement as StatementBase,
     Nop as NopBase)
@@ -444,7 +446,7 @@ class AssignFunctionCall(AssignmentBase):
         return CallWithKwargs(
                 Variable(self.function_id),
                 parameters=self.parameters,
-                kw_parameters=self.kw_parameters)
+                kw_parameters=immutabledict(self.kw_parameters))
 
     def map_expressions(self, mapper, include_lhs=True):
         from pymbolic.primitives import CallWithKwargs, Variable
