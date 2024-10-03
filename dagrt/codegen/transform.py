@@ -23,6 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from immutabledict import immutabledict
+
 from pymbolic.mapper import IdentityMapper
 from pytools import UniqueNameGenerator
 
@@ -182,8 +184,9 @@ class ExprFunctionArgumentIsolator(IdentityMapper):
                 expr.function,
                 tuple(self.isolate_arg(child, base_condition, base_deps, extra_deps)
                     for child in expr.parameters),
-                {key: self.isolate_arg(val, base_condition, base_deps, extra_deps)
-                    for key, val in sorted(expr.kw_parameters.items())}
+                immutabledict({
+                    key: self.isolate_arg(val, base_condition, base_deps, extra_deps)
+                    for key, val in sorted(expr.kw_parameters.items())})
                 )
 
 
