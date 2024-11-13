@@ -364,7 +364,8 @@ def match(template, expression, free_variable_names=None,
         urecs = [UnificationRecord(eqns)]
 
     unifier = _ExtendedUnifier(free_variable_names)
-    records = unifier(template, expression, urecs)
+    from pymbolic import flatten
+    records = unifier(flatten(template), flatten(expression), urecs)
 
     if len(records) > 1:
         from warnings import warn
