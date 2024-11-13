@@ -238,9 +238,10 @@ class Assign(Statement, AssignBase):
         else:
             rhs = kwargs.pop("rhs")
 
+        from pymbolic import flatten
         super().__init__(
                 lhs=lhs,
-                rhs=rhs,
+                rhs=flatten(rhs),
                 loops=loops,
                 **kwargs)
 
