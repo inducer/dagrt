@@ -25,6 +25,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
 
+from pymbolic import flatten
 from pymbolic.mapper import Mapper
 from pytools import RecordWithoutPickling
 
@@ -541,7 +542,11 @@ class SymbolKindFinder:
                         continue
 
                     try:
-                        kind = kim(stmt.expression)
+                        # FIXME This 'flatten' is dodgy, it shouldn't be here, but
+                        # kind inference does not take 'kindly' to 0 + ..., so
+                        # the non-simplification pymbolic changes necessitated
+                        # some action.
+                        kind = kim(flatten(stmt.expression))
                     except UnableToInferKind:
                         stmt_queue_push_buffer.append((phase_name, stmt))
                     else:
