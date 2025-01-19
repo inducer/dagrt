@@ -116,6 +116,7 @@ jobs:
                 DOWNSTREAM_PROJECT: ${{ matrix.downstream_project }}
                 RUN_WHAT: ${{ matrix.run_what }}
             run: |
+                sudo apt install gfortran liblapack-dev libblas-dev
                 curl -L -O https://tiker.net/ci-support-v0
                 . ./ci-support-v0
 
