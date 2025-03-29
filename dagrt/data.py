@@ -318,42 +318,21 @@ class KindInferenceMapper(Mapper):
                 "nothing known about '%s'"
                 % expr.name)
 
-    def map_sum(self, expr):
-        kind = None
-
-        last_exc = None
-
-        # Sums must be homogeneous, so being able to
-        # infer one child is good enough.
-        for ch in expr.children:
-            try:
-                ch_kind = self.rec(ch)
-            except UnableToInferKind as e:
-                if self.check:
-                    raise
-                else:
-                    last_exc = e
-
-            else:
-                kind = unify(kind, ch_kind)
-
-        if kind is None:
-            raise last_exc
-        else:
-            return kind
-
-    def map_product_like(self, children):
+    def map_expr_with_children(self, children):
         kind = None
         for ch in children:
             kind = unify(kind, self.rec(ch))
 
         return kind
 
+    def map_sum(self, expr):
+        return self.map_expr_with_children(expr.children)
+
     def map_product(self, expr):
-        return self.map_product_like(expr.children)
+        return self.map_expr_with_children(expr.children)
 
     def map_quotient(self, expr):
-        return self.map_product_like((expr.numerator, expr.denominator))
+        return self.map_expr_with_children((expr.numerator, expr.denominator))
 
     def map_power(self, expr):
         if self.check and not isinstance(self.rec(expr.exponent), Scalar):
